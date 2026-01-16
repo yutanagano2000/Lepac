@@ -24,6 +24,11 @@ const DOC_TYPES = [
   "固定資産評価証明書",
 ] as const;
 
+const ID_TYPES = [
+  "運転免許証",
+  "マイナンバーカード",
+] as const;
+
 function sanitizeForFilename(s: string) {
   return s
     .trim()
@@ -43,18 +48,37 @@ export default function FilenamePage() {
   const [docType, setDocType] = React.useState<string>("");
   const [name, setName] = React.useState<string>("");
   const [date, setDate] = React.useState<Date | undefined>(undefined);
+  const [idType, setIdType] = React.useState<string>("");
   const [isCalendarOpen, setIsCalendarOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
+  // 書類が変更されたら不要なステートをクリア
+  React.useEffect(() => {
+    if (docType === "身分証明書") {
+      setDate(undefined);
+    } else {
+      setIdType("");
+    }
+  }, [docType]);
+
   const filename = React.useMemo(() => {
-    const d = formatYyyyMd(date);
     const nRaw = sanitizeForFilename(name);
     const t = sanitizeForFilename(docType);
-    if (!d || !nRaw || !t) return "";
+    if (!nRaw || !t) return "";
     const n = nRaw.endsWith("様") ? nRaw : `${nRaw}様`;
-    const prefix = t === "土地売買契約書" ? "P_" : "";
+
+    // 身分証明書の場合
+    if (t === "身分証明書") {
+      if (!idType) return "";
+      return `【${t}】${n}_${idType}`;
+    }
+
+    // その他の書類の場合（日付が必要）
+    const d = formatYyyyMd(date);
+    if (!d) return "";
+    const prefix = t === "土地売買契約書" ? "P番号_" : "";
     return `【${t}】${prefix}${n}_${d}`;
-  }, [docType, name, date]);
+  }, [docType, name, date, idType]);
 
   const onCopy = async () => {
     if (!filename) return;
@@ -70,7 +94,7 @@ export default function FilenamePage() {
           <div className="space-y-1">
             <h1 className="text-xl font-semibold">ファイル名生成</h1>
             <p className="text-sm text-muted-foreground">
-              書類・氏名・日付を入力するとファイル名を生成します
+              書類・氏名・必要項目を入力するとファイル名を生成します
             </p>
           </div>
 
@@ -111,43 +135,65 @@ export default function FilenamePage() {
               </CardContent>
             </Card>
 
-            {/* ③ データピッカー（日付） */}
-            <Card>
-              <CardHeader>
-                <CardTitle>日付</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-start gap-2 font-normal"
-                    >
-                      <CalendarIcon className="h-4 w-4" />
-                      {date ? (
-                        <span className="font-mono">{formatYyyyMd(date)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">日付を選択</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      required
-                      selected={date}
-                      onSelect={(d) => {
-                        // 選択したら必ず閉じる（requiredなので通常undefinedにはならない）
-                        if (d) setDate(d);
-                        setIsCalendarOpen(false);
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </CardContent>
-            </Card>
+            {/* ③ 動的カード（身分証明書の場合は証明書種類、その他は日付） */}
+            {docType === "身分証明書" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>証明書種類</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select value={idType} onValueChange={setIdType}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="種類を選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ID_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>日付</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-start gap-2 font-normal"
+                      >
+                        <CalendarIcon className="h-4 w-4" />
+                        {date ? (
+                          <span className="font-mono">{formatYyyyMd(date)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">日付を選択</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        required
+                        selected={date}
+                        onSelect={(d) => {
+                          // 選択したら必ず閉じる（requiredなので通常undefinedにはならない）
+                          if (d) setDate(d);
+                          setIsCalendarOpen(false);
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* 生成結果（カード無し / ファイル名＋コピーアイコンのみ） */}
@@ -173,7 +219,12 @@ export default function FilenamePage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            形式: <span className="font-mono">【書類】氏名様_YYYY.M.D</span>
+            形式:{" "}
+            <span className="font-mono">
+              {docType === "身分証明書"
+                ? "【書類】氏名様_証明書種類"
+                : "【書類】氏名様_YYYY.M.D"}
+            </span>
           </p>
         </div>
       </div>

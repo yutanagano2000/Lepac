@@ -231,10 +231,10 @@ export function GeoSearchView() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-8">
-      {/* Lepacロゴ */}
+      {/* 法令確認タイトル */}
       <div className="mb-8">
-        <h1 className="text-7xl font-normal tracking-tight text-white">
-          Lepac
+        <h1 className="text-4xl font-normal tracking-tight text-white">
+          法令確認
         </h1>
       </div>
 

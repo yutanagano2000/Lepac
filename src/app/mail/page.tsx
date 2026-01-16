@@ -86,11 +86,22 @@ function buildEmail(answers: Record<string, string>) {
 export default function MailPage() {
   const [step, setStep] = React.useState(0);
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
-  const [copied, setCopied] = React.useState(false);
+  const [copiedBody, setCopiedBody] = React.useState(false);
+  const [copiedTitle, setCopiedTitle] = React.useState(false);
 
   const done = step >= QUESTIONS.length;
   const question = QUESTIONS[step];
   const emailText = React.useMemo(() => (done ? buildEmail(answers) : ""), [done, answers]);
+  
+  // メールタイトルを生成
+  const emailTitle = React.useMemo(() => {
+    if (!done) return "";
+    const content = answers.content;
+    if (content === "ownership-transfer") {
+      return "所有権移転登記のお願い（会社名_P番号)";
+    }
+    return "";
+  }, [done, answers]);
 
   const choose = (qId: string, optionId: string) => {
     setAnswers((prev) => ({ ...prev, [qId]: optionId }));
@@ -101,14 +112,22 @@ export default function MailPage() {
   const reset = () => {
     setAnswers({});
     setStep(0);
-    setCopied(false);
+    setCopiedBody(false);
+    setCopiedTitle(false);
   };
 
-  const onCopy = async () => {
+  const onCopyBody = async () => {
     if (!emailText) return;
     await navigator.clipboard.writeText(emailText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setCopiedBody(true);
+    setTimeout(() => setCopiedBody(false), 1500);
+  };
+
+  const onCopyTitle = async () => {
+    if (!emailTitle) return;
+    await navigator.clipboard.writeText(emailTitle);
+    setCopiedTitle(true);
+    setTimeout(() => setCopiedTitle(false), 1500);
   };
 
   return (
@@ -171,43 +190,113 @@ export default function MailPage() {
             <>
               <div className="flex items-center justify-between">
                 <h1 className="text-xl font-semibold">メール文面</h1>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={onCopy}
-                    disabled={!emailText}
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-4 w-4" />
-                        コピーしました
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-4 w-4" />
-                        コピー
-                      </>
-                    )}
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={reset}>
-                    <RotateCcw className="h-4 w-4" />
-                    最初から
-                  </Button>
-                </div>
+                <Button type="button" variant="ghost" onClick={reset}>
+                  <RotateCcw className="h-4 w-4" />
+                  最初から
+                </Button>
               </div>
 
+              {/* メールタイトルカード */}
+              {emailTitle && (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+                  <p className="min-w-0 flex-1 truncate text-sm font-medium text-card-foreground">
+                    {emailTitle}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={onCopyTitle}
+                    disabled={!emailTitle}
+                    aria-label="タイトルをコピー"
+                    title="コピー"
+                  >
+                    {copiedTitle ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* メール文面カード */}
               <div className="rounded-2xl border border-border bg-card p-4">
                 {emailText ? (
-                  <pre className="whitespace-pre-wrap break-words text-sm text-card-foreground">
-                    {emailText}
-                  </pre>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <pre className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-card-foreground">
+                        {emailText}
+                      </pre>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={onCopyBody}
+                        className="shrink-0"
+                        aria-label="本文をコピー"
+                        title="コピー"
+                      >
+                        {copiedBody ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     （この条件のメール文面は未登録です）
                   </p>
                 )}
               </div>
+
+              {/* 添付資料の注意書き */}
+              {emailText && (
+                <div className="rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 rounded-full bg-amber-500/20 p-2">
+                      <svg
+                        className="h-5 w-5 text-amber-600 dark:text-amber-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                        />
+                      </svg>
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <p className="font-semibold text-amber-900 dark:text-amber-200">
+                        添付資料をお忘れなく
+                      </p>
+                      <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-300">
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 dark:bg-amber-400"></span>
+                          土地売買契約書
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 dark:bg-amber-400"></span>
+                          印鑑登録証明書
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 dark:bg-amber-400"></span>
+                          身分証明書
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-600 dark:bg-amber-400"></span>
+                          不動産登記
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
