@@ -1,0 +1,50 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Globe, Home, Scale, FileText } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+
+const items = [
+  { href: "/", label: "ホーム", icon: Home },
+  { href: "/legal", label: "法令確認", icon: Scale },
+  { href: "/filename", label: "ファイル名", icon: FileText },
+] as const;
+
+export function SideNav() {
+  const pathname = usePathname();
+
+  return (
+    <aside className="sticky top-0 h-screen w-72 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <div className="flex h-full flex-col p-4">
+        {/* ロゴ：遷移なし（クリック不可） */}
+        <div className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2">
+          <Globe className="h-5 w-5" />
+          <span className="text-lg font-semibold tracking-tight">Lepac</span>
+        </div>
+
+        <nav className="space-y-1">
+          {items.map((item) => {
+            const active = pathname === item.href;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent",
+                  active && "bg-sidebar-accent text-sidebar-accent-foreground"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </aside>
+  );
+}
+
