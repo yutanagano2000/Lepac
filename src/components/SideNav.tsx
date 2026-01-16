@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, Scale, FileText } from "lucide-react";
+import { Globe, Home, Scale, FileText, Mail } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ const items = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/legal", label: "法令確認", icon: Scale },
   { href: "/filename", label: "ファイル名", icon: FileText },
+  { href: "/mail", label: "メール", icon: Mail },
 ] as const;
 
 export function SideNav() {
