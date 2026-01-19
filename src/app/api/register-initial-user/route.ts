@@ -13,12 +13,12 @@ export async function GET() {
   }
 
   // 初期ユーザーの作成
-  const hashedPassword = await bcrypt.hash("admin123", 10);
+  const hashedPassword = await bcrypt.hash("Energy", 10);
   
   const [newUser] = await db
     .insert(users)
     .values({
-      username: "admin",
+      username: "Person",
       name: "管理者",
       password: hashedPassword,
       role: "admin",
@@ -28,6 +28,6 @@ export async function GET() {
   return NextResponse.json({
     message: "Initial user created",
     username: newUser.username,
-    password: "admin123 (Please change this immediately)"
+    password: "Energy (Please change this immediately)"
   });
 }
