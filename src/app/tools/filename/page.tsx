@@ -1,8 +1,8 @@
-
 "use client";
 
 import * as React from "react";
-import { Check, Copy, Calendar as CalendarIcon } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Check, Copy, Calendar as CalendarIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,11 +91,24 @@ export default function FilenamePage() {
     <div className="min-h-screen bg-background px-6">
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center py-10">
         <div className="w-full space-y-4">
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold">ファイル名生成</h1>
-            <p className="text-sm text-muted-foreground">
-              書類・氏名・必要項目を入力するとファイル名を生成します
-            </p>
+          <div className="flex items-center gap-3">
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              aria-label="ツール一覧に戻る"
+              title="戻る"
+            >
+              <Link href="/tools">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold">ファイル名生成</h1>
+              <p className="text-sm text-muted-foreground">
+                書類・氏名・必要項目を入力するとファイル名を生成します
+              </p>
+            </div>
           </div>
 
           {/* 条件入力（3カード横並び） */}

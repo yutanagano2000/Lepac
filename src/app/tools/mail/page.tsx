@@ -1,7 +1,8 @@
- "use client";
+"use client";
 
 import * as React from "react";
-import { ChevronLeft, RotateCcw, Copy, Check } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, ChevronLeft, RotateCcw, Copy, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -137,9 +138,22 @@ export default function MailPage() {
           {!done ? (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  質問 {step + 1} / {QUESTIONS.length}
-                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    aria-label="ツール一覧に戻る"
+                    title="戻る"
+                  >
+                    <Link href="/tools">
+                      <ArrowLeft className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    質問 {step + 1} / {QUESTIONS.length}
+                  </p>
+                </div>
 
                 <div className="flex gap-2">
                   <Button
@@ -189,7 +203,20 @@ export default function MailPage() {
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <h1 className="text-xl font-semibold">メール文面</h1>
+                <div className="flex items-center gap-3">
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    aria-label="ツール一覧に戻る"
+                    title="戻る"
+                  >
+                    <Link href="/tools">
+                      <ArrowLeft className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <h1 className="text-xl font-semibold">メール文面</h1>
+                </div>
                 <Button type="button" variant="ghost" onClick={reset}>
                   <RotateCcw className="h-4 w-4" />
                   最初から
@@ -304,4 +331,3 @@ export default function MailPage() {
     </div>
   );
 }
-

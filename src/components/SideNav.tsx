@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, Scale, FileText, Mail } from "lucide-react";
+import { Globe, Home, Scale, Wrench } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/legal", label: "法令確認", icon: Scale },
-  { href: "/filename", label: "ファイル名", icon: FileText },
-  { href: "/mail", label: "メール", icon: Mail },
+  { href: "/tools", label: "ツール", icon: Wrench },
 ] as const;
 
 export function SideNav() {
@@ -27,7 +26,10 @@ export function SideNav() {
 
         <nav className="space-y-1">
           {items.map((item) => {
-            const active = pathname === item.href;
+            // ツールの場合は、/tools で始まるパスでもアクティブにする
+            const active = item.href === "/tools" 
+              ? pathname.startsWith("/tools")
+              : pathname === item.href;
             const Icon = item.icon;
             return (
               <Link
@@ -48,4 +50,3 @@ export function SideNav() {
     </aside>
   );
 }
-
