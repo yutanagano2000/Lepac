@@ -16,6 +16,15 @@ export const progress = sqliteTable("progress", {
   title: text("title").notNull(),
   description: text("description"),
   status: text("status").notNull().default("planned"), // planned: 予定, completed: 完了
+  createdAt: text("created_at").notNull(), // 予定日
+  completedAt: text("completed_at"), // 完了日
+});
+
+// コメント（ツイート）テーブル
+export const comments = sqliteTable("comments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  content: text("content").notNull(),
   createdAt: text("created_at").notNull(),
 });
 
@@ -23,3 +32,5 @@ export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 export type Progress = typeof progress.$inferSelect;
 export type NewProgress = typeof progress.$inferInsert;
+export type Comment = typeof comments.$inferSelect;
+export type NewComment = typeof comments.$inferInsert;

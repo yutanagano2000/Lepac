@@ -42,7 +42,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const body = await request.json();
-  const { progressId, title, description, status, createdAt } = body;
+  const { progressId, title, description, status, createdAt, completedAt } = body;
 
   // 更新するフィールドを構築
   const updateFields: Record<string, unknown> = {};
@@ -50,6 +50,7 @@ export async function PATCH(
   if (description !== undefined) updateFields.description = description;
   if (status !== undefined) updateFields.status = status;
   if (createdAt !== undefined) updateFields.createdAt = createdAt;
+  if (completedAt !== undefined) updateFields.completedAt = completedAt;
 
   const result = db
     .update(progress)

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,7 +25,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Project, Progress } from "@/db/schema";
+import type { Project, Progress, Comment } from "@/db/schema";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const PROGRESS_TITLES = [
   "合意書",
@@ -59,6 +70,13 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [progressList, setProgressList] = useState<Progress[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [editingComment, setEditingComment] = useState<Comment | null>(null);
+  const [editCommentContent, setEditCommentContent] = useState("");
+  const [commentEditOpen, setCommentEditOpen] = useState(false);
+  const [commentDeleteOpen, setCommentDeleteOpen] = useState(false);
+  const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
   const [open, setOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -82,13 +100,17 @@ export default function ProjectDetailPage() {
     title: string;
     description: string;
     date: Date | undefined;
+    completedAt: Date | undefined;
     status: "planned" | "completed";
   }>({
     title: "",
     description: "",
     date: undefined,
+    completedAt: undefined,
     status: "planned",
   });
+  const [editCompletedDateText, setEditCompletedDateText] = useState("");
+  const [editCompletedCalendarOpen, setEditCompletedCalendarOpen] = useState(false);
   const [editDateText, setEditDateText] = useState("");
 
   const fetchProject = () => {
@@ -103,6 +125,61 @@ export default function ProjectDetailPage() {
       .then(setProgressList);
   };
 
+  const fetchComments = () => {
+    fetch(`/api/projects/${id}/comments`)
+      .then((res) => res.json())
+      .then(setComments);
+  };
+
+  const handleCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    await fetch(`/api/projects/${id}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: newComment }),
+    });
+    setNewComment("");
+    fetchComments();
+  };
+
+  const openCommentEditDialog = (comment: Comment) => {
+    setEditingComment(comment);
+    setEditCommentContent(comment.content);
+    setCommentEditOpen(true);
+  };
+
+  const handleCommentEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingComment || !editCommentContent.trim()) return;
+    await fetch(`/api/projects/${id}/comments`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        commentId: editingComment.id,
+        content: editCommentContent,
+      }),
+    });
+    setCommentEditOpen(false);
+    setEditingComment(null);
+    fetchComments();
+  };
+
+  const openCommentDeleteDialog = (comment: Comment) => {
+    setDeletingComment(comment);
+    setCommentDeleteOpen(true);
+  };
+
+  const handleCommentDelete = async () => {
+    if (!deletingComment) return;
+    await fetch(`/api/projects/${id}/comments?commentId=${deletingComment.id}`, {
+      method: "DELETE",
+    });
+    setCommentDeleteOpen(false);
+    setDeletingComment(null);
+    fetchComments();
+  };
+
   // タイムラインを自動生成してから進捗を取得
   const generateAndFetchProgress = async () => {
     await fetch(`/api/projects/${id}/progress/generate`, { method: "POST" });
@@ -112,6 +189,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     fetchProject();
     generateAndFetchProgress();
+    fetchComments();
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,7 +215,11 @@ export default function ProjectDetailPage() {
     await fetch(`/api/projects/${id}/progress`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ progressId, status: "completed" }),
+      body: JSON.stringify({ 
+        progressId, 
+        status: "completed",
+        completedAt: new Date().toISOString(),
+      }),
     });
     fetchProgress();
   };
@@ -145,13 +227,16 @@ export default function ProjectDetailPage() {
   const openEditDialog = (p: Progress) => {
     setEditingProgress(p);
     const date = new Date(p.createdAt);
+    const completedAt = p.completedAt ? new Date(p.completedAt) : undefined;
     setEditForm({
       title: p.title,
       description: p.description ?? "",
       date,
+      completedAt,
       status: p.status as "planned" | "completed",
     });
     setEditDateText(formatYyyyMd(date));
+    setEditCompletedDateText(completedAt ? formatYyyyMd(completedAt) : "");
     setEditOpen(true);
   };
 
@@ -167,6 +252,7 @@ export default function ProjectDetailPage() {
         description: editForm.description,
         status: editForm.status,
         createdAt: editForm.date.toISOString(),
+        completedAt: editForm.completedAt ? editForm.completedAt.toISOString() : null,
       }),
     });
     setEditOpen(false);
@@ -202,6 +288,7 @@ export default function ProjectDetailPage() {
         title: p.title,
         description: p.description ?? undefined,
         date: new Date(p.createdAt),
+        completedAt: p.completedAt ? new Date(p.completedAt) : undefined,
         status: p.status as "completed" | "planned",
       }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -233,14 +320,8 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* 進捗追加ボタン */}
+          {/* 進捗追加ダイアログ */}
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4" />
-                進捗を追加
-              </Button>
-            </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>進捗を追加</DialogTitle>
@@ -385,7 +466,7 @@ export default function ProjectDetailPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>日付</Label>
+                  <Label>予定日</Label>
                   <div className="flex gap-2">
                     <Input
                       value={editDateText}
@@ -423,6 +504,54 @@ export default function ProjectDetailPage() {
                               setEditDateText(formatYyyyMd(d));
                             }
                             setEditCalendarOpen(false);
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>完了日（任意）</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={editCompletedDateText}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setEditCompletedDateText(value);
+                        const match = value.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
+                        if (match) {
+                          const [, y, m, d] = match;
+                          const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+                          if (!isNaN(parsed.getTime())) {
+                            setEditForm({ ...editForm, completedAt: parsed });
+                          }
+                        } else if (value === "") {
+                          setEditForm({ ...editForm, completedAt: undefined });
+                        }
+                      }}
+                      placeholder="例: 2026.1.19"
+                      className="flex-1"
+                    />
+                    <Popover open={editCompletedCalendarOpen} onOpenChange={setEditCompletedCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="icon">
+                          <CalendarIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                          mode="single"
+                          selected={editForm.completedAt}
+                          onSelect={(d) => {
+                            if (d) {
+                              setEditForm({ ...editForm, completedAt: d });
+                              setEditCompletedDateText(formatYyyyMd(d));
+                            } else {
+                              setEditForm({ ...editForm, completedAt: undefined });
+                              setEditCompletedDateText("");
+                            }
+                            setEditCompletedCalendarOpen(false);
                           }}
                           initialFocus
                         />
@@ -472,9 +601,19 @@ export default function ProjectDetailPage() {
 
           {/* 統合タイムライン */}
           <div className="relative">
-            <div className="mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <h2 className="font-semibold">タイムライン</h2>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <h2 className="font-semibold">タイムライン</h2>
+              </div>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="h-4 w-4" />
+                    進捗を追加
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
             </div>
             {sortedTimeline.length === 0 ? (
               <p className="text-sm text-muted-foreground">タイムラインがありません</p>
@@ -488,6 +627,12 @@ export default function ProjectDetailPage() {
                   return sortedTimeline.map((item, index) => {
                     const isCompleted = item.status === "completed";
                     const isFirstPending = index === firstPendingIndex;
+                    
+                    // 予定日までの日数を計算
+                    const now = new Date();
+                    const daysUntilDue = Math.ceil((item.date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                    const isOverdue = !isCompleted && daysUntilDue < 0;
+                    
                     return (
                     <div key={item.id} className="relative flex gap-4">
                       {/* 縦線とノード */}
@@ -496,13 +641,15 @@ export default function ProjectDetailPage() {
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${
                             isCompleted
                               ? "border-green-500 bg-green-500"
+                              : isOverdue
+                              ? "border-red-500 bg-background"
                               : "border-muted-foreground bg-background"
                           }`}
                         >
                           {isCompleted ? (
                             <Check className="h-4 w-4 text-white" />
                           ) : (
-                            <Circle className="h-4 w-4 text-muted-foreground" />
+                            <Circle className={`h-4 w-4 ${isOverdue ? "text-red-500" : "text-muted-foreground"}`} />
                           )}
                         </div>
                         {index < sortedTimeline.length - 1 && (
@@ -545,6 +692,11 @@ export default function ProjectDetailPage() {
                             )}
                             <p className="mt-1 text-xs text-muted-foreground">
                               {formatDateJp(item.date)}
+                              {item.completedAt && (
+                                <span className={`ml-2 ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
+                                  → {formatDateJp(item.completedAt)}
+                                </span>
+                              )}
                             </p>
                           </div>
                           {isFirstPending && (
@@ -565,6 +717,117 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </div>
+
+          {/* コメントフィード */}
+          <div className="relative">
+            <div className="mb-4 flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-semibold">コメント</h2>
+            </div>
+            {/* コメント投稿欄 */}
+            <form onSubmit={handleCommentSubmit} className="mb-4">
+              <div className="flex gap-2">
+                <Textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="コメントを入力..."
+                  rows={2}
+                  className="flex-1"
+                />
+                <Button type="submit" size="icon" disabled={!newComment.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+            {/* コメント一覧 */}
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">コメントはありません</p>
+              ) : (
+                comments.map((comment) => (
+                  <Card key={comment.id} className="bg-muted/50">
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm">{comment.content}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDateJp(new Date(comment.createdAt))}
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openCommentEditDialog(comment)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => openCommentDeleteDialog(comment)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* コメント編集ダイアログ */}
+          <Dialog open={commentEditOpen} onOpenChange={setCommentEditOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>コメントを編集</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCommentEditSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-comment-content">内容</Label>
+                  <Textarea
+                    id="edit-comment-content"
+                    value={editCommentContent}
+                    onChange={(e) => setEditCommentContent(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setCommentEditOpen(false)}>
+                    キャンセル
+                  </Button>
+                  <Button type="submit" disabled={!editCommentContent.trim()}>
+                    保存
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* コメント削除確認ダイアログ */}
+          <AlertDialog open={commentDeleteOpen} onOpenChange={setCommentDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>コメントを削除</AlertDialogTitle>
+                <AlertDialogDescription>
+                  このコメントを削除しますか？
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleCommentDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  削除
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
         </div>
       </div>

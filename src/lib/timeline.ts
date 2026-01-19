@@ -48,7 +48,7 @@ export function calculateTimeline(
   includeNoushin: boolean = false
 ): TimelinePhase[] {
   const [year, month] = completionMonth.split("-").map(Number);
-  const baseDate = new Date(year, month - 1, 1);
+  const baseDate = new Date(year, month - 1, 15); // 完成月の15日を基準とする
 
   return PHASE_OFFSETS.filter((phase) => !phase.optional || includeNoushin).map(
     (phase) => ({
