@@ -50,12 +50,12 @@ export function calculateTimeline(
   const [year, month] = completionMonth.split("-").map(Number);
   const baseDate = new Date(year, month - 1, 15); // 完成月の15日を基準とする
 
-  return PHASE_OFFSETS.filter((phase) => !phase.optional || includeNoushin).map(
+  return PHASE_OFFSETS.filter((phase) => !("optional" in phase) || includeNoushin).map(
     (phase) => ({
       key: phase.key,
       title: phase.title,
       date: addMonths(baseDate, phase.monthsOffset),
-      optional: phase.optional,
+      optional: "optional" in phase ? phase.optional : undefined,
     })
   );
 }

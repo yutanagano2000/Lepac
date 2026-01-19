@@ -4,13 +4,13 @@ import { projects } from "@/db/schema";
 
 // 全件取得
 export async function GET() {
-  const allProjects = db.select().from(projects).all();
+  const allProjects = await db.select().from(projects);
   return NextResponse.json(allProjects);
 }
 
 // 新規追加
 export async function POST(request: Request) {
   const body = await request.json();
-  const result = db.insert(projects).values(body).returning().get();
+  const [result] = await db.insert(projects).values(body).returning();
   return NextResponse.json(result);
 }

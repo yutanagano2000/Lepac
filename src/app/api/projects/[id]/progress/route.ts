@@ -8,12 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const allProgress = db
+  const allProgress = await db
     .select()
     .from(progress)
     .where(eq(progress.projectId, Number(id)))
-    .orderBy(desc(progress.createdAt))
-    .all();
+    .orderBy(desc(progress.createdAt));
   return NextResponse.json(allProgress);
 }
 
@@ -23,7 +22,7 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const result = db
+  const [result] = await db
     .insert(progress)
     .values({
       projectId: Number(id),
@@ -32,8 +31,7 @@ export async function POST(
       status: body.status || "planned",
       createdAt: body.createdAt || new Date().toISOString(),
     })
-    .returning()
-    .get();
+    .returning();
   return NextResponse.json(result);
 }
 
@@ -52,12 +50,11 @@ export async function PATCH(
   if (createdAt !== undefined) updateFields.createdAt = createdAt;
   if (completedAt !== undefined) updateFields.completedAt = completedAt;
 
-  const result = db
+  const [result] = await db
     .update(progress)
     .set(updateFields)
     .where(eq(progress.id, Number(progressId)))
-    .returning()
-    .get();
+    .returning();
   return NextResponse.json(result);
 }
 
@@ -70,6 +67,6 @@ export async function DELETE(
   if (!progressId) {
     return NextResponse.json({ error: "progressId is required" }, { status: 400 });
   }
-  db.delete(progress).where(eq(progress.id, Number(progressId))).run();
+  await db.delete(progress).where(eq(progress.id, Number(progressId)));
   return NextResponse.json({ success: true });
 }

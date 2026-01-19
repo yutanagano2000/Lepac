@@ -16,11 +16,10 @@ export async function POST(
   const projectId = Number(id);
 
   // 案件を取得
-  const project = db
+  const [project] = await db
     .select()
     .from(projects)
-    .where(eq(projects.id, projectId))
-    .get();
+    .where(eq(projects.id, projectId));
 
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -34,11 +33,10 @@ export async function POST(
   const timeline = calculateTimeline(project.completionMonth, false);
 
   // 既存の進捗を取得
-  const existingProgress = db
+  const existingProgress = await db
     .select()
     .from(progress)
-    .where(eq(progress.projectId, projectId))
-    .all();
+    .where(eq(progress.projectId, projectId));
 
   // 既存のタイトルをセットに変換（重複チェック用）
   const existingTitles = new Set(existingProgress.map((p) => p.title));
@@ -71,7 +69,7 @@ export async function POST(
   // 新規進捗を挿入
   const insertedProgress = [];
   for (const item of newProgress) {
-    const result = db
+    const [result] = await db
       .insert(progress)
       .values({
         projectId,
@@ -80,8 +78,7 @@ export async function POST(
         status: "planned",
         createdAt: item.date.toISOString(),
       })
-      .returning()
-      .get();
+      .returning();
     insertedProgress.push(result);
   }
 

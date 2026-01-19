@@ -8,12 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const allComments = db
+  const allComments = await db
     .select()
     .from(comments)
     .where(eq(comments.projectId, Number(id)))
-    .orderBy(desc(comments.createdAt))
-    .all();
+    .orderBy(desc(comments.createdAt));
   return NextResponse.json(allComments);
 }
 
@@ -23,15 +22,14 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const result = db
+  const [result] = await db
     .insert(comments)
     .values({
       projectId: Number(id),
       content: body.content,
       createdAt: new Date().toISOString(),
     })
-    .returning()
-    .get();
+    .returning();
   return NextResponse.json(result);
 }
 
@@ -41,12 +39,11 @@ export async function PATCH(
 ) {
   const body = await request.json();
   const { commentId, content } = body;
-  const result = db
+  const [result] = await db
     .update(comments)
     .set({ content })
     .where(eq(comments.id, Number(commentId)))
-    .returning()
-    .get();
+    .returning();
   return NextResponse.json(result);
 }
 
@@ -59,6 +56,6 @@ export async function DELETE(
   if (!commentId) {
     return NextResponse.json({ error: "commentId is required" }, { status: 400 });
   }
-  db.delete(comments).where(eq(comments.id, Number(commentId))).run();
+  await db.delete(comments).where(eq(comments.id, Number(commentId)));
   return NextResponse.json({ success: true });
 }
