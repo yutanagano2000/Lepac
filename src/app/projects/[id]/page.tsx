@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Project, Progress, Comment } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -77,6 +78,12 @@ export default function ProjectDetailPage() {
   const [commentEditOpen, setCommentEditOpen] = useState(false);
   const [commentDeleteOpen, setCommentDeleteOpen] = useState(false);
   const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
+  const [detailEditOpen, setDetailEditOpen] = useState(false);
+  const [detailForm, setDetailForm] = useState({
+    address: "",
+    coordinates: "",
+    landowner: "",
+  });
   const [open, setOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -129,6 +136,33 @@ export default function ProjectDetailPage() {
     fetch(`/api/projects/${id}/comments`)
       .then((res) => res.json())
       .then(setComments);
+  };
+
+  const handleDetailUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!project) return;
+    await fetch(`/api/projects/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...project,
+        address: detailForm.address,
+        coordinates: detailForm.coordinates,
+        landowner: detailForm.landowner,
+      }),
+    });
+    setDetailEditOpen(false);
+    fetchProject();
+  };
+
+  const openDetailEditDialog = () => {
+    if (!project) return;
+    setDetailForm({
+      address: project.address ?? "",
+      coordinates: project.coordinates ?? "",
+      landowner: project.landowner ?? "",
+    });
+    setDetailEditOpen(true);
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
@@ -278,6 +312,14 @@ export default function ProjectDetailPage() {
       month: "2-digit",
       day: "2-digit",
     });
+  };
+
+  const getMappleUrl = (coords: string | null) => {
+    if (!coords) return null;
+    const parts = coords.split(/[\s,]+/).map((p) => p.trim());
+    if (parts.length < 2) return null;
+    const [lat, lng] = parts;
+    return `https://labs.mapple.com/mapplexml.html#16/${lat}/${lng}`;
   };
 
   // 進捗を日付でソート（すべてDBから取得）
@@ -718,67 +760,162 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          {/* コメントフィード */}
-          <div className="relative">
-            <div className="mb-4 flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 text-muted-foreground" />
-              <h2 className="font-semibold">コメント</h2>
-            </div>
-            {/* コメント投稿欄 */}
-            <form onSubmit={handleCommentSubmit} className="mb-4">
-              <div className="flex gap-2">
-                <Textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="コメントを入力..."
-                  rows={2}
-                  className="flex-1"
-                />
-                <Button type="submit" size="icon" disabled={!newComment.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
+          {/* タブ UI */}
+          <Tabs defaultValue="comments" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="comments">コメント</TabsTrigger>
+              <TabsTrigger value="details">案件詳細情報</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="comments" className="mt-6 space-y-6">
+              {/* コメントフィード */}
+              <div className="relative">
+                <div className="mb-4 flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="font-semibold">コメント</h2>
+                </div>
+                {/* コメント投稿欄 */}
+                <form onSubmit={handleCommentSubmit} className="mb-4">
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="コメントを入力..."
+                      rows={2}
+                      className="flex-1"
+                    />
+                    <Button type="submit" size="icon" disabled={!newComment.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </form>
+                {/* コメント一覧 */}
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {comments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">コメントはありません</p>
+                  ) : (
+                    comments.map((comment) => (
+                      <Card key={comment.id} className="bg-muted/50">
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="text-sm">{comment.content}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {formatDateJp(new Date(comment.createdAt))}
+                              </p>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => openCommentEditDialog(comment)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => openCommentDeleteDialog(comment)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
               </div>
-            </form>
-            {/* コメント一覧 */}
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {comments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">コメントはありません</p>
-              ) : (
-                comments.map((comment) => (
-                  <Card key={comment.id} className="bg-muted/50">
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-sm">{comment.content}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatDateJp(new Date(comment.createdAt))}
-                          </p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openCommentEditDialog(comment)}
+            </TabsContent>
+
+            <TabsContent value="details" className="mt-6">
+              <Card>
+                <CardContent className="pt-6 space-y-4">
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">現地住所</span>
+                    <span className="col-span-2 text-sm">{project.address || "未登録"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">座標</span>
+                    <div className="col-span-2 flex items-center justify-between gap-2">
+                      <span className="text-sm">{project.coordinates || "未登録"}</span>
+                      {project.coordinates && (
+                        <Button variant="outline" size="sm" asChild className="h-8">
+                          <a
+                            href={getMappleUrl(project.coordinates) || ""}
+                            target="_blank"
+                            rel="noopener noreferrer"
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => openCommentDeleteDialog(comment)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </div>
+                            <ExternalLink className="h-3 w-3 mr-2" />
+                            MAPPLEで表示
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">地権者</span>
+                    <span className="col-span-2 text-sm">{project.landowner || "未登録"}</span>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <Button variant="outline" size="sm" onClick={openDetailEditDialog}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      詳細情報を編集
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* 詳細情報編集ダイアログ */}
+          <Dialog open={detailEditOpen} onOpenChange={setDetailEditOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>詳細情報を編集</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleDetailUpdate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="address">現地住所</Label>
+                  <Input
+                    id="address"
+                    value={detailForm.address}
+                    onChange={(e) => setDetailForm({ ...detailForm, address: e.target.value })}
+                    placeholder="例: 長野県..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="coordinates">座標</Label>
+                  <Input
+                    id="coordinates"
+                    value={detailForm.coordinates}
+                    onChange={(e) => setDetailForm({ ...detailForm, coordinates: e.target.value })}
+                    placeholder="例: 36.6485, 138.1942"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="landowner">地権者</Label>
+                  <Input
+                    id="landowner"
+                    value={detailForm.landowner}
+                    onChange={(e) => setDetailForm({ ...detailForm, landowner: e.target.value })}
+                    placeholder="例: 山田 太郎"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setDetailEditOpen(false)}>
+                    キャンセル
+                  </Button>
+                  <Button type="submit">
+                    保存
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           {/* コメント編集ダイアログ */}
           <Dialog open={commentEditOpen} onOpenChange={setCommentEditOpen}>

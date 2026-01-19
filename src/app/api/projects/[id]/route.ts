@@ -29,6 +29,9 @@ export async function PUT(
       client: body.client,
       projectNumber: body.projectNumber,
       completionMonth: body.completionMonth || null,
+      address: body.address || null,
+      coordinates: body.coordinates || null,
+      landowner: body.landowner || null,
     })
     .where(eq(projects.id, Number(id)))
     .returning();

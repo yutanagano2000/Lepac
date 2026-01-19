@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, FolderKanban, Scale, Wrench } from "lucide-react";
+import { Globe, Home, FolderKanban, Scale, Wrench, LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,8 @@ const items = [
 
 export function SideNav() {
   const pathname = usePathname();
+
+  if (pathname === "/login") return null;
 
   return (
     <aside className="sticky top-0 h-screen w-72 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -47,6 +50,16 @@ export function SideNav() {
             );
           })}
         </nav>
+
+        <div className="mt-auto border-t border-sidebar-border pt-4">
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>ログアウト</span>
+          </button>
+        </div>
       </div>
     </aside>
   );

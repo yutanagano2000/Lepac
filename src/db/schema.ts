@@ -7,6 +7,9 @@ export const projects = sqliteTable("projects", {
   client: text("client").notNull(),
   projectNumber: text("project_number").notNull(),
   completionMonth: text("completion_month"), // 完成月（例: 2026-03）
+  address: text("address"), // 現地住所
+  coordinates: text("coordinates"), // 座標
+  landowner: text("landowner"), // 地権者
 });
 
 // 進捗テーブル
@@ -34,3 +37,15 @@ export type Progress = typeof progress.$inferSelect;
 export type NewProgress = typeof progress.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
+
+// ユーザーテーブル
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  username: text("username").notNull().unique(), // ログインID
+  name: text("name"), // 表示名
+  password: text("password").notNull(), // ハッシュ化したパスワード
+  role: text("role").notNull().default("user"), // user, admin
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
