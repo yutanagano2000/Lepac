@@ -25,7 +25,7 @@ export const db: LibSQLDatabase<typeof schema> = new Proxy({} as LibSQLDatabase<
       initDb(); // 背景で初期化（非同期だが、次は待たれる）
       dbInstance = drizzle(getClient(), { schema });
     }
-    return (dbInstance as Record<string, unknown>)[prop as string];
+    return (dbInstance as unknown as Record<string, unknown>)[prop as string];
   },
 });
 
