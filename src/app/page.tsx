@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import {
   Table,
   TableBody,
@@ -6,15 +9,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-// サンプルデータ（実際のデータはAPIやDBから取得）
-const projects = [
-  { id: "P-001", manager: "山田", client: "〇〇不動産", projectNumber: "2026-0001" },
-  { id: "P-002", manager: "佐藤", client: "△△建設", projectNumber: "2026-0002" },
-  { id: "P-003", manager: "田中", client: "□□開発", projectNumber: "2026-0003" },
-];
+import type { Project } from "@/db/schema";
 
 export default function HomePage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((res) => res.json())
+      .then(setProjects);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background px-6">
       <div className="mx-auto max-w-5xl py-10">
@@ -37,14 +42,22 @@ export default function HomePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {projects.map((project) => (
-                  <TableRow key={project.id}>
-                    <TableCell className="font-medium">{project.id}</TableCell>
-                    <TableCell>{project.manager}</TableCell>
-                    <TableCell>{project.client}</TableCell>
-                    <TableCell>{project.projectNumber}</TableCell>
+                {projects.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      案件がありません
+                    </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  projects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-medium">{project.managementNumber}</TableCell>
+                      <TableCell>{project.manager}</TableCell>
+                      <TableCell>{project.client}</TableCell>
+                      <TableCell>{project.projectNumber}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

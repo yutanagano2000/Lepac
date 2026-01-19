@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, Scale, Wrench } from "lucide-react";
+import { Globe, Home, FolderKanban, Scale, Wrench } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/", label: "ホーム", icon: Home },
+  { href: "/projects", label: "案件", icon: FolderKanban },
   { href: "/legal", label: "法令確認", icon: Scale },
   { href: "/tools", label: "ツール", icon: Wrench },
 ] as const;
@@ -21,7 +22,7 @@ export function SideNav() {
         {/* ロゴ：遷移なし（クリック不可） */}
         <div className="mb-4 flex items-center gap-2 rounded-xl px-3 py-2">
           <Globe className="h-5 w-5" />
-          <span className="text-lg font-semibold tracking-tight">Lepac</span>
+          <span className="text-lg font-semibold tracking-tight">ALAN</span>
         </div>
 
         <nav className="space-y-1">

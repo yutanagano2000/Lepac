@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lepac - 法令検索アプリ",
+  title: "ALAN - 法令検索アプリ",
   description: "座標と都道府県を入力して、工事に関連する法令を検索します。",
 };
 
