@@ -1,16 +1,17 @@
 // フェーズ定義（完工からの相対月数）
+// タイトルは PROGRESS_TITLES と統一（重複防止のため）
 export const PHASE_OFFSETS = [
   { key: "noushin", title: "農振申請", monthsOffset: -10.1, optional: true },
   { key: "denryoku", title: "電力申請", monthsOffset: -5.8 },
-  { key: "genchi", title: "現地調査", monthsOffset: -5.5 },
+  { key: "genchi", title: "現調", monthsOffset: -5.5 },
   { key: "teishutsu", title: "案件提出", monthsOffset: -5.0 },
   { key: "denryoku_kaito", title: "電力回答", monthsOffset: -2.5 },
-  { key: "nouten", title: "農転・地目申請", monthsOffset: -2.5 },
+  { key: "nouten", title: "法令申請", monthsOffset: -2.5 },
   { key: "tochi_keiyaku", title: "土地契約", monthsOffset: -2.4 },
   { key: "chakko", title: "着工", monthsOffset: -1.9 },
   { key: "tochi_kessai", title: "土地決済", monthsOffset: -1.1 },
   { key: "kanko", title: "完工", monthsOffset: 0 },
-  { key: "renkei", title: "連系（発電開始）", monthsOffset: 2.7 },
+  { key: "renkei", title: "連系", monthsOffset: 2.7 },
 ] as const;
 
 export type PhaseKey = (typeof PHASE_OFFSETS)[number]["key"];

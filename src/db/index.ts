@@ -96,6 +96,32 @@ async function initDb() {
       FOREIGN KEY (project_id) REFERENCES projects(id)
     )
   `);
+
+  // 古い名前を新しい名前に統一（重複データのクリーンアップ）
+  // 「現地調査」→「現調」、「農転・地目申請」→「法令申請」、「連系（発電開始）」→「連系」
+  const legacyTitleMigrations = [
+    { oldTitle: "現地調査", newTitle: "現調" },
+    { oldTitle: "農転・地目申請", newTitle: "法令申請" },
+    { oldTitle: "連系（発電開始）", newTitle: "連系" },
+  ];
+
+  for (const { oldTitle, newTitle } of legacyTitleMigrations) {
+    // 新しい名前が既に存在するプロジェクトから古い名前のレコードを削除
+    try {
+      await c.execute(`
+        DELETE FROM progress 
+        WHERE title = ? 
+        AND project_id IN (
+          SELECT DISTINCT project_id FROM progress WHERE title = ?
+        )
+      `, [oldTitle, newTitle]);
+    } catch (e) {}
+
+    // 残りの古い名前を新しい名前に変更
+    try {
+      await c.execute(`UPDATE progress SET title = ? WHERE title = ?`, [newTitle, oldTitle]);
+    } catch (e) {}
+  }
   
   initialized = true;
 }

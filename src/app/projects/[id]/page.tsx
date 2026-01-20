@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy } from "lucide-react";
@@ -25,12 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Project, Progress, Comment } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -300,10 +295,21 @@ export default function ProjectDetailPage() {
     fetchProgress();
   };
 
+  // Strict Modeでの二重呼び出しを防止
+  const hasGeneratedRef = useRef(false);
+
   useEffect(() => {
     fetchProject();
-    generateAndFetchProgress();
     fetchComments();
+    
+    // generate APIは1回だけ呼び出す（React Strict Modeでの二重実行防止）
+    if (!hasGeneratedRef.current) {
+      hasGeneratedRef.current = true;
+      generateAndFetchProgress();
+    } else {
+      // 2回目以降は進捗の取得のみ
+      fetchProgress();
+    }
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -333,6 +339,19 @@ export default function ProjectDetailPage() {
         progressId, 
         status: "completed",
         completedAt: new Date().toISOString(),
+      }),
+    });
+    fetchProgress();
+  };
+
+  const markAsIncomplete = async (progressId: number) => {
+    await fetch(`/api/projects/${id}/progress`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        progressId, 
+        status: "planned",
+        completedAt: null,
       }),
     });
     fetchProgress();
@@ -737,68 +756,6 @@ export default function ProjectDetailPage() {
             </DialogContent>
           </Dialog>
 
-          {/* コメントセクション */}
-          <div className="relative">
-            <div className="mb-4 flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 text-muted-foreground" />
-              <h2 className="font-semibold">コメント</h2>
-            </div>
-            {/* コメント投稿欄 */}
-            <form onSubmit={handleCommentSubmit} className="mb-4">
-              <div className="flex gap-2">
-                <Textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="コメントを入力..."
-                  rows={2}
-                  className="flex-1"
-                />
-                <Button type="submit" size="icon" disabled={!newComment.trim()}>
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-            </form>
-            {/* コメント一覧 */}
-            <div className="space-y-3 max-h-48 overflow-y-auto">
-              {comments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">コメントはありません</p>
-              ) : (
-                comments.map((comment) => (
-                  <Card key={comment.id} className="bg-muted/50">
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-sm">{comment.content}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatDateJp(new Date(comment.createdAt))}
-                          </p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openCommentEditDialog(comment)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => openCommentDeleteDialog(comment)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </div>
-
           {/* 統合タイムライン */}
           <div className="relative">
             <div className="mb-4 flex items-center justify-between">
@@ -899,15 +856,33 @@ export default function ProjectDetailPage() {
                               )}
                             </p>
                           </div>
-                          {isFirstPending && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => markAsCompleted(item.id)}
-                            >
-                              完了にする
-                            </Button>
-                          )}
+                          <div className="flex flex-col gap-1">
+                            {/* 未完了にするボタン（直近の完了タスク） */}
+                            {isCompleted && (
+                              firstPendingIndex === -1 
+                                ? index === sortedTimeline.length - 1
+                                : index === firstPendingIndex - 1
+                            ) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                                onClick={() => markAsIncomplete(item.id)}
+                              >
+                                未完了にする
+                              </Button>
+                            )}
+                            {/* 完了にするボタン（直近の未完了タスク） */}
+                            {isFirstPending && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => markAsCompleted(item.id)}
+                              >
+                                完了にする
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -918,11 +893,16 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          {/* 案件詳細情報 */}
-          <div className="space-y-6">
+          {/* タブ UI */}
+          <Tabs defaultValue="details" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">案件情報</TabsTrigger>
+              <TabsTrigger value="comments">コメント</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="mt-6">
               <Card>
                 <CardContent className="pt-6 space-y-4">
-                  <h2 className="font-semibold text-lg mb-2">案件情報</h2>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">現地住所</span>
                     <div className="col-span-2 flex items-center gap-2">
@@ -1087,51 +1067,72 @@ export default function ProjectDetailPage() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
 
-              {/* 書類アコーディオン */}
-              <Accordion type="multiple" className="w-full">
-                <AccordionItem value="agreement">
-                  <AccordionTrigger>合意書</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-sm text-muted-foreground">
-                        合意書に関するファイルがここに表示されます
-                      </p>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="land-info">
-                  <AccordionTrigger>土地情報</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-sm text-muted-foreground">
-                        土地情報に関するファイルがここに表示されます
-                      </p>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="legal">
-                  <AccordionTrigger>法令関係</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-sm text-muted-foreground">
-                        法令関係に関するファイルがここに表示されます
-                      </p>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="materials">
-                  <AccordionTrigger>材料発注</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-sm text-muted-foreground">
-                        材料発注に関するファイルがここに表示されます
-                      </p>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-          </div>
+            <TabsContent value="comments" className="mt-6 space-y-6">
+              {/* コメントフィード */}
+              <div className="relative">
+                <div className="mb-4 flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="font-semibold">コメント</h2>
+                </div>
+                {/* コメント投稿欄 */}
+                <form onSubmit={handleCommentSubmit} className="mb-4">
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="コメントを入力..."
+                      rows={2}
+                      className="flex-1"
+                    />
+                    <Button type="submit" size="icon" disabled={!newComment.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </form>
+                {/* コメント一覧 */}
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {comments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">コメントはありません</p>
+                  ) : (
+                    comments.map((comment) => (
+                      <Card key={comment.id} className="bg-muted/50">
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="text-sm">{comment.content}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {formatDateJp(new Date(comment.createdAt))}
+                              </p>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => openCommentEditDialog(comment)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => openCommentDeleteDialog(comment)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
 
           {/* 詳細情報編集ダイアログ */}
           <Dialog open={detailEditOpen} onOpenChange={setDetailEditOpen}>
@@ -1194,6 +1195,7 @@ export default function ProjectDetailPage() {
                           <SelectItem value="山林">山林</SelectItem>
                           <SelectItem value="原野">原野</SelectItem>
                           <SelectItem value="畑">畑</SelectItem>
+                          <SelectItem value="田">田</SelectItem>
                         </SelectContent>
                       </Select>
                       <Input
@@ -1218,6 +1220,7 @@ export default function ProjectDetailPage() {
                           <SelectItem value="山林">山林</SelectItem>
                           <SelectItem value="原野">原野</SelectItem>
                           <SelectItem value="畑">畑</SelectItem>
+                          <SelectItem value="田">田</SelectItem>
                         </SelectContent>
                       </Select>
                       <Input
@@ -1242,6 +1245,7 @@ export default function ProjectDetailPage() {
                           <SelectItem value="山林">山林</SelectItem>
                           <SelectItem value="原野">原野</SelectItem>
                           <SelectItem value="畑">畑</SelectItem>
+                          <SelectItem value="田">田</SelectItem>
                         </SelectContent>
                       </Select>
                       <Input

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,6 +61,17 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // 検索フィルタリング（管理番号・案件番号）
+  const filteredProjects = projects.filter((project) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      project.managementNumber.toLowerCase().includes(query) ||
+      project.projectNumber.toLowerCase().includes(query)
+    );
+  });
 
   const fetchProjects = () => {
     fetch("/api/projects")
@@ -149,12 +160,23 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     <div className="min-h-screen bg-background px-6">
       <div className="mx-auto max-w-5xl py-10">
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1 shrink-0">
               <h1 className="text-xl font-semibold">案件一覧</h1>
               <p className="text-sm text-muted-foreground">
                 担当する案件を確認できます
               </p>
+            </div>
+
+            {/* 検索欄 */}
+            <div className="relative flex-1 max-w-xl">
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="管理番号・案件番号で検索"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 h-12 text-base bg-muted/50 border-0 focus-visible:ring-2 rounded-xl"
+              />
             </div>
 
             <Dialog open={open} onOpenChange={setOpen}>
@@ -411,14 +433,14 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {projects.length === 0 ? (
+                {filteredProjects.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      案件がありません
+                      {searchQuery ? "検索結果がありません" : "案件がありません"}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  projects.map((project) => (
+                  filteredProjects.map((project) => (
                     <TableRow
                       key={project.id}
                       className="cursor-pointer hover:bg-muted/50"
