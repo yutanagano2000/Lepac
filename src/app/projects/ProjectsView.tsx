@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,13 +36,16 @@ import type { Project, NewProject } from "@/db/schema";
 
 const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
 
+// 超過情報を含む案件型
+type ProjectWithOverdue = Project & { hasOverdue: boolean };
+
 interface ProjectsViewProps {
-  initialProjects: Project[];
+  initialProjects: ProjectWithOverdue[];
 }
 
 export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const router = useRouter();
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [projects, setProjects] = useState<ProjectWithOverdue[]>(initialProjects);
   const [isPreparing, setIsPreparing] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -435,6 +438,9 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
+                          {project.hasOverdue && (
+                            <AlertCircle className="h-4 w-4 text-red-500" title="超過している進捗があります" />
+                          )}
                           {project.managementNumber}
                           {isPreparing === project.id && (
                             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
