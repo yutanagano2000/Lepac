@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,7 +46,6 @@ interface ProjectsViewProps {
 export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectWithOverdue[]>(initialProjects);
-  const [isPreparing, setIsPreparing] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -422,18 +421,9 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                   projects.map((project) => (
                     <TableRow
                       key={project.id}
-                      className={`cursor-pointer hover:bg-muted/50 transition-opacity ${
-                        isPreparing === project.id ? "opacity-50 pointer-events-none" : ""
-                      }`}
-                      onClick={async () => {
-                        setIsPreparing(project.id);
-                        try {
-                          await fetch(`/api/projects/${project.id}/progress/generate`, { method: "POST" });
-                          router.push(`/projects/${project.id}`);
-                        } catch (error) {
-                          console.error("Failed to generate timeline:", error);
-                          setIsPreparing(null);
-                        }
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => {
+                        router.push(`/projects/${project.id}`);
                       }}
                     >
                       <TableCell className="font-medium">
@@ -442,9 +432,6 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                             <AlertCircle className="h-4 w-4 text-red-500" />
                           )}
                           {project.managementNumber}
-                          {isPreparing === project.id && (
-                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>{project.manager}</TableCell>
