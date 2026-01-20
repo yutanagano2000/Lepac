@@ -439,7 +439,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {project.hasOverdue && (
-                            <AlertCircle className="h-4 w-4 text-red-500" title="超過している進捗があります" />
+                            <AlertCircle className="h-4 w-4 text-red-500" />
                           )}
                           {project.managementNumber}
                           {isPreparing === project.id && (
