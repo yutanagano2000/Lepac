@@ -9,7 +9,9 @@ export const projects = sqliteTable("projects", {
   completionMonth: text("completion_month"), // 完成月（例: 2026-03）
   address: text("address"), // 現地住所
   coordinates: text("coordinates"), // 座標
-  landowner: text("landowner"), // 地権者
+  landowner1: text("landowner_1"), // 地権者1
+  landowner2: text("landowner_2"), // 地権者2
+  landowner3: text("landowner_3"), // 地権者3
   landCategory1: text("land_category_1"), // 地目1（山林・原野・畑）
   landCategory2: text("land_category_2"), // 地目2（山林・原野・畑）
   landCategory3: text("land_category_3"), // 地目3（山林・原野・畑）

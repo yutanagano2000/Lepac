@@ -52,13 +52,17 @@ async function initDb() {
   // カラム追加用（既存テーブルへの対応）
   try { await c.execute(`ALTER TABLE projects ADD COLUMN address TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN coordinates TEXT`); } catch (e) {}
-  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN land_category_1 TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN land_category_2 TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN land_category_3 TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN land_area_1 TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN land_area_2 TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN land_area_3 TEXT`); } catch (e) {}
+  // 地権者を3つに拡張（既存のlandownerカラムがある場合はlandowner_1に移行）
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_1 TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_2 TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_3 TEXT`); } catch (e) {}
+  try { await c.execute(`UPDATE projects SET landowner_1 = landowner WHERE landowner IS NOT NULL AND landowner_1 IS NULL`); } catch (e) {}
 
   await c.execute(`
     CREATE TABLE IF NOT EXISTS users (

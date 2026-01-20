@@ -82,7 +82,9 @@ export default function ProjectDetailPage() {
   const [detailForm, setDetailForm] = useState({
     address: "",
     coordinates: "",
-    landowner: "",
+    landowner1: "",
+    landowner2: "",
+    landowner3: "",
     landCategory1: "",
     landCategory2: "",
     landCategory3: "",
@@ -154,7 +156,9 @@ export default function ProjectDetailPage() {
         ...project,
         address: detailForm.address,
         coordinates: detailForm.coordinates,
-        landowner: detailForm.landowner,
+        landowner1: detailForm.landowner1,
+        landowner2: detailForm.landowner2,
+        landowner3: detailForm.landowner3,
         landCategory1: detailForm.landCategory1,
         landCategory2: detailForm.landCategory2,
         landCategory3: detailForm.landCategory3,
@@ -172,7 +176,9 @@ export default function ProjectDetailPage() {
     setDetailForm({
       address: project.address ?? "",
       coordinates: project.coordinates ?? "",
-      landowner: project.landowner ?? "",
+      landowner1: project.landowner1 ?? "",
+      landowner2: project.landowner2 ?? "",
+      landowner3: project.landowner3 ?? "",
       landCategory1: project.landCategory1 ?? "",
       landCategory2: project.landCategory2 ?? "",
       landCategory3: project.landCategory3 ?? "",
@@ -806,10 +812,10 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* タブ UI */}
-          <Tabs defaultValue="comments" className="w-full">
+          <Tabs defaultValue="details" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="comments">コメント</TabsTrigger>
               <TabsTrigger value="details">案件詳細情報</TabsTrigger>
+              <TabsTrigger value="comments">コメント</TabsTrigger>
             </TabsList>
 
             <TabsContent value="comments" className="mt-6 space-y-6">
@@ -915,7 +921,14 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">地権者</span>
-                    <span className="col-span-2 text-sm">{project.landowner || "未登録"}</span>
+                    <div className="col-span-2 space-y-1 text-sm">
+                      {project.landowner1 && <div>{project.landowner1}</div>}
+                      {project.landowner2 && <div>{project.landowner2}</div>}
+                      {project.landowner3 && <div>{project.landowner3}</div>}
+                      {!project.landowner1 && !project.landowner2 && !project.landowner3 && (
+                        <span>未登録</span>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">地目・面積</span>
@@ -1004,13 +1017,24 @@ export default function ProjectDetailPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="landowner">地権者</Label>
-                  <Input
-                    id="landowner"
-                    value={detailForm.landowner}
-                    onChange={(e) => setDetailForm({ ...detailForm, landowner: e.target.value })}
-                    placeholder="例: 山田 太郎"
-                  />
+                  <Label>地権者</Label>
+                  <div className="space-y-2">
+                    <Input
+                      value={detailForm.landowner1}
+                      onChange={(e) => setDetailForm({ ...detailForm, landowner1: e.target.value })}
+                      placeholder="地権者1"
+                    />
+                    <Input
+                      value={detailForm.landowner2}
+                      onChange={(e) => setDetailForm({ ...detailForm, landowner2: e.target.value })}
+                      placeholder="地権者2"
+                    />
+                    <Input
+                      value={detailForm.landowner3}
+                      onChange={(e) => setDetailForm({ ...detailForm, landowner3: e.target.value })}
+                      placeholder="地権者3"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>地目・土地の面積</Label>
