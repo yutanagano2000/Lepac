@@ -25,7 +25,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import type { Project, Progress, Comment } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -78,6 +83,7 @@ export default function ProjectDetailPage() {
   const [commentEditOpen, setCommentEditOpen] = useState(false);
   const [commentDeleteOpen, setCommentDeleteOpen] = useState(false);
   const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [detailEditOpen, setDetailEditOpen] = useState(false);
   const [detailForm, setDetailForm] = useState({
     address: "",
@@ -197,10 +203,18 @@ export default function ProjectDetailPage() {
     return num1 + num2 + num3;
   };
 
+  // クリップボードにコピーする汎用関数
+  const copyToClipboard = async (text: string, fieldName: string) => {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   // 座標をクリップボードにコピー
   const copyCoordinates = async () => {
     if (!project?.coordinates) return;
-    await navigator.clipboard.writeText(project.coordinates);
+    await copyToClipboard(project.coordinates, "coordinates");
   };
 
   // 合計値をクリップボードにコピー
@@ -211,7 +225,24 @@ export default function ProjectDetailPage() {
       project.landArea2 ?? "",
       project.landArea3 ?? ""
     );
-    await navigator.clipboard.writeText(total.toString());
+    await copyToClipboard(total.toString(), "totalArea");
+  };
+
+  // 住所をコピー
+  const copyAddress = async () => {
+    if (!project?.address) return;
+    await copyToClipboard(project.address, "address");
+  };
+
+  // 地権者をコピー
+  const copyLandowners = async () => {
+    if (!project) return;
+    const landowners = [project.landowner1, project.landowner2, project.landowner3]
+      .filter(Boolean)
+      .join("\n");
+    if (landowners) {
+      await copyToClipboard(landowners, "landowners");
+    }
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
@@ -706,6 +737,68 @@ export default function ProjectDetailPage() {
             </DialogContent>
           </Dialog>
 
+          {/* コメントセクション */}
+          <div className="relative">
+            <div className="mb-4 flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-muted-foreground" />
+              <h2 className="font-semibold">コメント</h2>
+            </div>
+            {/* コメント投稿欄 */}
+            <form onSubmit={handleCommentSubmit} className="mb-4">
+              <div className="flex gap-2">
+                <Textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="コメントを入力..."
+                  rows={2}
+                  className="flex-1"
+                />
+                <Button type="submit" size="icon" disabled={!newComment.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+            {/* コメント一覧 */}
+            <div className="space-y-3 max-h-48 overflow-y-auto">
+              {comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">コメントはありません</p>
+              ) : (
+                comments.map((comment) => (
+                  <Card key={comment.id} className="bg-muted/50">
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm">{comment.content}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDateJp(new Date(comment.createdAt))}
+                          </p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openCommentEditDialog(comment)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive"
+                            onClick={() => openCommentDeleteDialog(comment)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* 統合タイムライン */}
           <div className="relative">
             <div className="mb-4 flex items-center justify-between">
@@ -825,83 +918,30 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          {/* タブ UI */}
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="details">案件詳細情報</TabsTrigger>
-              <TabsTrigger value="comments">コメント</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="comments" className="mt-6 space-y-6">
-              {/* コメントフィード */}
-              <div className="relative">
-                <div className="mb-4 flex items-center gap-2">
-                  <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                  <h2 className="font-semibold">コメント</h2>
-                </div>
-                {/* コメント投稿欄 */}
-                <form onSubmit={handleCommentSubmit} className="mb-4">
-                  <div className="flex gap-2">
-                    <Textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="コメントを入力..."
-                      rows={2}
-                      className="flex-1"
-                    />
-                    <Button type="submit" size="icon" disabled={!newComment.trim()}>
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </form>
-                {/* コメント一覧 */}
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">コメントはありません</p>
-                  ) : (
-                    comments.map((comment) => (
-                      <Card key={comment.id} className="bg-muted/50">
-                        <CardContent className="p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <p className="text-sm">{comment.content}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {formatDateJp(new Date(comment.createdAt))}
-                              </p>
-                            </div>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => openCommentEditDialog(comment)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={() => openCommentDeleteDialog(comment)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="details" className="mt-6">
+          {/* 案件詳細情報 */}
+          <div className="space-y-6">
               <Card>
                 <CardContent className="pt-6 space-y-4">
+                  <h2 className="font-semibold text-lg mb-2">案件情報</h2>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">現地住所</span>
-                    <span className="col-span-2 text-sm">{project.address || "未登録"}</span>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <span className="text-sm">{project.address || "未登録"}</span>
+                      {project.address && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={copyAddress}
+                        >
+                          {copiedField === "address" ? (
+                            <Check className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">座標</span>
@@ -914,9 +954,12 @@ export default function ProjectDetailPage() {
                             size="sm"
                             className="h-6 w-6 p-0"
                             onClick={copyCoordinates}
-                            title="座標をコピー"
                           >
-                            <Copy className="h-3 w-3" />
+                            {copiedField === "coordinates" ? (
+                              <Check className="h-3 w-3 text-green-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
                           </Button>
                         )}
                       </div>
@@ -958,12 +1001,28 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">地権者</span>
-                    <div className="col-span-2 space-y-1 text-sm">
-                      {project.landowner1 && <div>{project.landowner1}</div>}
-                      {project.landowner2 && <div>{project.landowner2}</div>}
-                      {project.landowner3 && <div>{project.landowner3}</div>}
-                      {!project.landowner1 && !project.landowner2 && !project.landowner3 && (
-                        <span>未登録</span>
+                    <div className="col-span-2 flex items-start gap-2">
+                      <div className="space-y-1 text-sm flex-1">
+                        {project.landowner1 && <div>{project.landowner1}</div>}
+                        {project.landowner2 && <div>{project.landowner2}</div>}
+                        {project.landowner3 && <div>{project.landowner3}</div>}
+                        {!project.landowner1 && !project.landowner2 && !project.landowner3 && (
+                          <span>未登録</span>
+                        )}
+                      </div>
+                      {(project.landowner1 || project.landowner2 || project.landowner3) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={copyLandowners}
+                        >
+                          {copiedField === "landowners" ? (
+                            <Check className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -1010,9 +1069,12 @@ export default function ProjectDetailPage() {
                           size="sm"
                           className="h-6 w-6 p-0"
                           onClick={copyTotalArea}
-                          title="合計値をコピー"
                         >
-                          <Copy className="h-3 w-3" />
+                          {copiedField === "totalArea" ? (
+                            <Check className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -1025,8 +1087,51 @@ export default function ProjectDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
+
+              {/* 書類アコーディオン */}
+              <Accordion type="multiple" className="w-full">
+                <AccordionItem value="agreement">
+                  <AccordionTrigger>合意書</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        合意書に関するファイルがここに表示されます
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="land-info">
+                  <AccordionTrigger>土地情報</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        土地情報に関するファイルがここに表示されます
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="legal">
+                  <AccordionTrigger>法令関係</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        法令関係に関するファイルがここに表示されます
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="materials">
+                  <AccordionTrigger>材料発注</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 pt-2">
+                      <p className="text-sm text-muted-foreground">
+                        材料発注に関するファイルがここに表示されます
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+          </div>
 
           {/* 詳細情報編集ダイアログ */}
           <Dialog open={detailEditOpen} onOpenChange={setDetailEditOpen}>
