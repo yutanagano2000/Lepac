@@ -32,6 +32,10 @@ export async function PUT(
       address: body.address || null,
       coordinates: body.coordinates || null,
       landowner: body.landowner || null,
+      landCategory: body.landCategory || null,
+      landArea1: body.landArea1 || null,
+      landArea2: body.landArea2 || null,
+      landArea3: body.landArea3 || null,
     })
     .where(eq(projects.id, Number(id)))
     .returning();

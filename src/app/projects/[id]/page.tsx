@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +83,10 @@ export default function ProjectDetailPage() {
     address: "",
     coordinates: "",
     landowner: "",
+    landCategory: "",
+    landArea1: "",
+    landArea2: "",
+    landArea3: "",
   });
   const [open, setOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -149,6 +153,10 @@ export default function ProjectDetailPage() {
         address: detailForm.address,
         coordinates: detailForm.coordinates,
         landowner: detailForm.landowner,
+        landCategory: detailForm.landCategory,
+        landArea1: detailForm.landArea1,
+        landArea2: detailForm.landArea2,
+        landArea3: detailForm.landArea3,
       }),
     });
     setDetailEditOpen(false);
@@ -161,8 +169,31 @@ export default function ProjectDetailPage() {
       address: project.address ?? "",
       coordinates: project.coordinates ?? "",
       landowner: project.landowner ?? "",
+      landCategory: project.landCategory ?? "",
+      landArea1: project.landArea1 ?? "",
+      landArea2: project.landArea2 ?? "",
+      landArea3: project.landArea3 ?? "",
     });
     setDetailEditOpen(true);
+  };
+
+  // 土地面積の合計を計算
+  const calculateTotalArea = (area1: string, area2: string, area3: string) => {
+    const num1 = parseFloat(area1) || 0;
+    const num2 = parseFloat(area2) || 0;
+    const num3 = parseFloat(area3) || 0;
+    return num1 + num2 + num3;
+  };
+
+  // 合計値をクリップボードにコピー
+  const copyTotalArea = async () => {
+    if (!project) return;
+    const total = calculateTotalArea(
+      project.landArea1 ?? "",
+      project.landArea2 ?? "",
+      project.landArea3 ?? ""
+    );
+    await navigator.clipboard.writeText(total.toString());
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
@@ -880,6 +911,31 @@ export default function ProjectDetailPage() {
                     <span className="text-sm font-medium text-muted-foreground">地権者</span>
                     <span className="col-span-2 text-sm">{project.landowner || "未登録"}</span>
                   </div>
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">地目</span>
+                    <span className="col-span-2 text-sm">{project.landCategory || "未登録"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">土地の面積</span>
+                    <div className="col-span-2 flex items-center gap-2 text-sm">
+                      <span className="font-medium">
+                        {calculateTotalArea(
+                          project.landArea1 ?? "",
+                          project.landArea2 ?? "",
+                          project.landArea3 ?? ""
+                        )} ㎡
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={copyTotalArea}
+                        title="合計値をコピー"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
                   <div className="flex justify-end pt-2">
                     <Button variant="outline" size="sm" onClick={openDetailEditDialog}>
                       <Pencil className="h-4 w-4 mr-2" />
@@ -924,6 +980,57 @@ export default function ProjectDetailPage() {
                     onChange={(e) => setDetailForm({ ...detailForm, landowner: e.target.value })}
                     placeholder="例: 山田 太郎"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="landCategory">地目</Label>
+                  <Select
+                    value={detailForm.landCategory}
+                    onValueChange={(value) => setDetailForm({ ...detailForm, landCategory: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="地目を選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="山林">山林</SelectItem>
+                      <SelectItem value="原野">原野</SelectItem>
+                      <SelectItem value="畑">畑</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>土地の面積（㎡）</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={detailForm.landArea1}
+                      onChange={(e) => setDetailForm({ ...detailForm, landArea1: e.target.value })}
+                      placeholder="面積1"
+                      className="flex-1"
+                    />
+                    <span>+</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={detailForm.landArea2}
+                      onChange={(e) => setDetailForm({ ...detailForm, landArea2: e.target.value })}
+                      placeholder="面積2"
+                      className="flex-1"
+                    />
+                    <span>+</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={detailForm.landArea3}
+                      onChange={(e) => setDetailForm({ ...detailForm, landArea3: e.target.value })}
+                      placeholder="面積3"
+                      className="flex-1"
+                    />
+                    <span>=</span>
+                    <span className="font-medium whitespace-nowrap">
+                      {calculateTotalArea(detailForm.landArea1, detailForm.landArea2, detailForm.landArea3)} ㎡
+                    </span>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setDetailEditOpen(false)}>

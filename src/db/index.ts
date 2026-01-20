@@ -53,6 +53,10 @@ async function initDb() {
   try { await c.execute(`ALTER TABLE projects ADD COLUMN address TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN coordinates TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN land_category TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN land_area_1 TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN land_area_2 TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN land_area_3 TEXT`); } catch (e) {}
 
   await c.execute(`
     CREATE TABLE IF NOT EXISTS users (

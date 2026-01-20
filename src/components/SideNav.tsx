@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, FolderKanban, Scale, Wrench, LogOut } from "lucide-react";
+import { Globe, Home, FolderKanban, Scale, Wrench, LogOut, CheckSquare, ExternalLink } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
@@ -49,6 +49,17 @@ export function SideNav() {
               </Link>
             );
           })}
+          {/* 外部リンク: Notion TODO */}
+          <a
+            href="https://www.notion.so/2eef2fd6b7ad80dc8c74e81667b2ae5b?v=2eef2fd6b7ad80d68794000c0e033a4a"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
+          >
+            <CheckSquare className="h-4 w-4" />
+            <span>TODO</span>
+            <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
+          </a>
         </nav>
 
         <div className="mt-auto border-t border-sidebar-border pt-4">
