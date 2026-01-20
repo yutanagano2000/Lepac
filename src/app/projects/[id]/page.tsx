@@ -83,7 +83,9 @@ export default function ProjectDetailPage() {
     address: "",
     coordinates: "",
     landowner: "",
-    landCategory: "",
+    landCategory1: "",
+    landCategory2: "",
+    landCategory3: "",
     landArea1: "",
     landArea2: "",
     landArea3: "",
@@ -153,7 +155,9 @@ export default function ProjectDetailPage() {
         address: detailForm.address,
         coordinates: detailForm.coordinates,
         landowner: detailForm.landowner,
-        landCategory: detailForm.landCategory,
+        landCategory1: detailForm.landCategory1,
+        landCategory2: detailForm.landCategory2,
+        landCategory3: detailForm.landCategory3,
         landArea1: detailForm.landArea1,
         landArea2: detailForm.landArea2,
         landArea3: detailForm.landArea3,
@@ -169,7 +173,9 @@ export default function ProjectDetailPage() {
       address: project.address ?? "",
       coordinates: project.coordinates ?? "",
       landowner: project.landowner ?? "",
-      landCategory: project.landCategory ?? "",
+      landCategory1: project.landCategory1 ?? "",
+      landCategory2: project.landCategory2 ?? "",
+      landCategory3: project.landCategory3 ?? "",
       landArea1: project.landArea1 ?? "",
       landArea2: project.landArea2 ?? "",
       landArea3: project.landArea3 ?? "",
@@ -912,28 +918,53 @@ export default function ProjectDetailPage() {
                     <span className="col-span-2 text-sm">{project.landowner || "未登録"}</span>
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
-                    <span className="text-sm font-medium text-muted-foreground">地目</span>
-                    <span className="col-span-2 text-sm">{project.landCategory || "未登録"}</span>
-                  </div>
-                  <div className="grid grid-cols-3 items-start border-b pb-3">
-                    <span className="text-sm font-medium text-muted-foreground">土地の面積</span>
-                    <div className="col-span-2 flex items-center gap-2 text-sm">
-                      <span className="font-medium">
-                        {calculateTotalArea(
-                          project.landArea1 ?? "",
-                          project.landArea2 ?? "",
-                          project.landArea3 ?? ""
-                        )} ㎡
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={copyTotalArea}
-                        title="合計値をコピー"
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
+                    <span className="text-sm font-medium text-muted-foreground">地目・面積</span>
+                    <div className="col-span-2 space-y-1 text-sm">
+                      {(project.landCategory1 || project.landArea1) && (
+                        <div className="flex items-center gap-2">
+                          <span>{project.landCategory1 || "-"}</span>
+                          <span className="text-muted-foreground">:</span>
+                          <span>{project.landArea1 || "-"} ㎡</span>
+                        </div>
+                      )}
+                      {(project.landCategory2 || project.landArea2) && (
+                        <div className="flex items-center gap-2">
+                          <span>{project.landCategory2 || "-"}</span>
+                          <span className="text-muted-foreground">:</span>
+                          <span>{project.landArea2 || "-"} ㎡</span>
+                        </div>
+                      )}
+                      {(project.landCategory3 || project.landArea3) && (
+                        <div className="flex items-center gap-2">
+                          <span>{project.landCategory3 || "-"}</span>
+                          <span className="text-muted-foreground">:</span>
+                          <span>{project.landArea3 || "-"} ㎡</span>
+                        </div>
+                      )}
+                      {!project.landCategory1 && !project.landArea1 && 
+                       !project.landCategory2 && !project.landArea2 && 
+                       !project.landCategory3 && !project.landArea3 && (
+                        <span>未登録</span>
+                      )}
+                      <div className="flex items-center gap-2 pt-1 border-t mt-1">
+                        <span className="font-medium">合計:</span>
+                        <span className="font-medium">
+                          {calculateTotalArea(
+                            project.landArea1 ?? "",
+                            project.landArea2 ?? "",
+                            project.landArea3 ?? ""
+                          )} ㎡
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={copyTotalArea}
+                          title="合計値をコピー"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-end pt-2">
@@ -982,54 +1013,87 @@ export default function ProjectDetailPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="landCategory">地目</Label>
-                  <Select
-                    value={detailForm.landCategory}
-                    onValueChange={(value) => setDetailForm({ ...detailForm, landCategory: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="地目を選択" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="山林">山林</SelectItem>
-                      <SelectItem value="原野">原野</SelectItem>
-                      <SelectItem value="畑">畑</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>土地の面積（㎡）</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={detailForm.landArea1}
-                      onChange={(e) => setDetailForm({ ...detailForm, landArea1: e.target.value })}
-                      placeholder="面積1"
-                      className="flex-1"
-                    />
-                    <span>+</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={detailForm.landArea2}
-                      onChange={(e) => setDetailForm({ ...detailForm, landArea2: e.target.value })}
-                      placeholder="面積2"
-                      className="flex-1"
-                    />
-                    <span>+</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={detailForm.landArea3}
-                      onChange={(e) => setDetailForm({ ...detailForm, landArea3: e.target.value })}
-                      placeholder="面積3"
-                      className="flex-1"
-                    />
-                    <span>=</span>
-                    <span className="font-medium whitespace-nowrap">
-                      {calculateTotalArea(detailForm.landArea1, detailForm.landArea2, detailForm.landArea3)} ㎡
-                    </span>
+                  <Label>地目・土地の面積</Label>
+                  <div className="space-y-2">
+                    {/* 1つ目 */}
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={detailForm.landCategory1}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, landCategory1: value })}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="地目" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="山林">山林</SelectItem>
+                          <SelectItem value="原野">原野</SelectItem>
+                          <SelectItem value="畑">畑</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={detailForm.landArea1}
+                        onChange={(e) => setDetailForm({ ...detailForm, landArea1: e.target.value })}
+                        placeholder="面積（㎡）"
+                        className="flex-1"
+                      />
+                    </div>
+                    {/* 2つ目 */}
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={detailForm.landCategory2}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, landCategory2: value })}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="地目" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="山林">山林</SelectItem>
+                          <SelectItem value="原野">原野</SelectItem>
+                          <SelectItem value="畑">畑</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={detailForm.landArea2}
+                        onChange={(e) => setDetailForm({ ...detailForm, landArea2: e.target.value })}
+                        placeholder="面積（㎡）"
+                        className="flex-1"
+                      />
+                    </div>
+                    {/* 3つ目 */}
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={detailForm.landCategory3}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, landCategory3: value })}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="地目" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="山林">山林</SelectItem>
+                          <SelectItem value="原野">原野</SelectItem>
+                          <SelectItem value="畑">畑</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={detailForm.landArea3}
+                        onChange={(e) => setDetailForm({ ...detailForm, landArea3: e.target.value })}
+                        placeholder="面積（㎡）"
+                        className="flex-1"
+                      />
+                    </div>
+                    {/* 合計 */}
+                    <div className="flex justify-end items-center gap-2 pt-1 border-t">
+                      <span className="text-sm">合計:</span>
+                      <span className="font-medium">
+                        {calculateTotalArea(detailForm.landArea1, detailForm.landArea2, detailForm.landArea3)} ㎡
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">

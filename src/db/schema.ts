@@ -10,7 +10,9 @@ export const projects = sqliteTable("projects", {
   address: text("address"), // 現地住所
   coordinates: text("coordinates"), // 座標
   landowner: text("landowner"), // 地権者
-  landCategory: text("land_category"), // 地目（山林・原野・畑）
+  landCategory1: text("land_category_1"), // 地目1（山林・原野・畑）
+  landCategory2: text("land_category_2"), // 地目2（山林・原野・畑）
+  landCategory3: text("land_category_3"), // 地目3（山林・原野・畑）
   landArea1: text("land_area_1"), // 土地面積1
   landArea2: text("land_area_2"), // 土地面積2
   landArea3: text("land_area_3"), // 土地面積3
