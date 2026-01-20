@@ -322,6 +322,14 @@ export default function ProjectDetailPage() {
     return `https://labs.mapple.com/mapplexml.html#16/${lat}/${lng}`;
   };
 
+  const getGoogleMapsUrl = (coords: string | null) => {
+    if (!coords) return null;
+    const parts = coords.split(/[\s,]+/).map((p) => p.trim());
+    if (parts.length < 2) return null;
+    const [lat, lng] = parts;
+    return `https://www.google.com/maps?q=${lat},${lng}`;
+  };
+
   // 進捗を日付でソート（すべてDBから取得）
   const sortedTimeline = useMemo(() => {
     return [...progressList]
@@ -840,19 +848,31 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">座標</span>
-                    <div className="col-span-2 flex items-center justify-between gap-2">
-                      <span className="text-sm">{project.coordinates || "未登録"}</span>
+                    <div className="col-span-2 flex flex-wrap items-center gap-2">
+                      <span className="text-sm flex-1">{project.coordinates || "未登録"}</span>
                       {project.coordinates && (
-                        <Button variant="outline" size="sm" asChild className="h-8">
-                          <a
-                            href={getMappleUrl(project.coordinates) || ""}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <ExternalLink className="h-3 w-3 mr-2" />
-                            MAPPLEで表示
-                          </a>
-                        </Button>
+                        <>
+                          <Button variant="outline" size="sm" asChild className="h-8">
+                            <a
+                              href={getMappleUrl(project.coordinates) || ""}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-2" />
+                              MAPPLE
+                            </a>
+                          </Button>
+                          <Button variant="outline" size="sm" asChild className="h-8">
+                            <a
+                              href={getGoogleMapsUrl(project.coordinates) || ""}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-2" />
+                              Google Map
+                            </a>
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
