@@ -197,6 +197,12 @@ export default function ProjectDetailPage() {
     return num1 + num2 + num3;
   };
 
+  // 座標をクリップボードにコピー
+  const copyCoordinates = async () => {
+    if (!project?.coordinates) return;
+    await navigator.clipboard.writeText(project.coordinates);
+  };
+
   // 合計値をクリップボードにコピー
   const copyTotalArea = async () => {
     if (!project) return;
@@ -371,6 +377,14 @@ export default function ProjectDetailPage() {
     if (parts.length < 2) return null;
     const [lat, lng] = parts;
     return `https://www.google.com/maps?q=${lat},${lng}`;
+  };
+
+  const getHazardMapUrl = (coords: string | null) => {
+    if (!coords) return null;
+    const parts = coords.split(/[\s,]+/).map((p) => p.trim());
+    if (parts.length < 2) return null;
+    const [lat, lng] = parts;
+    return `https://disaportal.gsi.go.jp/maps/?ll=${lat},${lng}&z=16&base=ort&vs=c1j0l0u0t0h0z0`;
   };
 
   // 進捗を日付でソート（すべてDBから取得）
@@ -891,10 +905,23 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">座標</span>
-                    <div className="col-span-2 flex flex-wrap items-center gap-2">
-                      <span className="text-sm flex-1">{project.coordinates || "未登録"}</span>
+                    <div className="col-span-2 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{project.coordinates || "未登録"}</span>
+                        {project.coordinates && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={copyCoordinates}
+                            title="座標をコピー"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
                       {project.coordinates && (
-                        <>
+                        <div className="flex flex-wrap gap-2 mt-2">
                           <Button variant="outline" size="sm" asChild className="h-8">
                             <a
                               href={getMappleUrl(project.coordinates) || ""}
@@ -915,7 +942,17 @@ export default function ProjectDetailPage() {
                               Google Map
                             </a>
                           </Button>
-                        </>
+                          <Button variant="outline" size="sm" asChild className="h-8">
+                            <a
+                              href={getHazardMapUrl(project.coordinates) || ""}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-2" />
+                              ハザード
+                            </a>
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
