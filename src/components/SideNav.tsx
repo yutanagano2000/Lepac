@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, FolderKanban, Scale, Wrench, LogOut, CheckSquare, ExternalLink, Calendar } from "lucide-react";
+import { Globe, Home, FolderKanban, Scale, Wrench, LogOut, CheckSquare, ExternalLink, Calendar, CalendarDays } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 const items = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/projects", label: "案件", icon: FolderKanban },
+  { href: "/schedule", label: "スケジュール", icon: CalendarDays },
   { href: "/legal", label: "法令確認", icon: Scale },
   { href: "/tools", label: "ツール", icon: Wrench },
 ] as const;
