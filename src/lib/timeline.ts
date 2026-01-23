@@ -144,7 +144,7 @@ export interface WorkflowSubPhase {
   date?: Date;
   type?: 'normal' | 'branch'; // 通常項目か分岐ノードか
   branchCriteria?: string; // 分岐基準
-  branches?: Array<{
+  branches?: ReadonlyArray<{
     name: string;
     condition: string;
   }>; // 分岐先
@@ -233,7 +233,7 @@ export function calculateTimeline(
 function calculateSubPhaseDates(
   phaseKey: string,
   phaseStart: Date,
-  subPhases?: WorkflowSubPhase[]
+  subPhases?: readonly WorkflowSubPhase[]
 ): WorkflowSubPhase[] | undefined {
   if (!subPhases) return undefined;
 
@@ -322,8 +322,7 @@ export function calculateWorkflowTimeline(startDate: Date): WorkflowTimelinePhas
         key: workflowPhase.key,
         title: workflowPhase.title,
         phase: workflowPhase.phase,
-        subPhases: workflowPhase.subPhases,
-        // dateは設定しない
+        // construction には subPhases なし / dateは設定しない
       });
       continue;
     }
