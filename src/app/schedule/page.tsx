@@ -154,7 +154,7 @@ export default function SchedulePage() {
             <div className="relative">
               <div className="mb-4 flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <h2 className="font-semibold">{client} のスケジュール</h2>
+                <h2 className="font-semibold">{client}様のスケジュール</h2>
               </div>
               <Accordion
                 type="multiple"
