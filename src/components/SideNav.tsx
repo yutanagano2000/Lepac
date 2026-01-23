@@ -50,15 +50,15 @@ export function SideNav() {
               </Link>
             );
           })}
-          {/* 外部リンク: Notion TODO */}
+          {/* 外部リンク: Notion ミーティング */}
           <a
-            href="https://www.notion.so/2eef2fd6b7ad80dc8c74e81667b2ae5b?v=2eef2fd6b7ad80d68794000c0e033a4a"
+            href="https://www.notion.so/Meeting-2f0f2fd6b7ad80de99b7f18d709b1bfa"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
           >
             <CheckSquare className="h-4 w-4" />
-            <span>TODO</span>
+            <span>ミーティング</span>
             <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
           </a>
           {/* 外部リンク: Notion Calendar */}
