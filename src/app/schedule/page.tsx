@@ -156,31 +156,45 @@ export default function SchedulePage() {
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <h2 className="font-semibold">{client} のスケジュール</h2>
               </div>
-              <Accordion type="multiple" className="w-full">
+              <Accordion
+                type="multiple"
+                className="w-full"
+                defaultValue={timeline.map((item) => item.key)}
+              >
                 {timeline.map((item, index) => {
                   // 日付がない工程（工事着工～完了）は常に「予定」として扱う
                   const now = new Date();
                   const isPast = item.date ? item.date < now : false;
-                  const hasDate = item.date !== undefined;
+                  const hasDate = item.date !== undefined || (item.startDate !== undefined && item.endDate !== undefined);
 
                   // 対応するワークフロー定義を取得
                   const workflowPhase = WORKFLOW_PHASES.find(phase => phase.key === item.key);
 
                   return (
-                    <AccordionItem key={item.key} value={item.key} className="border-b">
+                    <AccordionItem
+                      key={item.key}
+                      value={item.key}
+                      className={`border-b ${
+                        item.key === "waiting_period" ? "bg-muted/30" : ""
+                      }`}
+                    >
                       <AccordionTrigger className="hover:no-underline px-4 py-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 w-full">
                           {/* ノード */}
                           <div
                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-                              !hasDate
+                              item.key === "waiting_period"
+                                ? "border-secondary bg-secondary"  // 待機期間はsecondaryカラー
+                                : !hasDate
                                 ? "border-gray-400 bg-background"  // 日付なしは灰色
                                 : isPast
                                 ? "border-green-500 bg-green-500"  // 過去の日付は完了扱い
                                 : "border-muted-foreground bg-background"  // 未来の日付は予定
                             }`}
                           >
-                            {!hasDate ? (
+                            {item.key === "waiting_period" ? (
+                              <Clock className="h-3 w-3 text-white" />
+                            ) : !hasDate ? (
                               <Circle className="h-3 w-3 text-gray-400" />
                             ) : isPast ? (
                               <Check className="h-3 w-3 text-white" />
@@ -188,83 +202,77 @@ export default function SchedulePage() {
                               <Circle className="h-3 w-3 text-muted-foreground" />
                             )}
                           </div>
-                          {/* タイトルとフェーズ */}
-                          <div className="flex items-center gap-2 text-left flex-1">
-                            <p className={`font-medium ${!hasDate || !isPast ? "text-muted-foreground" : ""}`}>
+                          {/* タイトルと期間 */}
+                          <div className="flex items-center gap-3 text-left flex-1 min-w-0">
+                            <p className={`font-medium truncate ${!hasDate || !isPast ? "text-muted-foreground" : ""}`}>
                               {item.title}
                             </p>
-                            <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                              {item.phase}
-                            </span>
+                            {item.startDate && item.endDate ? (
+                              item.key === "initial_acquisition" || item.key === "submission_decision" ? (
+                                // 案件スタートと提出先の判断は日付表示
+                                <span className="text-sm font-bold text-primary shrink-0 px-2 py-1 bg-primary/10 rounded">
+                                  日付: {formatDateJp(item.startDate)}
+                                </span>
+                              ) : item.key === "waiting_period" ? (
+                                // 待機期間は特別な表示
+                                <span className="text-sm font-bold text-secondary-foreground shrink-0 px-2 py-1 bg-secondary rounded">
+                                  待機期間: {formatDateJp(item.startDate)} ～ {formatDateJp(item.endDate)}
+                                </span>
+                              ) : (
+                                // その他のフェーズは期間表示
+                                <span className="text-sm font-bold text-primary shrink-0 px-2 py-1 bg-primary/10 rounded">
+                                  期間: {formatDateJp(item.startDate)} ～ {formatDateJp(item.endDate)}
+                                </span>
+                              )
+                            ) : null}
                           </div>
+                          {/* フェーズ情報 */}
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded shrink-0">
+                            {item.phase}
+                          </span>
                         </div>
                       </AccordionTrigger>
 
-                      {/* 予定日をアコーディオンの外に表示 */}
-                      {item.date && (
-                        <div className="px-4 pb-2">
-                          <div className="ml-9 flex items-center gap-2">
-                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                            <p className="text-sm font-medium">
-                              {formatDateJp(item.date)}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
                       <AccordionContent className="px-4 pb-4">
-                        <div className="ml-9 space-y-3">
-                          {/* 工数情報 */}
-                          {workflowPhase && (
+                        <div className="ml-9 space-y-2">
+                          {/* サブ項目のタイムライン */}
+                          {item.subPhases && item.subPhases.length > 0 && (
                             <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">所要期間:</span>
-                                <span className="text-sm font-medium">
-                                  {workflowPhase.duration === 0 ? "当日" : `${workflowPhase.duration}${workflowPhase.unit === "business_days" ? "営業日" : "暦日"}`}
-                                </span>
-                              </div>
-                              {workflowPhase.unit === "business_days" && (
-                                <p className="text-xs text-muted-foreground ml-6">
-                                  ※土日・祝日を除く営業日で計算
-                                </p>
-                              )}
+                              {item.subPhases.map((subPhase, subIndex) => (
+                                <div key={subPhase.key} className="flex items-center gap-3">
+                                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-muted-foreground/50 bg-background">
+                                    <div className="h-2 w-2 rounded-full bg-muted-foreground/50"></div>
+                                  </div>
+                                  {subPhase.type === 'branch' ? (
+                                    <div className="flex-1 space-y-1">
+                                      <p className="text-sm font-medium">{subPhase.title}</p>
+                                      <div className="flex gap-4 mt-2">
+                                        {subPhase.branches?.map((branch, branchIndex) => (
+                                          <div key={branchIndex} className="flex items-center gap-2">
+                                            <div className="h-3 w-3 rounded-full bg-blue-500"></div>
+                                            <span className="text-xs font-medium">{branch.name}</span>
+                                            <span className="text-xs text-muted-foreground">({branch.condition})</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <span className="text-sm flex-1">{subPhase.title}</span>
+                                      {subPhase.date && (
+                                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded shrink-0">
+                                          予定: {formatDateJp(subPhase.date)}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           )}
 
-                          {/* 工程の説明 */}
-                          <div className="space-y-1">
-                            <h4 className="text-sm font-medium">工程詳細</h4>
-                            <div className="text-sm text-muted-foreground space-y-1">
-                              {item.key === "initial_acquisition" && (
-                                <p>現地調査の実施と初期データの収集を行います。</p>
-                              )}
-                              {item.key === "initial_survey" && (
-                                <p>法令チェック等の初期調査・設計業務を行います。</p>
-                              )}
-                              {item.key === "site_confirmation" && (
-                                <p>造成の要否判断を含む現地詳細確認を行います。</p>
-                              )}
-                              {item.key === "application_contract" && (
-                                <p>図面修正・土地契約を含む申請・契約業務を行います。</p>
-                              )}
-                              {item.key === "waiting_period" && (
-                                <p>行政・電力申請の審査待ち期間です。</p>
-                              )}
-                              {item.key === "final_design" && (
-                                <p>再シミュレーションを含む本設計業務を行います。</p>
-                              )}
-                              {item.key === "final_decision" && (
-                                <p>最終的な判断と決済手続きを行います。</p>
-                              )}
-                              {item.key === "construction" && (
-                                <p>工事着工から完了までの期間です。</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {!item.date && (
-                            <div className="flex items-center gap-2 text-orange-600">
+                          {!hasDate && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
                               <Circle className="h-4 w-4" />
                               <p className="text-sm">予定日は未定です</p>
                             </div>
