@@ -25,8 +25,8 @@ export const WORKFLOW_PHASES = [
     unit: "business_days",
     phase: "01 開始",
     subPhases: [
-      { key: "project_acquisition", title: "案件取得", date: new Date("2026-01-25") }, // サンプル日付
-      { key: "initial_photography", title: "初期撮影", date: new Date("2026-01-25") }  // サンプル日付
+      { key: "project_acquisition", title: "案件取得", date: new Date("2026-01-25"), responsibles: ['営業'] as const },
+      { key: "initial_photography", title: "初期撮影", date: new Date("2026-01-25"), responsibles: ['工務'] as const }
     ]
   },
   {
@@ -36,10 +36,10 @@ export const WORKFLOW_PHASES = [
     unit: "business_days",
     phase: "01 開始",
     subPhases: [
-      { key: "site_guide_map", title: "現場案内図作成", date: new Date("2026-01-28") },
-      { key: "legal_check", title: "法令チェック", date: new Date("2026-01-29") },
-      { key: "hazard_map_check", title: "ハザードマップ確認", date: new Date("2026-01-30") },
-      { key: "rough_drawing", title: "ラフ図面作成", date: new Date("2026-01-31") }
+      { key: "site_guide_map", title: "現場案内図作成", date: new Date("2026-01-28"), responsibles: ['事務'] as const },
+      { key: "legal_check", title: "法令チェック", date: new Date("2026-01-29"), responsibles: ['事務'] as const },
+      { key: "hazard_map_check", title: "ハザードマップ確認", date: new Date("2026-01-30"), responsibles: ['事務'] as const },
+      { key: "rough_drawing", title: "ラフ図面作成", date: new Date("2026-01-31"), responsibles: ['設計'] as const }
     ]
   },
   {
@@ -49,7 +49,7 @@ export const WORKFLOW_PHASES = [
     unit: "business_days",
     phase: "02 判断",
     subPhases: [
-      { key: "site_survey_photos", title: "現調（不足分の写真撮影）", date: new Date("2026-02-05") }
+      { key: "site_survey_photos", title: "現調（不足分の写真撮影）", date: new Date("2026-02-05"), responsibles: ['工務', '設計'] as const }
     ]
   },
   {
@@ -73,18 +73,28 @@ export const WORKFLOW_PHASES = [
   },
   {
     key: "application_contract",
-    title: "申請・契約・詳細設計",
+    title: "契約・詳細設計",
     duration: 5,
     unit: "business_days",
     phase: "03 申請",
     subPhases: [
-      { key: "drawing_revision", title: "図面修正", date: new Date("2026-02-10") },
-      { key: "power_simulation", title: "電力シミュレーション", date: new Date("2026-02-12") },
-      { key: "neighbor_greeting", title: "近隣挨拶・伐採範囲の許可取得", date: new Date("2026-02-14") },
-      { key: "land_contract", title: "土地契約", date: new Date("2026-02-17") },
-      { key: "land_category_change", title: "地目変更", date: new Date("2026-02-19") },
-      { key: "power_application", title: "電力申請", date: new Date("2026-02-20") },
-      { key: "legal_application", title: "法令申請", date: new Date("2026-02-22") }
+      { key: "drawing_revision", title: "図面修正", date: new Date("2026-02-10"), responsibles: ['設計'] as const },
+      { key: "power_simulation", title: "電力シミュレーション", date: new Date("2026-02-12"), responsibles: ['設計'] as const },
+      { key: "neighbor_greeting", title: "近隣挨拶・伐採範囲の許可取得", date: new Date("2026-02-14"), responsibles: ['営業', '工務'] as const },
+      { key: "land_contract", title: "土地契約", date: new Date("2026-02-17"), responsibles: ['事務', '営業'] as const },
+      { key: "land_category_change", title: "地目変更", date: new Date("2026-02-19"), responsibles: ['事務'] as const }
+    ]
+  },
+  {
+    key: "application",
+    title: "申請",
+    duration: 0,
+    unit: "business_days",
+    phase: "03 申請",
+    subPhases: [
+      { key: "dd", title: "DD", date: new Date("2026-02-10"), responsibles: ['事務', '設計'] as const },
+      { key: "power_application", title: "電力申請", date: new Date("2026-02-10"), responsibles: ['事務'] as const },
+      { key: "legal_application", title: "法令申請", date: new Date("2026-02-10"), responsibles: ['事務'] as const }
     ]
   },
   {
@@ -94,8 +104,8 @@ export const WORKFLOW_PHASES = [
     unit: "calendar_days",
     phase: "03 申請",
     subPhases: [
-      { key: "legal_response", title: "法令回答", date: new Date("2026-02-20") }, // サンプル日付
-      { key: "power_response", title: "電力回答", date: new Date("2026-02-22") }  // サンプル日付
+      { key: "legal_response", title: "法令回答", date: new Date("2026-02-20"), responsibles: ['事務'] as const },
+      { key: "power_response", title: "電力回答", date: new Date("2026-02-22"), responsibles: ['事務'] as const }
     ]
   },
   {
@@ -105,7 +115,7 @@ export const WORKFLOW_PHASES = [
     unit: "business_days",
     phase: "03 申請",
     subPhases: [
-      { key: "final_design_simulation", title: "本設計（再シミュレーション実施）", date: new Date("2026-03-10") }
+      { key: "final_design_simulation", title: "本設計（再シミュレーション実施）", date: new Date("2026-03-10"), responsibles: ['設計'] as const }
     ]
   },
   {
@@ -115,8 +125,8 @@ export const WORKFLOW_PHASES = [
     unit: "business_days",
     phase: "04 決済",
     subPhases: [
-      { key: "ground_survey_request", title: "地盤調査依頼", date: new Date("2026-03-15") },
-      { key: "settlement_name_change", title: "決済（名義変更）", date: new Date("2026-03-20") }
+      { key: "ground_survey_request", title: "地盤調査依頼", date: new Date("2026-03-15"), responsibles: ['事務', '工務'] as const },
+      { key: "settlement_name_change", title: "決済（名義変更）", date: new Date("2026-03-20"), responsibles: ['事務'] as const }
     ]
   },
   {
@@ -137,6 +147,9 @@ export interface TimelinePhase {
   optional?: boolean;
 }
 
+// 担当者タイプ
+export type ResponsibleType = '事務' | '工務' | '設計' | '営業';
+
 // サブフェーズ定義
 export interface WorkflowSubPhase {
   key: string;
@@ -148,6 +161,9 @@ export interface WorkflowSubPhase {
     name: string;
     condition: string;
   }>; // 分岐先
+  duration?: number; // 工数
+  unit?: 'business_days' | 'calendar_days'; // 工数の単位
+  responsibles?: ReadonlyArray<ResponsibleType>; // 担当者
 }
 
 // ワークフロー用TimelinePhase（フェーズ情報付き）
@@ -245,62 +261,108 @@ function calculateSubPhaseDates(
 
     let calculatedDate: Date | undefined;
 
+    let duration: number | undefined;
+    let unit: 'business_days' | 'calendar_days' | undefined;
+
     switch (phaseKey) {
       case "initial_acquisition":
         // 案件スタート内の項目は案件スタートの日付と同じ
         calculatedDate = new Date(phaseStart);
+        duration = 1; // 各サブ項目は1営業日と仮定
+        unit = "business_days";
         break;
 
       case "initial_survey":
         // 現場案内図、法令チェック、ハザードマップ確認：+2営業日、ラフ図面：+3営業日
         if (subPhase.key === "rough_drawing") {
           calculatedDate = addBusinessDays(phaseStart, 3);
+          duration = 3;
         } else {
           calculatedDate = addBusinessDays(phaseStart, 2);
+          duration = 2;
         }
+        unit = "business_days";
         break;
 
       case "site_confirmation":
         // 現調：+3営業日
         calculatedDate = addBusinessDays(phaseStart, 3);
+        duration = 3;
+        unit = "business_days";
         break;
 
       case "submission_decision":
         // 提出先の判断：期間スタートの日付
         calculatedDate = new Date(phaseStart);
+        duration = 1; // 各サブ項目は1営業日と仮定
+        unit = "business_days";
         break;
 
       case "application_contract":
         // すべての項目：+5営業日
         calculatedDate = addBusinessDays(phaseStart, 5);
+        duration = 1; // 各サブ項目は1営業日と仮定
+        unit = "business_days";
+        break;
+
+      case "application":
+        // 申請フェーズの項目はすべて契約・詳細設計の開始日から5営業日後
+        calculatedDate = addBusinessDays(phaseStart, 5);
+        duration = 1; // 各サブ項目は1営業日と仮定
+        unit = "business_days";
         break;
 
       case "waiting_period":
         // 法令回答：+1か月、電力回答：+1.5ヶ月
         if (subPhase.key === "legal_response") {
           calculatedDate = addMonths(phaseStart, 1);
+          duration = 30; // 約1ヶ月
+          unit = "calendar_days";
         } else if (subPhase.key === "power_response") {
           calculatedDate = addMonths(phaseStart, 1.5);
+          duration = 45; // 約1.5ヶ月
+          unit = "calendar_days";
+        } else {
+          // その他のサブ項目
+          duration = 1;
+          unit = "calendar_days";
         }
         break;
 
       case "final_design":
         // 本設計：+3日（暦日）
         calculatedDate = addCalendarDays(phaseStart, 3);
+        duration = 3;
+        unit = "calendar_days";
         break;
 
       case "final_decision":
         // 地盤調査依頼と決済：+5日（暦日）
         calculatedDate = addCalendarDays(phaseStart, 5);
+        duration = 1; // 各サブ項目は1暦日と仮定
+        unit = "calendar_days";
         break;
 
       default:
         calculatedDate = undefined;
+        // デフォルトでは工数を設定しない（元のsubPhaseの工数を使用）
+        if (duration === undefined) {
+          duration = subPhase.duration;
+        }
+        if (!unit) {
+          unit = subPhase.unit || "business_days";
+        }
     }
+
+    // durationがundefinedの場合は1営業日をデフォルトとする
+    const finalDuration = duration !== undefined ? duration : (subPhase.duration !== undefined ? subPhase.duration : 1);
+    const finalUnit = unit || subPhase.unit || "business_days";
 
     return {
       ...subPhase,
       date: calculatedDate,
+      duration: finalDuration,
+      unit: finalUnit,
     };
   });
 }
@@ -314,6 +376,7 @@ function calculateSubPhaseDates(
 export function calculateWorkflowTimeline(startDate: Date): WorkflowTimelinePhase[] {
   const phases: WorkflowTimelinePhase[] = [];
   let currentDate = new Date(startDate);
+  let applicationContractStartDate: Date | undefined = undefined;
 
   for (const workflowPhase of WORKFLOW_PHASES) {
     // 工事着工～完了の場合は日付計算をスキップ
@@ -331,11 +394,23 @@ export function calculateWorkflowTimeline(startDate: Date): WorkflowTimelinePhas
     const phaseStart = new Date(currentDate);
     let phaseEnd: Date;
 
+    // application_contractの開始日を保持（申請フェーズの日付計算に使用）
+    if (workflowPhase.key === "application_contract") {
+      applicationContractStartDate = new Date(phaseStart);
+    }
+
     // 開始日の場合はそのまま使用（案件スタートなど）
     if (workflowPhase.duration === 0) {
       phaseEnd = new Date(currentDate);
-      // サブ項目の日付を計算
-      const calculatedSubPhases = calculateSubPhaseDates(workflowPhase.key, phaseStart, workflowPhase.subPhases);
+      
+      // 申請フェーズの場合は、契約・詳細設計の開始日から5営業日後を日付として使用
+      let calculatedSubPhases;
+      if (workflowPhase.key === "application" && applicationContractStartDate) {
+        calculatedSubPhases = calculateSubPhaseDates(workflowPhase.key, applicationContractStartDate, workflowPhase.subPhases);
+      } else {
+        calculatedSubPhases = calculateSubPhaseDates(workflowPhase.key, phaseStart, workflowPhase.subPhases);
+      }
+      
       phases.push({
         key: workflowPhase.key,
         title: workflowPhase.title,

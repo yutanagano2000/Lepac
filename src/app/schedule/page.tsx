@@ -21,7 +21,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { calculateWorkflowTimeline, formatDateJp, type WorkflowTimelinePhase, WORKFLOW_PHASES } from "@/lib/timeline";
+import { calculateWorkflowTimeline, formatDateJp, type WorkflowTimelinePhase, WORKFLOW_PHASES, type ResponsibleType } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 
 function formatYyyyMd(date: Date | undefined) {
@@ -37,6 +37,37 @@ function formatStartDate(date: Date): string {
   const m = date.getMonth() + 1;
   const d = date.getDate();
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// 担当者バッジの色定義
+const responsibleColors: Record<ResponsibleType, string> = {
+  '事務': 'bg-blue-600',
+  '工務': 'bg-green-600',
+  '設計': 'bg-purple-600',
+  '営業': 'bg-orange-600',
+};
+
+// 担当者バッジコンポーネント
+function ResponsibleBadges({ responsibles }: { responsibles?: ReadonlyArray<ResponsibleType> }) {
+  if (!responsibles || responsibles.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      {responsibles.map((responsible, index) => (
+        <div key={index} className="flex items-center gap-1">
+          <span className={cn(
+            "px-2 py-0.5 rounded-md text-xs font-medium text-white",
+            responsibleColors[responsible]
+          )}>
+            {responsible}
+          </span>
+          {index < responsibles.length - 1 && (
+            <span className="text-muted-foreground text-xs">→</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 
@@ -212,16 +243,31 @@ export default function SchedulePage() {
                                 // 案件スタートと提出先の判断は日付表示
                                 <span className="text-sm font-bold text-primary shrink-0 px-2 py-1 bg-primary/10 rounded">
                                   日付: {formatDateJp(item.startDate)}
+                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
+                                    <span className="ml-2 text-xs font-normal">
+                                      {workflowPhase.duration}営業日
+                                    </span>
+                                  )}
                                 </span>
                               ) : item.key === "waiting_period" ? (
                                 // 待機期間は特別な表示
                                 <span className="text-sm font-bold text-secondary-foreground shrink-0 px-2 py-1 bg-secondary rounded">
                                   待機期間: {formatDateJp(item.startDate)} ～ {formatDateJp(item.endDate)}
+                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
+                                    <span className="ml-2 text-xs font-normal">
+                                      {workflowPhase.duration}営業日
+                                    </span>
+                                  )}
                                 </span>
                               ) : (
                                 // その他のフェーズは期間表示
                                 <span className="text-sm font-bold text-primary shrink-0 px-2 py-1 bg-primary/10 rounded">
                                   期間: {formatDateJp(item.startDate)} ～ {formatDateJp(item.endDate)}
+                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
+                                    <span className="ml-2 text-xs font-normal">
+                                      {workflowPhase.duration}営業日
+                                    </span>
+                                  )}
                                 </span>
                               )
                             ) : null}
@@ -258,10 +304,18 @@ export default function SchedulePage() {
                                     </div>
                                   ) : (
                                     <>
-                                      <span className="text-sm flex-1">{subPhase.title}</span>
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="text-sm flex-1">{subPhase.title}</span>
+                                        <ResponsibleBadges responsibles={subPhase.responsibles} />
+                                      </div>
                                       {subPhase.date && (
                                         <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded shrink-0">
                                           予定: {formatDateJp(subPhase.date)}
+                                          {subPhase.duration !== undefined && subPhase.duration > 0 && (
+                                            <span className="ml-2">
+                                              {subPhase.duration}営業日
+                                            </span>
+                                          )}
                                         </span>
                                       )}
                                     </>
