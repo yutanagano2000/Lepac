@@ -97,6 +97,17 @@ async function initDb() {
     )
   `);
 
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS meetings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      meeting_date TEXT NOT NULL,
+      category TEXT NOT NULL,
+      content TEXT,
+      agenda TEXT
+    )
+  `);
+
   // 古い名前を新しい名前に統一（重複データのクリーンアップ）
   // 「現地調査」→「現調」、「農転・地目申請」→「法令申請」、「連系（発電開始）」→「連系」
   const legacyTitleMigrations = [

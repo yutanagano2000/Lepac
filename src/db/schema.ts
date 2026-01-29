@@ -46,6 +46,19 @@ export type NewProgress = typeof progress.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
 
+// 会議（議事録）テーブル
+export const meetings = sqliteTable("meetings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(), // タイトル（どんな会議だったか）
+  meetingDate: text("meeting_date").notNull(), // 日付（YYYY-MM-DD）
+  category: text("category").notNull(), // 種別（社内 / 社外）
+  content: text("content"), // 議事録本文（長文）
+  agenda: text("agenda"), // 議題（今後検索用）
+});
+
+export type Meeting = typeof meetings.$inferSelect;
+export type NewMeeting = typeof meetings.$inferInsert;
+
 // ユーザーテーブル
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
