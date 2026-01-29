@@ -36,8 +36,8 @@ import type { Project, NewProject } from "@/db/schema";
 
 const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
 
-// 超過情報を含む案件型
-type ProjectWithOverdue = Project & { hasOverdue: boolean };
+// 超過情報・コメント検索用テキストを含む案件型
+type ProjectWithOverdue = Project & { hasOverdue: boolean; commentSearchText?: string };
 
 interface ProjectsViewProps {
   initialProjects: ProjectWithOverdue[];
@@ -64,7 +64,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 検索フィルタリング（管理番号・案件番号・地権者・現地住所）
+  // 検索フィルタリング（管理番号・案件番号・地権者・現地住所・コメント内容）
   const filteredProjects = projects.filter((project) => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
@@ -72,13 +72,15 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     const l1 = (project.landowner1 ?? "").toLowerCase();
     const l2 = (project.landowner2 ?? "").toLowerCase();
     const l3 = (project.landowner3 ?? "").toLowerCase();
+    const commentText = (project.commentSearchText ?? "").toLowerCase();
     return (
       project.managementNumber.toLowerCase().includes(query) ||
       project.projectNumber.toLowerCase().includes(query) ||
       addr.includes(query) ||
       l1.includes(query) ||
       l2.includes(query) ||
-      l3.includes(query)
+      l3.includes(query) ||
+      commentText.includes(query)
     );
   });
 
@@ -186,7 +188,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
             <div className="relative flex-1 max-w-xl">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="管理番号・案件番号・地権者・現地住所で検索"
+                placeholder="管理番号・案件番号・地権者・現地住所・コメントで検索"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-12 h-12 text-base bg-muted/50 border-0 focus-visible:ring-2 rounded-xl"

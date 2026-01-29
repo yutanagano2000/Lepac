@@ -1,20 +1,23 @@
 import { db } from "@/db";
-import { projects, progress } from "@/db/schema";
+import { projects, progress, comments } from "@/db/schema";
 import { calculateTimeline } from "@/lib/timeline";
 import ProjectsView from "./ProjectsView";
 
 export default async function ProjectsPage() {
   const allProjects = await db.select().from(projects);
   const allProgress = await db.select().from(progress);
-  
+  const allComments = await db.select().from(comments);
+
   const now = new Date();
-  
-  // 各案件に超過情報を追加
+
+  // 各案件に超過情報とコメント検索用テキストを追加
   const projectsWithOverdue = allProjects.map((project) => {
     const projectProgress = allProgress.filter((p) => p.projectId === project.id);
-    
+    const projectComments = allComments.filter((c) => c.projectId === project.id);
+    const commentSearchText = projectComments.map((c) => c.content).join(" ");
+
     let hasOverdue = false;
-    
+
     if (projectProgress.length > 0) {
       // 進捗データがある場合: 未完了かつ予定日が過去の進捗があるかチェック
       hasOverdue = projectProgress.some((p) => {
@@ -31,10 +34,11 @@ export default async function ProjectsPage() {
         return daysUntilDue < 0;
       });
     }
-    
+
     return {
       ...project,
       hasOverdue,
+      commentSearchText,
     };
   });
 
