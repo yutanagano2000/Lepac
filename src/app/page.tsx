@@ -7,6 +7,7 @@ import { AlertCircle, Calendar, Clock, ArrowRight, CheckCircle2, LayoutDashboard
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { HomeProjectSearch } from "@/components/HomeProjectSearch";
 
 interface TaskItem {
   projectId: number;
@@ -86,6 +87,11 @@ export default async function HomePage() {
       <div className="mx-auto max-w-6xl px-6 py-8 md:py-12">
         <div className="flex flex-col gap-8">
           
+          {/* 案件検索バー（案件一覧と同じUI） */}
+          <div className="w-full">
+            <HomeProjectSearch />
+          </div>
+
           {/* Header Section */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="space-y-1">
