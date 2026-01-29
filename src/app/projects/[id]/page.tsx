@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +58,1010 @@ const PROGRESS_TITLES = [
   "完工",
 ] as const;
 
+// 法令検索タブ用の型と定数（GeoSearchViewから再利用）
+interface JudgmentResult {
+  宅地造成等工事規制区域: boolean;
+  特定盛土等規制区域: boolean;
+}
+
+const TEMPLATES = {
+  宅地造成等工事規制区域: "宅地造成規制区域。造成の規模によっては許可申請が必要。現調結果次第で判断いたします。",
+  特定盛土等規制区域: "特定盛土規制区域。造成の規模によっては届出 / 許可申請が必要。現調結果次第で判断いたします。",
+};
+
+interface AdditionalButton {
+  label: string;
+  url: string;
+}
+
+interface LawSearchCardProps {
+  lawName: string;
+  onSearch: (lawName: string) => void;
+  fixedText?: string;
+  copiedText: string | null;
+  onCopy: (text: string) => void;
+  prefecture?: string;
+  additionalButtons?: AdditionalButton[];
+  badges?: string[];
+  caption?: string;
+}
+
+const LawSearchCard: React.FC<LawSearchCardProps> = ({ 
+  lawName, 
+  onSearch, 
+  fixedText, 
+  copiedText, 
+  onCopy,
+  prefecture,
+  additionalButtons = [],
+  badges = [],
+  caption
+}) => {
+  return (
+    <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <p className="font-medium text-foreground">{lawName}</p>
+          {caption && (
+            <p className="text-sm text-muted-foreground mt-2">{caption}</p>
+          )}
+          {fixedText && (
+            <div className="flex items-start gap-2 mt-3 p-3 rounded-xl bg-muted/50 border border-border">
+              <p className="flex-1 text-sm text-foreground leading-relaxed">{fixedText}</p>
+              <button
+                onClick={() => onCopy(fixedText)}
+                className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                title="コピー"
+              >
+                {copiedText === fixedText ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                )}
+              </button>
+            </div>
+          )}
+          {badges.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {badges.map((badge, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 shrink-0 ml-4">
+          <Button onClick={() => onSearch(lawName)} className="w-full">
+            Googleで検索
+          </Button>
+          {additionalButtons.map((button, index) => (
+            <Button
+              key={index}
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(button.url, '_blank')}
+              className="w-full"
+            >
+              <ExternalLink className="h-3 w-3 mr-2" />
+              {button.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface Law {
+  id: number;
+  name: string;
+  fixedText?: string;
+}
+
+const laws: Law[] = [
+  { id: 1, name: "国土利用計画法" },
+  { id: 2, name: "都市計画法" },
+  { id: 3, name: "河川法" },
+  { id: 4, name: "港湾法" },
+  { id: 5, name: "海岸法" },
+  { id: 6, name: "急傾斜地の崩壊による災害の防止に関する法律" },
+  { id: 7, name: "砂防法" },
+  { id: 8, name: "地すべり等防止法" },
+  { id: 9, name: "景観法" },
+  { id: 10, name: "農業振興地域の整備に関する法律" },
+  { id: 11, name: "農地法" },
+  { id: 12, name: "森林法" },
+  { id: 13, name: "文化財保護法" },
+  { id: 14, name: "土壌汚染対策法" },
+  { id: 15, name: "自然公園法" },
+  { id: 16, name: "自然環境保全法" },
+  { id: 17, name: "絶滅の恐れがある野生動植物の種の保存に関する法律" },
+  { id: 18, name: "鳥獣の保護及び管理並びに狩猟の適正化に関する法律" },
+  { id: 19, name: "環境影響評価法・条例" },
+  { id: 20, name: "消防法", fixedText: "低圧の為、消防署への届出が必要な機器設置なく、該当しません。" },
+  { id: 21, name: "振動規制法", fixedText: "特定施設を設置しないため、該当しません。" },
+  { id: 22, name: "道路法", fixedText: "工事区域に道路が無い為、道路使用許可が占用許可の必要な行為は予定されていません。" },
+  { id: 23, name: "廃棄物の処理及び清掃に関する法律", fixedText: "敷地内の残置物及び工事で発生した産廃物については適正に処理します。" },
+];
+
+// 法令検索タブコンポーネント
+interface LegalSearchTabProps {
+  searchParams: { lat: string; lon: string; prefecture: string } | null;
+  projectAddress: string | null;
+  projectCoordinates: string | null;
+}
+
+function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: LegalSearchTabProps) {
+  const [coordinateInput, setCoordinateInput] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [prefecture, setPrefecture] = useState("");
+  const [result, setResult] = useState<JudgmentResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // カンマ区切り座標を解析する関数
+  const handleCoordinateInput = (value: string) => {
+    setCoordinateInput(value);
+    
+    const parts = value.split(',').map(part => part.trim());
+    
+    if (parts.length === 2) {
+      const [lat, lon] = parts;
+      if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lon))) {
+        setLatitude(lat);
+        setLongitude(lon);
+      } else {
+        setLatitude("");
+        setLongitude("");
+      }
+    } else {
+      setLatitude("");
+      setLongitude("");
+    }
+  };
+
+  // 検索実行（逆ジオコーディングは削除）
+  const runSearch = async (lat: number, lon: number, pref: string) => {
+    setHasSearched(true);
+    setResult(null);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("https://geo-checker-backend-aj4j.onrender.com/api/v1/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ latitude: lat, longitude: lon, prefecture: pref }),
+      });
+      const data: JudgmentResult = await response.json();
+      setResult(data);
+    } catch (error) {
+      console.error("判定エラー:", error);
+      alert("判定に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // フォームからの検索実行
+  const handleSearch = () => {
+    if (!latitude || !longitude || !prefecture) return;
+    runSearch(parseFloat(latitude), parseFloat(longitude), prefecture);
+  };
+
+  // searchParamsが設定されたら自動検索
+  useEffect(() => {
+    if (!searchParams) return;
+    const lat = parseFloat(searchParams.lat);
+    const lon = parseFloat(searchParams.lon);
+    if (isNaN(lat) || isNaN(lon)) return;
+    runSearch(lat, lon, searchParams.prefecture);
+  }, [searchParams]);
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedText(text);
+      setTimeout(() => setCopiedText(null), 2000);
+    } catch (error) {
+      console.error("コピーに失敗しました:", error);
+    }
+  };
+
+  const handleGoogleSearch = (lawName: string) => {
+    const currentPrefecture = searchParams?.prefecture || prefecture;
+    const prefectureName = currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : "";
+    const keyword = `${prefectureName} ${lawName}`;
+    const encodedKeyword = encodeURIComponent(keyword);
+    const searchUrl = `https://www.google.com/search?q=${encodedKeyword}`;
+    window.open(searchUrl, '_blank');
+  };
+
+  // 座標から緯度・経度を取得
+  const getCoordinates = () => {
+    if (searchParams) {
+      return { lat: searchParams.lat, lon: searchParams.lon };
+    }
+    if (projectCoordinates) {
+      const parts = projectCoordinates.split(/[\s,]+/).map((p) => p.trim());
+      if (parts.length >= 2) {
+        return { lat: parts[0], lon: parts[1] };
+      }
+    }
+    if (latitude && longitude) {
+      return { lat: latitude, lon: longitude };
+    }
+    return null;
+  };
+
+  const coordinates = getCoordinates();
+
+  const getMappleUrl = () => {
+    if (!coordinates) return null;
+    const lat = coordinates.lat.trim();
+    const lng = coordinates.lon.trim();
+    if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) return null;
+    return `https://labs.mapple.com/mapplexml.html#16/${lat}/${lng}`;
+  };
+
+  // searchParamsがnullの場合はフォームを表示
+  if (!searchParams) {
+    const currentPrefecture = prefecture;
+    const currentLat = latitude;
+    const currentLon = longitude;
+    const isOkayama = currentPrefecture === "okayama";
+    const isHiroshima = currentPrefecture === "hiroshima";
+
+    return (
+      <div className="space-y-6">
+        {/* 検索フォーム */}
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-8 space-y-6">
+          {/* 座標入力（カンマ区切り） */}
+          <div className="space-y-2">
+            <label htmlFor="coordinate" className="text-sm font-medium text-foreground">
+              座標（緯度,経度）
+            </label>
+            <Input
+              id="coordinate"
+              type="text"
+              placeholder="例: 34.580590,133.457655"
+              value={coordinateInput}
+              onChange={(e) => handleCoordinateInput(e.target.value)}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              緯度と経度をカンマ区切りで入力してください
+            </p>
+          </div>
+
+          {/* 都道府県選択 */}
+          <div className="space-y-2">
+            <label htmlFor="prefecture" className="text-sm font-medium text-foreground">
+              都道府県
+            </label>
+            <Select value={prefecture} onValueChange={setPrefecture}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="都道府県を選択してください" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hiroshima">広島県</SelectItem>
+                <SelectItem value="okayama">岡山県</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 検索ボタン */}
+          <div className="pt-2">
+            <Button
+              onClick={handleSearch}
+              size="lg"
+              className="w-full"
+              disabled={!latitude || !longitude || !prefecture || isLoading}
+            >
+              {isLoading ? "検索中..." : "検索"}
+            </Button>
+          </div>
+        </div>
+
+        {/* 現地住所・現地座標（画面上部に固定表示） */}
+        {(projectAddress || projectCoordinates) && (
+          <div className="sticky top-0 z-10 bg-background pt-1 -mt-1 pb-4 space-y-4 border-b border-border/50 shadow-sm">
+            {projectAddress && (
+              <div className="bg-card rounded-4xl border border-border shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h2 className="text-xl font-semibold text-foreground mb-4">現地住所</h2>
+                <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                  <p className="flex-1 text-sm text-foreground leading-relaxed">
+                    {projectAddress}
+                  </p>
+                  <button
+                    onClick={() => handleCopy(projectAddress)}
+                    className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                    title="コピー"
+                  >
+                    {copiedText === projectAddress ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {projectCoordinates && (
+              <div className="bg-card rounded-4xl border border-border shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h2 className="text-xl font-semibold text-foreground mb-4">現地座標</h2>
+                <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                  <p className="flex-1 text-sm text-foreground leading-relaxed">
+                    {projectCoordinates}
+                  </p>
+                  <button
+                    onClick={() => handleCopy(projectCoordinates)}
+                    className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                    title="コピー"
+                  >
+                    {copiedText === projectCoordinates ? (
+                      <Check className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                    )}
+                  </button>
+                </div>
+                {coordinates && (
+                  <div className="flex flex-wrap gap-2">
+                    {getMappleUrl() && (
+                      <Button variant="outline" size="sm" asChild className="h-9">
+                        <a
+                          href={getMappleUrl() ?? ""}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-3 w-3 mr-2" />
+                          MAPPLE
+                        </a>
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => window.open(
+                        `https://www.google.com/maps?q=${coordinates.lat},${coordinates.lon}`,
+                        '_blank'
+                      )}
+                      className="flex-1"
+                    >
+                      Google Mapで確認
+                    </Button>
+                    {currentPrefecture === "okayama" && (
+                      <Button
+                        onClick={() => window.open('https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7', '_blank')}
+                        className="flex-1"
+                      >
+                        おかやま全県統合型GIS
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 法律検索カード一覧 */}
+        {hasSearched && laws.map((law) => {
+          let additionalButtons: AdditionalButton[] = [];
+          let badges: string[] = [];
+          let caption: string | undefined;
+          let fixedTextWithCopy = law.fixedText;
+
+          if (law.id === 1 && isOkayama) {
+            additionalButtons.push({
+              label: "おかやま全県統合型GIS",
+              url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+            });
+          }
+          if (law.id === 1 && isHiroshima) {
+            additionalButtons.push({
+              label: "ひろしま地図ナビ",
+              url: "https://www2.wagmap.jp/hiroshimacity/Portal?mid=4"
+            });
+          }
+
+          if (law.id === 4 && isOkayama) {
+            fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
+            badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
+          }
+
+          if (law.id === 5 && isOkayama) {
+            fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
+            badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
+          }
+
+          if (law.id === 9 && isOkayama) {
+            caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
+            additionalButtons.push({
+              label: "届出対象行為",
+              url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
+            });
+          }
+
+          if (law.id === 13 && isOkayama) {
+            additionalButtons.push({
+              label: "おかやま全県統合型GIS",
+              url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+            });
+          }
+          if (law.id === 13 && isHiroshima) {
+            additionalButtons.push({
+              label: "広島県埋蔵文化財地図",
+              url: "https://www.pref.hiroshima.lg.jp/site/bunkazai/bunkazai-map-map.html"
+            });
+          }
+
+          if (law.id === 15 && isOkayama) {
+            additionalButtons.push({
+              label: "おかやま全県統合型GIS",
+              url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+            });
+          }
+
+          if (law.id === 16 && isOkayama) {
+            additionalButtons.push({
+              label: "自然環境保全地域",
+              url: "https://www.pref.okayama.jp/page/573469.html"
+            });
+          }
+
+          if (law.id === 17) {
+            additionalButtons.push({
+              label: "生息地等保護区",
+              url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
+            });
+          }
+
+          if (law.id === 18 && isOkayama) {
+            additionalButtons.push({
+              label: "鳥獣保護区等位置図",
+              url: "https://www.pref.okayama.jp/uploaded/life/1011233_9758897_misc.pdf"
+            });
+          }
+
+          if (law.id === 19 && isOkayama) {
+            fixedTextWithCopy = "対象の面積要件は20ha以上のため、今回は該当しません。";
+            additionalButtons.push({
+              label: "条例の対象事業",
+              url: "https://www.pref.okayama.jp/uploaded/life/1005026_9692062_misc.pdf"
+            });
+          }
+
+          return (
+            <LawSearchCard
+              key={law.id}
+              lawName={law.name}
+              onSearch={handleGoogleSearch}
+              fixedText={fixedTextWithCopy}
+              copiedText={copiedText}
+              onCopy={handleCopy}
+              prefecture={currentPrefecture}
+              additionalButtons={additionalButtons}
+              badges={badges}
+              caption={caption}
+            />
+          );
+        })}
+
+        {/* 都道府県条例カード（岡山県） */}
+        {hasSearched && currentPrefecture === "okayama" && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">都道府県条例</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="font-medium text-foreground">岡山県太陽光発電施設の安全な導入を促進する条例</p>
+              </div>
+              <Button
+                onClick={() => window.open("https://www.pref.okayama.jp/page/619095.html", "_blank")}
+                className="shrink-0 ml-4"
+              >
+                Googleで検索
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 市区町村条例カード（井原市） */}
+        {hasSearched && locationInfo?.city?.includes("井原市") && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">市区町村条例</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="font-medium text-foreground">井原市開発事業の調整に関する条例</p>
+              </div>
+              <Button
+                onClick={() => window.open("https://www.city.ibara.okayama.jp/soshiki/3/1214.html", "_blank")}
+                className="shrink-0 ml-4"
+              >
+                Googleで検索
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 判定結果表示 */}
+        {hasSearched && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">判定結果</h2>
+            
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                判定中...
+              </div>
+            ) : result ? (
+              <>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 border border-border">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">宅地造成等工事規制区域</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {result.宅地造成等工事規制区域 ? (
+                        <>
+                          <CheckCircle2 className="w-6 h-6 text-green-500" />
+                          <span className="font-semibold text-green-500">該当します</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-6 h-6 text-red-500" />
+                          <span className="font-semibold text-muted-foreground">該当しません</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {result.宅地造成等工事規制区域 && (
+                    <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                      <p className="flex-1 text-sm text-foreground leading-relaxed">
+                        {TEMPLATES.宅地造成等工事規制区域}
+                      </p>
+                      <button
+                        onClick={() => handleCopy(TEMPLATES.宅地造成等工事規制区域)}
+                        className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                        title="コピー"
+                      >
+                        {copiedText === TEMPLATES.宅地造成等工事規制区域 ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 border border-border">
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">特定盛土等規制区域</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {result.特定盛土等規制区域 ? (
+                        <>
+                          <CheckCircle2 className="w-6 h-6 text-green-500" />
+                          <span className="font-semibold text-green-500">該当します</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-6 h-6 text-red-500" />
+                          <span className="font-semibold text-muted-foreground">該当しません</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {result.特定盛土等規制区域 && (
+                    <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                      <p className="flex-1 text-sm text-foreground leading-relaxed">
+                        {TEMPLATES.特定盛土等規制区域}
+                      </p>
+                      <button
+                        onClick={() => handleCopy(TEMPLATES.特定盛土等規制区域)}
+                        className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                        title="コピー"
+                      >
+                        {copiedText === TEMPLATES.特定盛土等規制区域 ? (
+                          <Check className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-border mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    判定座標: {projectAddress && `${projectAddress}, `}緯度 {currentLat}, 経度 {currentLon}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                判定結果がありません
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const currentPrefecture = searchParams.prefecture;
+  const isOkayama = currentPrefecture === "okayama";
+  const isHiroshima = currentPrefecture === "hiroshima";
+
+  // 座標から緯度・経度を取得（searchParams時）
+  const getCoordinatesForSearchParams = () => {
+    if (searchParams) {
+      return { lat: searchParams.lat, lon: searchParams.lon };
+    }
+    if (projectCoordinates) {
+      const parts = projectCoordinates.split(/[\s,]+/).map((p) => p.trim());
+      if (parts.length >= 2) {
+        return { lat: parts[0], lon: parts[1] };
+      }
+    }
+    return null;
+  };
+
+  const coordinatesForSearchParams = getCoordinatesForSearchParams();
+
+  const getMappleUrlForSearchParams = () => {
+    if (!coordinatesForSearchParams) return null;
+    const lat = coordinatesForSearchParams.lat.trim();
+    const lng = coordinatesForSearchParams.lon.trim();
+    if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) return null;
+    return `https://labs.mapple.com/mapplexml.html#16/${lat}/${lng}`;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 現地住所・現地座標（画面上部に固定表示） */}
+      {(projectAddress || projectCoordinates) && (
+        <div className="sticky top-0 z-10 bg-background pt-1 -mt-1 pb-4 space-y-4 border-b border-border/50 shadow-sm">
+          {projectAddress && (
+            <div className="bg-card rounded-4xl border border-border shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-xl font-semibold text-foreground mb-4">現地住所</h2>
+              <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                <p className="flex-1 text-sm text-foreground leading-relaxed">
+                  {projectAddress}
+                </p>
+                <button
+                  onClick={() => handleCopy(projectAddress)}
+                  className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                  title="コピー"
+                >
+                  {copiedText === projectAddress ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {projectCoordinates && (
+            <div className="bg-card rounded-4xl border border-border shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-xl font-semibold text-foreground mb-4">現地座標</h2>
+              <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                <p className="flex-1 text-sm text-foreground leading-relaxed">
+                  {projectCoordinates}
+                </p>
+                <button
+                  onClick={() => handleCopy(projectCoordinates)}
+                  className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                  title="コピー"
+                >
+                  {copiedText === projectCoordinates ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                  )}
+                </button>
+              </div>
+              {coordinatesForSearchParams && (
+                <div className="flex flex-wrap gap-2">
+                  {getMappleUrlForSearchParams() && (
+                    <Button variant="outline" size="sm" asChild className="h-9">
+                      <a
+                        href={getMappleUrlForSearchParams() ?? ""}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-2" />
+                        MAPPLE
+                      </a>
+                    </Button>
+                  )}
+                  {coordinatesForSearchParams && (
+                    <Button
+                      onClick={() => window.open(
+                        `https://www.google.com/maps?q=${coordinatesForSearchParams.lat},${coordinatesForSearchParams.lon}`,
+                        '_blank'
+                      )}
+                      className="flex-1"
+                    >
+                      Google Mapで確認
+                    </Button>
+                  )}
+                  {currentPrefecture === "okayama" && (
+                    <Button
+                      onClick={() => window.open('https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7', '_blank')}
+                      className="flex-1"
+                    >
+                      おかやま全県統合型GIS
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 法律検索カード一覧 */}
+      {hasSearched && laws.map((law) => {
+        let additionalButtons: AdditionalButton[] = [];
+        let badges: string[] = [];
+        let caption: string | undefined;
+        let fixedTextWithCopy = law.fixedText;
+
+        if (law.id === 1 && isOkayama) {
+          additionalButtons.push({
+            label: "おかやま全県統合型GIS",
+            url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+          });
+        }
+        if (law.id === 1 && isHiroshima) {
+          additionalButtons.push({
+            label: "ひろしま地図ナビ",
+            url: "https://www2.wagmap.jp/hiroshimacity/Portal?mid=4"
+          });
+        }
+
+        if (law.id === 4 && isOkayama) {
+          fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
+          badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
+        }
+
+        if (law.id === 5 && isOkayama) {
+          fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
+          badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
+        }
+
+        if (law.id === 9 && isOkayama) {
+          caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
+          additionalButtons.push({
+            label: "届出対象行為",
+            url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
+          });
+        }
+
+        if (law.id === 13 && isOkayama) {
+          additionalButtons.push({
+            label: "おかやま全県統合型GIS",
+            url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+          });
+        }
+        if (law.id === 13 && isHiroshima) {
+          additionalButtons.push({
+            label: "広島県埋蔵文化財地図",
+            url: "https://www.pref.hiroshima.lg.jp/site/bunkazai/bunkazai-map-map.html"
+          });
+        }
+
+        if (law.id === 15 && isOkayama) {
+          additionalButtons.push({
+            label: "おかやま全県統合型GIS",
+            url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+          });
+        }
+
+        if (law.id === 16 && isOkayama) {
+          additionalButtons.push({
+            label: "自然環境保全地域",
+            url: "https://www.pref.okayama.jp/page/573469.html"
+          });
+        }
+
+        if (law.id === 17) {
+          additionalButtons.push({
+            label: "生息地等保護区",
+            url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
+          });
+        }
+
+        if (law.id === 18 && isOkayama) {
+          additionalButtons.push({
+            label: "鳥獣保護区等位置図",
+            url: "https://www.pref.okayama.jp/uploaded/life/1011233_9758897_misc.pdf"
+          });
+        }
+
+        if (law.id === 19 && isOkayama) {
+          fixedTextWithCopy = "対象の面積要件は20ha以上のため、今回は該当しません。";
+          additionalButtons.push({
+            label: "条例の対象事業",
+            url: "https://www.pref.okayama.jp/uploaded/life/1005026_9692062_misc.pdf"
+          });
+        }
+
+        return (
+          <LawSearchCard
+            key={law.id}
+            lawName={law.name}
+            onSearch={handleGoogleSearch}
+            fixedText={fixedTextWithCopy}
+            copiedText={copiedText}
+            onCopy={handleCopy}
+            prefecture={currentPrefecture}
+            additionalButtons={additionalButtons}
+            badges={badges}
+            caption={caption}
+          />
+        );
+      })}
+
+      {/* 都道府県条例カード（岡山県） */}
+      {hasSearched && currentPrefecture === "okayama" && (
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h2 className="text-xl font-semibold text-foreground mb-4">都道府県条例</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="font-medium text-foreground">岡山県太陽光発電施設の安全な導入を促進する条例</p>
+            </div>
+            <Button
+              onClick={() => window.open("https://www.pref.okayama.jp/page/619095.html", "_blank")}
+              className="shrink-0 ml-4"
+            >
+              Googleで検索
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 市区町村条例カード（井原市） */}
+      {hasSearched && projectAddress?.includes("井原市") && (
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h2 className="text-xl font-semibold text-foreground mb-4">市区町村条例</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="font-medium text-foreground">井原市開発事業の調整に関する条例</p>
+            </div>
+            <Button
+              onClick={() => window.open("https://www.city.ibara.okayama.jp/soshiki/3/1214.html", "_blank")}
+              className="shrink-0 ml-4"
+            >
+              Googleで検索
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 判定結果表示 */}
+      {hasSearched && (
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h2 className="text-xl font-semibold text-foreground mb-4">判定結果</h2>
+          
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              判定中...
+            </div>
+          ) : result ? (
+            <>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 border border-border">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">宅地造成等工事規制区域</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {result.宅地造成等工事規制区域 ? (
+                      <>
+                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                        <span className="font-semibold text-green-500">該当します</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-6 h-6 text-red-500" />
+                        <span className="font-semibold text-muted-foreground">該当しません</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                {result.宅地造成等工事規制区域 && (
+                  <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                    <p className="flex-1 text-sm text-foreground leading-relaxed">
+                      {TEMPLATES.宅地造成等工事規制区域}
+                    </p>
+                    <button
+                      onClick={() => handleCopy(TEMPLATES.宅地造成等工事規制区域)}
+                      className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                      title="コピー"
+                    >
+                      {copiedText === TEMPLATES.宅地造成等工事規制区域 ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 border border-border">
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">特定盛土等規制区域</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {result.特定盛土等規制区域 ? (
+                      <>
+                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                        <span className="font-semibold text-green-500">該当します</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-6 h-6 text-red-500" />
+                        <span className="font-semibold text-muted-foreground">該当しません</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                {result.特定盛土等規制区域 && (
+                  <div className="flex items-start gap-2 p-4 rounded-2xl bg-muted/50 border border-border">
+                    <p className="flex-1 text-sm text-foreground leading-relaxed">
+                      {TEMPLATES.特定盛土等規制区域}
+                    </p>
+                    <button
+                      onClick={() => handleCopy(TEMPLATES.特定盛土等規制区域)}
+                      className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                      title="コピー"
+                    >
+                      {copiedText === TEMPLATES.特定盛土等規制区域 ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {coordinatesForSearchParams && (
+                <div className="pt-2 border-t border-border mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    判定座標: {projectAddress && `${projectAddress}, `}緯度 {coordinatesForSearchParams.lat}, 経度 {coordinatesForSearchParams.lon}
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              判定結果がありません
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatYyyyMd(date: Date | undefined) {
   if (!date) return "";
   const y = date.getFullYear();
@@ -73,6 +1077,8 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [progressList, setProgressList] = useState<Progress[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [activeTab, setActiveTab] = useState("details");
+  const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
   const [newComment, setNewComment] = useState("");
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
   const [editCommentContent, setEditCommentContent] = useState("");
@@ -438,6 +1444,27 @@ export default function ProjectDetailPage() {
     return `https://disaportal.gsi.go.jp/maps/?ll=${lat},${lng}&z=16&base=ort&vs=c1j0l0u0t0h0z0`;
   };
 
+  // 現地住所から都道府県の選択値（法令検索用）を取得
+  const getPrefectureParam = (address: string | null): string | null => {
+    if (!address) return null;
+    if (address.includes("広島県")) return "hiroshima";
+    if (address.includes("岡山県")) return "okayama";
+    return null;
+  };
+
+  // 法令確認画面へのURL（座標・都道府県をクエリで渡す）
+  const getLegalSearchUrl = () => {
+    if (!project?.coordinates || !project?.address) return null;
+    const parts = project.coordinates.split(/[\s,]+/).map((p) => p.trim());
+    if (parts.length < 2) return null;
+    const lat = parts[0];
+    const lon = parts[1];
+    const prefectureParam = getPrefectureParam(project.address);
+    if (!prefectureParam || !lat || !lon) return null;
+    const params = new URLSearchParams({ lat, lon, prefecture: prefectureParam });
+    return `/legal?${params.toString()}`;
+  };
+
   // 進捗を日付でソート（すべてDBから取得）
   const sortedTimeline = useMemo(() => {
     return [...progressList]
@@ -456,7 +1483,7 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-3xl py-10">
+      <div className="mx-auto max-w-5xl py-10">
         <div className="space-y-6">
           {/* ヘッダー */}
           <div className="flex items-center gap-3">
@@ -895,9 +1922,10 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* タブ UI */}
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs defaultValue="details" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="details">案件情報</TabsTrigger>
+              <TabsTrigger value="legal">法令</TabsTrigger>
               <TabsTrigger value="comments">コメント</TabsTrigger>
             </TabsList>
 
@@ -977,6 +2005,38 @@ export default function ProjectDetailPage() {
                             </a>
                           </Button>
                         </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">法令</span>
+                    <div className="col-span-2">
+                      {getLegalSearchUrl() ? (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8"
+                          onClick={() => {
+                            const url = getLegalSearchUrl();
+                            if (url) {
+                              const urlObj = new URL(url, window.location.origin);
+                              const lat = urlObj.searchParams.get("lat");
+                              const lon = urlObj.searchParams.get("lon");
+                              const prefecture = urlObj.searchParams.get("prefecture");
+                              if (lat && lon && prefecture) {
+                                setLegalSearchParams({ lat, lon, prefecture });
+                                setActiveTab("legal");
+                              }
+                            }
+                          }}
+                        >
+                          <Scale className="h-3 w-3 mr-2" />
+                          法令検索
+                        </Button>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          現地住所に広島県または岡山県を含め、座標を登録すると利用できます
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1068,6 +2128,14 @@ export default function ProjectDetailPage() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="legal" className="mt-6 space-y-6">
+              <LegalSearchTab 
+                searchParams={legalSearchParams}
+                projectAddress={project?.address || null}
+                projectCoordinates={project?.coordinates || null}
+              />
             </TabsContent>
 
             <TabsContent value="comments" className="mt-6 space-y-6">

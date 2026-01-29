@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,14 +62,23 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 検索フィルタリング（管理番号・案件番号）
+  // 検索フィルタリング（管理番号・案件番号・地権者・現地住所）
   const filteredProjects = projects.filter((project) => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
+    const addr = (project.address ?? "").toLowerCase();
+    const l1 = (project.landowner1 ?? "").toLowerCase();
+    const l2 = (project.landowner2 ?? "").toLowerCase();
+    const l3 = (project.landowner3 ?? "").toLowerCase();
     return (
       project.managementNumber.toLowerCase().includes(query) ||
-      project.projectNumber.toLowerCase().includes(query)
+      project.projectNumber.toLowerCase().includes(query) ||
+      addr.includes(query) ||
+      l1.includes(query) ||
+      l2.includes(query) ||
+      l3.includes(query)
     );
   });
 
@@ -86,14 +95,19 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setForm({ managementNumber: "", manager: "", client: "", projectNumber: "", completionMonth: "" });
-    setOpen(false);
-    fetchProjects();
+    setIsSubmitting(true);
+    try {
+      await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      setForm({ managementNumber: "", manager: "", client: "", projectNumber: "", completionMonth: "" });
+      setOpen(false);
+      fetchProjects();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -172,7 +186,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
             <div className="relative flex-1 max-w-xl">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="管理番号・案件番号で検索"
+                placeholder="管理番号・案件番号・地権者・現地住所で検索"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-12 h-12 text-base bg-muted/50 border-0 focus-visible:ring-2 rounded-xl"
@@ -282,10 +296,19 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                     </Popover>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
                       キャンセル
                     </Button>
-                    <Button type="submit">登録</Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          登録中...
+                        </>
+                      ) : (
+                        "登録"
+                      )}
+                    </Button>
                   </div>
                 </form>
               </DialogContent>

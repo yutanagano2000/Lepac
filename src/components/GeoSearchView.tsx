@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -10,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Copy, Check, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Copy, Check, Loader2, ExternalLink } from "lucide-react";
 
 interface JudgmentResult {
   宅地造成等工事規制区域: boolean;
@@ -22,22 +23,90 @@ const TEMPLATES = {
   特定盛土等規制区域: "特定盛土規制区域。造成の規模によっては届出 / 許可申請が必要。現調結果次第で判断いたします。",
 };
 
+// 追加ボタンの型定義
+interface AdditionalButton {
+  label: string;
+  url: string;
+}
+
 // 法律検索カードコンポーネント
 interface LawSearchCardProps {
   lawName: string;
   onSearch: (lawName: string) => void;
+  fixedText?: string;
+  copiedText: string | null;
+  onCopy: (text: string) => void;
+  prefecture?: string;
+  additionalButtons?: AdditionalButton[];
+  badges?: string[];
+  caption?: string;
 }
 
-const LawSearchCard: React.FC<LawSearchCardProps> = ({ lawName, onSearch }) => {
+const LawSearchCard: React.FC<LawSearchCardProps> = ({ 
+  lawName, 
+  onSearch, 
+  fixedText, 
+  copiedText, 
+  onCopy,
+  prefecture,
+  additionalButtons = [],
+  badges = [],
+  caption
+}) => {
   return (
     <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="font-medium text-foreground">{lawName}</p>
+          {caption && (
+            <p className="text-sm text-muted-foreground mt-2">{caption}</p>
+          )}
+          {fixedText && (
+            <div className="flex items-start gap-2 mt-3 p-3 rounded-xl bg-muted/50 border border-border">
+              <p className="flex-1 text-sm text-foreground leading-relaxed">{fixedText}</p>
+              <button
+                onClick={() => onCopy(fixedText)}
+                className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
+                title="コピー"
+              >
+                {copiedText === fixedText ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                )}
+              </button>
+            </div>
+          )}
+          {badges.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {badges.map((badge, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <Button onClick={() => onSearch(lawName)}>
-          Googleで検索
-        </Button>
+        <div className="flex flex-col gap-2 shrink-0 ml-4">
+          <Button onClick={() => onSearch(lawName)} className="w-full">
+            Googleで検索
+          </Button>
+          {additionalButtons.map((button, index) => (
+            <Button
+              key={index}
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(button.url, '_blank')}
+              className="w-full"
+            >
+              <ExternalLink className="h-3 w-3 mr-2" />
+              {button.label}
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -47,6 +116,7 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({ lawName, onSearch }) => {
 interface Law {
   id: number;
   name: string;
+  fixedText?: string;
 }
 
 const laws: Law[] = [
@@ -69,10 +139,10 @@ const laws: Law[] = [
   { id: 17, name: "絶滅の恐れがある野生動植物の種の保存に関する法律" },
   { id: 18, name: "鳥獣の保護及び管理並びに狩猟の適正化に関する法律" },
   { id: 19, name: "環境影響評価法・条例" },
-  { id: 20, name: "消防法" },
-  { id: 21, name: "振動規制法" },
-  { id: 22, name: "道路法" },
-  { id: 23, name: "廃棄物の処理及び清掃に関する法律" },
+  { id: 20, name: "消防法", fixedText: "低圧の為、消防署への届出が必要な機器設置なく、該当しません。" },
+  { id: 21, name: "振動規制法", fixedText: "特定施設を設置しないため、該当しません。" },
+  { id: 22, name: "道路法", fixedText: "工事区域に道路が無い為、道路使用許可が占用許可の必要な行為は予定されていません。" },
+  { id: 23, name: "廃棄物の処理及び清掃に関する法律", fixedText: "敷地内の残置物及び工事で発生した産廃物については適正に処理します。" },
 ];
 
 export function GeoSearchView() {
@@ -136,27 +206,53 @@ export function GeoSearchView() {
         address.municipality ||
         "";
 
-      const cityName = fullCityName.includes("市")
-        ? fullCityName.split("市")[0] + "市"
-        : fullCityName;
+      // 区名を取得（suburbやneighbourhoodから）
+      const wardName =
+        address.suburb ||
+        address.neighbourhood ||
+        "";
+
+      // 市名の処理：区名が含まれている場合はそのまま、含まれていない場合は区名を追加
+      let cityName = fullCityName;
+      if (fullCityName.includes("市")) {
+        // 既に区名が含まれている場合（例：「広島市安佐北区」）はそのまま使用
+        if (fullCityName.includes("区")) {
+          cityName = fullCityName;
+        } else {
+          // 「市」で終わっている場合（例：「広島市」）、区名があれば追加
+          if (wardName && wardName.includes("区")) {
+            cityName = fullCityName + wardName;
+          } else {
+            // 区名がない場合は、市名のみ（「市」で終わる部分まで）
+            cityName = fullCityName.split("市")[0] + "市";
+          }
+        }
+      }
       
       // 都道府県名を取得
       const prefectureName = address.state || address.prefecture || "";
 
-      // 町名・エリア名（あれば）
+      // 町名・エリア名（区名以外。neighbourhood/suburb に町名が入る場合がある）
       const area =
-        address.suburb ||
-        address.neighbourhood ||
+        (address.neighbourhood && !address.neighbourhood.includes("区")
+          ? address.neighbourhood
+          : "") ||
+        (address.suburb && !address.suburb.includes("区") ? address.suburb : "") ||
         address.quarter ||
         address.hamlet ||
         address.village ||
         "";
 
-      // 表示用の短い住所（郵便番号や国名は含めない）
-      const shortAddress = [prefectureName, cityName, area].filter(Boolean).join("");
+      // 通り名・番地（Nominatimのaddressから取得）
+      const road = address.road || "";
+      const houseNumber = address.house_number || "";
 
-      // 番地まで含むフル住所（必要なら保持）
-      const fullAddress = data.display_name || "";
+      // 表示用の住所：address の全要素を順に結合（都道府県→市区町村→町名→通り→番地）
+      const shortAddress = [prefectureName, cityName, area, road, houseNumber]
+        .filter(Boolean)
+        .join("");
+
+      const fullAddress = (data.display_name || "").trim();
       
       return {
         prefecture: prefectureName,
@@ -170,35 +266,26 @@ export function GeoSearchView() {
     }
   };
 
-  const handleSearch = async () => {
+  // 検索実行（座標・都道府県を指定可能。未指定時は state を使用）
+  const runSearch = async (override?: { lat: number; lon: number; prefecture: string }) => {
+    const lat = override ? override.lat : parseFloat(latitude);
+    const lon = override ? override.lon : parseFloat(longitude);
+    const pref = override ? override.prefecture : prefecture;
+    if (isNaN(lat) || isNaN(lon) || !pref) return;
+
     setHasSearched(true);
     setResult(null);
     setIsLoading(true);
-    
-    try {
-      // 座標から都道府県・市を取得
-      const location = await getLocationFromCoordinates(
-        parseFloat(latitude),
-        parseFloat(longitude)
-      );
-      
-      if (location) {
-        setLocationInfo(location);
-      }
 
-      // 既存の判定API呼び出し
+    try {
+      const location = await getLocationFromCoordinates(lat, lon);
+      if (location) setLocationInfo(location);
+
       const response = await fetch("https://geo-checker-backend-aj4j.onrender.com/api/v1/check", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          latitude: parseFloat(latitude),
-          longitude: parseFloat(longitude),
-          prefecture: prefecture,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ latitude: lat, longitude: lon, prefecture: pref }),
       });
-
       const data: JudgmentResult = await response.json();
       setResult(data);
     } catch (error) {
@@ -208,6 +295,28 @@ export function GeoSearchView() {
       setIsLoading(false);
     }
   };
+
+  const handleSearch = () => runSearch();
+
+  // URL パラメータ（案件画面から遷移時）で座標・都道府県があれば自動検索
+  const searchParams = useSearchParams();
+  const initialSearchDone = useRef(false);
+  useEffect(() => {
+    const latParam = searchParams.get("lat");
+    const lonParam = searchParams.get("lon");
+    const prefectureParam = searchParams.get("prefecture");
+    if (!latParam || !lonParam || !prefectureParam || initialSearchDone.current) return;
+    const lat = parseFloat(latParam);
+    const lon = parseFloat(lonParam);
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    initialSearchDone.current = true;
+    setCoordinateInput(`${latParam},${lonParam}`);
+    setLatitude(latParam);
+    setLongitude(lonParam);
+    setPrefecture(prefectureParam);
+    runSearch({ lat, lon, prefecture: prefectureParam });
+  }, [searchParams]);
 
   const handleCopy = async (text: string) => {
     try {
@@ -219,11 +328,19 @@ export function GeoSearchView() {
     }
   };
 
+  // Mapple URL（座標をパラメータとして渡す・案件画面と同様）
+  const getMappleUrl = () => {
+    if (!latitude || !longitude) return null;
+    const lat = latitude.trim();
+    const lng = longitude.trim();
+    if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) return null;
+    return `https://labs.mapple.com/mapplexml.html#16/${lat}/${lng}`;
+  };
+
   // Google検索関数（再利用可能）
   const handleGoogleSearch = (lawName: string) => {
     const prefectureName = prefecture === "hiroshima" ? "広島県" : prefecture === "okayama" ? "岡山県" : "";
-    const cityName = locationInfo?.city || "";
-    const keyword = `${prefectureName}　${cityName}　${lawName}`;
+    const keyword = `${prefectureName} ${lawName}`;
     const encodedKeyword = encodeURIComponent(keyword);
     const searchUrl = `https://www.google.com/search?q=${encodedKeyword}`;
     window.open(searchUrl, '_blank');
@@ -310,7 +427,19 @@ export function GeoSearchView() {
               </button>
             </div>
             {/* 地図確認ボタン */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {getMappleUrl() && (
+                <Button variant="outline" size="sm" asChild className="h-9">
+                  <a
+                    href={getMappleUrl() ?? ""}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-2" />
+                    MAPPLE
+                  </a>
+                </Button>
+              )}
               <Button
                 onClick={() => window.open(
                   `https://www.google.com/maps?q=${latitude},${longitude}`,
@@ -334,13 +463,156 @@ export function GeoSearchView() {
         )}
 
         {/* 法律検索カード一覧 */}
-        {hasSearched && laws.map((law) => (
-          <LawSearchCard
-            key={law.id}
-            lawName={law.name}
-            onSearch={handleGoogleSearch}
-          />
-        ))}
+        {hasSearched && laws.map((law) => {
+          // 各法律ごとの条件分岐
+          const isOkayama = prefecture === "okayama";
+          const isHiroshima = prefecture === "hiroshima";
+          let additionalButtons: AdditionalButton[] = [];
+          let badges: string[] = [];
+          let caption: string | undefined;
+          let fixedTextWithCopy = law.fixedText;
+
+          // 1. 国土利用計画法
+          if (law.id === 1 && isOkayama) {
+            additionalButtons.push({
+              label: "おかやま全県統合型GIS",
+              url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+            });
+          }
+          if (law.id === 1 && isHiroshima) {
+            additionalButtons.push({
+              label: "ひろしま地図ナビ",
+              url: "https://www2.wagmap.jp/hiroshimacity/Portal?mid=4"
+            });
+          }
+
+          // 2. 港湾法
+          if (law.id === 4 && isOkayama) {
+            fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
+            badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
+          }
+
+          // 3. 海岸法
+          if (law.id === 5 && isOkayama) {
+            fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
+            badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
+          }
+
+          // 4. 景観法
+          if (law.id === 9 && isOkayama) {
+            caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
+            additionalButtons.push({
+              label: "届出対象行為",
+              url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
+            });
+          }
+
+          // 5. 文化財保護法
+          if (law.id === 13 && isOkayama) {
+            additionalButtons.push({
+              label: "おかやま全県統合型GIS",
+              url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+            });
+          }
+          if (law.id === 13 && isHiroshima) {
+            additionalButtons.push({
+              label: "広島県埋蔵文化財地図",
+              url: "https://www.pref.hiroshima.lg.jp/site/bunkazai/bunkazai-map-map.html"
+            });
+          }
+
+          // 6. 自然公園法
+          if (law.id === 15 && isOkayama) {
+            additionalButtons.push({
+              label: "おかやま全県統合型GIS",
+              url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
+            });
+          }
+
+          // 7. 自然環境保全法
+          if (law.id === 16 && isOkayama) {
+            additionalButtons.push({
+              label: "自然環境保全地域",
+              url: "https://www.pref.okayama.jp/page/573469.html"
+            });
+          }
+
+          // 8. 絶滅の恐れがある野生動植物の種の保存に関する法律（常時表示）
+          if (law.id === 17) {
+            additionalButtons.push({
+              label: "生息地等保護区",
+              url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
+            });
+          }
+
+          // 9. 鳥獣の保護及び管理並びに狩猟の適正化に関する法律
+          if (law.id === 18 && isOkayama) {
+            additionalButtons.push({
+              label: "鳥獣保護区等位置図",
+              url: "https://www.pref.okayama.jp/uploaded/life/1011233_9758897_misc.pdf"
+            });
+          }
+
+          // 10. 環境影響評価法・条例
+          if (law.id === 19 && isOkayama) {
+            fixedTextWithCopy = "対象の面積要件は20ha以上のため、今回は該当しません。";
+            additionalButtons.push({
+              label: "条例の対象事業",
+              url: "https://www.pref.okayama.jp/uploaded/life/1005026_9692062_misc.pdf"
+            });
+          }
+
+          return (
+            <LawSearchCard
+              key={law.id}
+              lawName={law.name}
+              onSearch={handleGoogleSearch}
+              fixedText={fixedTextWithCopy}
+              copiedText={copiedText}
+              onCopy={handleCopy}
+              prefecture={prefecture}
+              additionalButtons={additionalButtons}
+              badges={badges}
+              caption={caption}
+            />
+          );
+        })}
+
+        {/* 都道府県条例カード（岡山県） */}
+        {hasSearched && prefecture === "okayama" && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">都道府県条例</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="font-medium text-foreground">岡山県太陽光発電施設の安全な導入を促進する条例</p>
+              </div>
+              <Button
+                onClick={() => window.open("https://www.pref.okayama.jp/page/619095.html", "_blank")}
+                className="shrink-0 ml-4"
+              >
+                Googleで検索
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 市区町村条例カード（井原市） */}
+        {hasSearched && locationInfo?.city?.includes("井原市") && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">市区町村条例</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="font-medium text-foreground">井原市開発事業の調整に関する条例</p>
+              </div>
+              <Button
+                onClick={() => window.open("https://www.city.ibara.okayama.jp/soshiki/3/1214.html", "_blank")}
+                className="shrink-0 ml-4"
+              >
+                Googleで検索
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* 判定結果表示 */}
         {hasSearched && (
@@ -454,32 +726,6 @@ export function GeoSearchView() {
           </div>
         )}
 
-
-        {/* 規制区域図のリンクを表示 */}
-        {hasSearched && (prefecture === "okayama" || prefecture === "hiroshima") && (
-          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-1">
-                  {prefecture === "hiroshima" ? "広島県" : "岡山県"} 規制区域図
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  詳細な規制区域図は{prefecture === "hiroshima" ? "広島県" : "岡山県"}の公式ページでご確認ください
-                </p>
-              </div>
-              <Button
-                onClick={() => window.open(
-                  prefecture === "hiroshima" 
-                    ? 'https://www.pref.hiroshima.lg.jp/soshiki/262/moridokeihatsu.html'
-                    : 'https://www.pref.okayama.jp/page/915358.html',
-                  '_blank'
-                )}
-              >
-                規制区域図を見る
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* 説明テキスト */}
         <p className="text-center text-sm text-muted-foreground">
