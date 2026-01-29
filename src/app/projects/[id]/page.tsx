@@ -3,8 +3,9 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Project, Progress, Comment } from "@/db/schema";
+import type { Project, Progress, Comment, Todo } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -1077,6 +1078,11 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [progressList, setProgressList] = useState<Progress[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [newTodoContent, setNewTodoContent] = useState("");
+  const [newTodoDueDate, setNewTodoDueDate] = useState<string>("");
+  const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
+  const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [activeTab, setActiveTab] = useState("details");
   const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
   const [newComment, setNewComment] = useState("");
@@ -1152,6 +1158,12 @@ export default function ProjectDetailPage() {
     fetch(`/api/projects/${id}/comments`)
       .then((res) => res.json())
       .then(setComments);
+  };
+
+  const fetchTodos = () => {
+    fetch(`/api/projects/${id}/todos`)
+      .then((res) => res.json())
+      .then(setTodos);
   };
 
   const handleDetailUpdate = async (e: React.FormEvent) => {
@@ -1296,6 +1308,25 @@ export default function ProjectDetailPage() {
     fetchComments();
   };
 
+  const handleTodoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTodoContent.trim() || !newTodoDueDate) return;
+    await fetch(`/api/projects/${id}/todos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: newTodoContent.trim(), dueDate: newTodoDueDate }),
+    });
+    setNewTodoContent("");
+    setNewTodoDueDate("");
+    setNewTodoSelectedDate(undefined);
+    fetchTodos();
+  };
+
+  const handleTodoDelete = async (todoId: number) => {
+    await fetch(`/api/projects/${id}/todos?todoId=${todoId}`, { method: "DELETE" });
+    fetchTodos();
+  };
+
   // タイムラインを自動生成してから進捗を取得
   const generateAndFetchProgress = async () => {
     await fetch(`/api/projects/${id}/progress/generate`, { method: "POST" });
@@ -1308,7 +1339,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     fetchProject();
     fetchComments();
-    
+    fetchTodos();
     // generate APIは1回だけ呼び出す（React Strict Modeでの二重実行防止）
     if (!hasGeneratedRef.current) {
       hasGeneratedRef.current = true;
@@ -2125,6 +2156,99 @@ export default function ProjectDetailPage() {
                       <Pencil className="h-4 w-4 mr-2" />
                       詳細情報を編集
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* TODO（この日までに行うリマインダー） */}
+              <Card className="mt-6">
+                <CardContent className="pt-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ListTodo className="h-4 w-4 text-muted-foreground" />
+                    <h2 className="font-semibold">TODO</h2>
+                  </div>
+                  <form onSubmit={handleTodoSubmit} className="space-y-3">
+                    <div className="flex gap-2 flex-wrap items-end">
+                      <div className="flex-1 min-w-[200px] space-y-1">
+                        <Label htmlFor="new-todo-content" className="text-xs text-muted-foreground">内容</Label>
+                        <Textarea
+                          id="new-todo-content"
+                          value={newTodoContent}
+                          onChange={(e) => setNewTodoContent(e.target.value)}
+                          placeholder="この日までに行うことを入力..."
+                          rows={2}
+                          className="resize-y"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">期日</Label>
+                        <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                "w-[180px] justify-start text-left font-normal",
+                                !newTodoSelectedDate && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {newTodoSelectedDate
+                                ? formatDateJp(newTodoSelectedDate)
+                                : "期日を選択"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={newTodoSelectedDate}
+                              onSelect={(date) => {
+                                setNewTodoSelectedDate(date);
+                                if (date) {
+                                  const y = date.getFullYear();
+                                  const m = String(date.getMonth() + 1).padStart(2, "0");
+                                  const d = String(date.getDate()).padStart(2, "0");
+                                  setNewTodoDueDate(`${y}-${m}-${d}`);
+                                  setNewTodoCalendarOpen(false);
+                                }
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <Button type="submit" size="default" disabled={!newTodoContent.trim() || !newTodoDueDate}>
+                        追加
+                      </Button>
+                    </div>
+                  </form>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {todos.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">TODOはありません</p>
+                    ) : (
+                      todos.map((todo) => (
+                        <div
+                          key={todo.id}
+                          className="flex items-start justify-between gap-2 p-3 rounded-lg bg-muted/50 border border-border"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm">{todo.content}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              期日: {formatDateJp(new Date(todo.dueDate + "T00:00:00"))}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                            onClick={() => handleTodoDelete(todo.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>

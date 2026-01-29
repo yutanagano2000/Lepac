@@ -39,12 +39,23 @@ export const comments = sqliteTable("comments", {
   createdAt: text("created_at").notNull(),
 });
 
+// TODOテーブル（案件ごと・期日付きリマインダー、ダッシュボード表示用）
+export const todos = sqliteTable("todos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  content: text("content").notNull(),
+  dueDate: text("due_date").notNull(), // この日までに行う（YYYY-MM-DD）
+  createdAt: text("created_at").notNull(),
+});
+
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 export type Progress = typeof progress.$inferSelect;
 export type NewProgress = typeof progress.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
+export type Todo = typeof todos.$inferSelect;
+export type NewTodo = typeof todos.$inferInsert;
 
 // 会議（議事録）テーブル
 export const meetings = sqliteTable("meetings", {

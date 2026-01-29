@@ -98,6 +98,17 @@ async function initDb() {
   `);
 
   await c.execute(`
+    CREATE TABLE IF NOT EXISTS todos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      due_date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    )
+  `);
+
+  await c.execute(`
     CREATE TABLE IF NOT EXISTS meetings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
