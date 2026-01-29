@@ -32,9 +32,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Project, NewProject } from "@/db/schema";
 
 const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+
+const MANAGER_OPTIONS = ["吉國", "刎本", "松下", "佐東", "川田", "近永", "その他"];
 
 // 超過情報・コメント検索用テキストを含む案件型
 type ProjectWithOverdue = Project & { hasOverdue: boolean; commentSearchText?: string };
@@ -100,6 +109,10 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.manager?.trim()) {
+      alert("担当を選択してください");
+      return;
+    }
     setIsSubmitting(true);
     try {
       await fetch("/api/projects", {
@@ -222,13 +235,21 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="manager">担当</Label>
-                    <Input
-                      id="manager"
-                      value={form.manager}
-                      onChange={(e) => setForm({ ...form, manager: e.target.value })}
-                      placeholder="例: 山田"
-                      required
-                    />
+                    <Select
+                      value={form.manager || undefined}
+                      onValueChange={(value) => setForm({ ...form, manager: value })}
+                    >
+                      <SelectTrigger id="manager" className="w-full">
+                        <SelectValue placeholder="選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MANAGER_OPTIONS.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="client">販売先</Label>
@@ -339,12 +360,24 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-manager">担当</Label>
-                    <Input
-                      id="edit-manager"
+                    <Select
                       value={editingProject.manager}
-                      onChange={(e) => setEditingProject({ ...editingProject, manager: e.target.value })}
-                      required
-                    />
+                      onValueChange={(value) => setEditingProject({ ...editingProject, manager: value })}
+                    >
+                      <SelectTrigger id="edit-manager" className="w-full">
+                        <SelectValue placeholder="選択してください" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MANAGER_OPTIONS.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                        {editingProject.manager && !MANAGER_OPTIONS.includes(editingProject.manager) && (
+                          <SelectItem value={editingProject.manager}>{editingProject.manager}</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-client">販売先</Label>
