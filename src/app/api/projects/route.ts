@@ -3,6 +3,9 @@ import { db } from "@/db";
 import { projects, progress, comments } from "@/db/schema";
 import { calculateTimeline } from "@/lib/timeline";
 
+// 一覧は常に最新を返すためキャッシュしない
+export const dynamic = "force-dynamic";
+
 // 全件取得（超過情報・コメント検索用テキスト付き）
 export async function GET() {
   const allProjects = await db.select().from(projects);

@@ -85,9 +85,12 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   });
 
   const fetchProjects = () => {
-    fetch("/api/projects")
+    fetch("/api/projects", { cache: "no-store" })
       .then((res) => res.json())
-      .then(setProjects);
+      .then(setProjects)
+      .catch((err) => {
+        console.error("案件一覧の取得に失敗しました:", err);
+      });
   };
 
   // 初期データがあるので、初回マウント時のフェッチは不要（更新時のみ使用）

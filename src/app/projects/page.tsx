@@ -3,6 +3,9 @@ import { projects, progress, comments } from "@/db/schema";
 import { calculateTimeline } from "@/lib/timeline";
 import ProjectsView from "./ProjectsView";
 
+// 他画面から戻ったときに常に最新一覧を表示するためキャッシュしない
+export const dynamic = "force-dynamic";
+
 export default async function ProjectsPage() {
   const allProjects = await db.select().from(projects);
   const allProgress = await db.select().from(progress);
