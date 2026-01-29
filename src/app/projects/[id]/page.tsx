@@ -572,7 +572,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
         )}
 
         {/* 市区町村条例カード（井原市） */}
-        {hasSearched && locationInfo?.city?.includes("井原市") && (
+        {hasSearched && projectAddress?.includes("井原市") && (
           <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h2 className="text-xl font-semibold text-foreground mb-4">市区町村条例</h2>
             <div className="flex items-center justify-between">
