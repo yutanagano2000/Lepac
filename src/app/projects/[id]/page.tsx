@@ -10,6 +10,7 @@ import {
   parseCoordinateString,
   normalizeCoordinateString,
 } from "@/lib/coordinates";
+import { parsePrefectureAndCity } from "@/lib/address";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,6 +44,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { LawAlertCard } from "@/components/LawAlertCard";
+import { ContactDeptAlertCard } from "@/components/ContactDeptAlertCard";
 
 const PROGRESS_TITLES = [
   "合意書",
@@ -74,6 +77,46 @@ const TEMPLATES = {
   特定盛土等規制区域: "特定盛土規制区域。造成の規模によっては届出 / 許可申請が必要。現調結果次第で判断いたします。",
 };
 
+// 土壌汚染対策法・福山市要措置区域等の対象地区（現地住所がこれらのいずれかを含む場合にアラート表示）
+const FUKUYAMA_SOIL_TARGET_DISTRICTS = [
+  "瀬戸町",
+  "加茂町",
+  "鋼管町",
+  "柳津町",
+  "緑町",
+  "三吉町",
+  "松浜町",
+] as const;
+const FUKUYAMA_SOIL_DETAIL_URL =
+  "https://www.city.fukuyama.hiroshima.jp/site/kankyo/335122.html";
+
+// 鳥獣の保護及び管理並びに狩猟の適正化に関する法律：赤アラート表示対象（広島県内）
+const HIROSHIMA_BIRD_PROTECTION_AREAS = [
+  "庄原市口和町",
+  "東広島市志和町",
+  "福山市走島町",
+  "福山市赤坂町",
+  "福山市沼隈町",
+  "福山市千田町",
+  "三原市",
+] as const;
+const HIROSHIMA_BIRD_PROTECTION_URL =
+  "https://www.pref.hiroshima.lg.jp/site/huntinglicense/hunter-map.html";
+
+function isHiroshimaBirdProtectionArea(address: string | null): boolean {
+  if (!address || !address.includes("広島県")) return false;
+  return HIROSHIMA_BIRD_PROTECTION_AREAS.some((area) => address.includes(area));
+}
+
+// 担当部署にお問い合わせのアラートを表示し、検索クエリに「担当部署」を追加する法律（河川法・急傾斜地・砂防・地すべり・森林法）
+const CONTACT_DEPT_LAW_IDS = [3, 6, 7, 8, 12] as const;
+const CONTACT_DEPT_MESSAGE = "担当部署にお問い合わせください";
+
+function isFukuyamaSoilTargetArea(address: string | null): boolean {
+  if (!address || !address.includes("福山市")) return false;
+  return FUKUYAMA_SOIL_TARGET_DISTRICTS.some((d) => address.includes(d));
+}
+
 interface AdditionalButton {
   label: string;
   url: string;
@@ -81,7 +124,8 @@ interface AdditionalButton {
 
 interface LawSearchCardProps {
   lawName: string;
-  onSearch: (lawName: string) => void;
+  onSearch: (lawName: string, lawId?: number) => void;
+  lawId?: number;
   fixedText?: string;
   copiedText: string | null;
   onCopy: (text: string) => void;
@@ -89,18 +133,22 @@ interface LawSearchCardProps {
   additionalButtons?: AdditionalButton[];
   badges?: string[];
   caption?: string;
+  /** ただし書き（コピーアイコンなしで表示） */
+  note?: string;
 }
 
-const LawSearchCard: React.FC<LawSearchCardProps> = ({ 
-  lawName, 
-  onSearch, 
-  fixedText, 
-  copiedText, 
+const LawSearchCard: React.FC<LawSearchCardProps> = ({
+  lawName,
+  onSearch,
+  lawId,
+  fixedText,
+  copiedText,
   onCopy,
   prefecture,
   additionalButtons = [],
   badges = [],
-  caption
+  caption,
+  note,
 }) => {
   return (
     <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -126,6 +174,9 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
               </button>
             </div>
           )}
+          {note && (
+            <p className="text-xs text-muted-foreground mt-2">{note}</p>
+          )}
           {badges.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
               {badges.map((badge, index) => (
@@ -140,7 +191,7 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
           )}
         </div>
         <div className="flex flex-col gap-2 shrink-0 ml-4">
-          <Button onClick={() => onSearch(lawName)} className="w-full">
+          <Button onClick={() => onSearch(lawName, lawId)} className="w-full">
             Googleで検索
           </Button>
           {additionalButtons.map((button, index) => (
@@ -198,9 +249,14 @@ interface LegalSearchTabProps {
   searchParams: { lat: string; lon: string; prefecture: string } | null;
   projectAddress: string | null;
   projectCoordinates: string | null;
+  projectLandCategories?: {
+    landCategory1: string | null;
+    landCategory2: string | null;
+    landCategory3: string | null;
+  } | null;
 }
 
-function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: LegalSearchTabProps) {
+function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, projectLandCategories }: LegalSearchTabProps) {
   const [coordinateInput, setCoordinateInput] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -271,13 +327,20 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
     }
   };
 
-  const handleGoogleSearch = (lawName: string) => {
+  const handleGoogleSearch = (lawName: string, lawId?: number) => {
     const currentPrefecture = searchParams?.prefecture || prefecture;
-    const prefectureName = currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : "";
-    const keyword = `${prefectureName} ${lawName}`;
+    const { prefectureName: addrPrefecture, cityName } = parsePrefectureAndCity(projectAddress);
+    const prefectureName =
+      addrPrefecture ||
+      (currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : "");
+    const parts = [prefectureName, cityName, lawName];
+    if (lawId != null && CONTACT_DEPT_LAW_IDS.includes(lawId as (typeof CONTACT_DEPT_LAW_IDS)[number])) {
+      parts.push("担当部署");
+    }
+    const keyword = parts.filter(Boolean).join(" ");
     const encodedKeyword = encodeURIComponent(keyword);
     const searchUrl = `https://www.google.com/search?q=${encodedKeyword}`;
-    window.open(searchUrl, '_blank');
+    window.open(searchUrl, "_blank");
   };
 
   // 座標から緯度・経度を取得
@@ -459,7 +522,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
               url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
             });
           }
-          if (law.id === 1 && isHiroshima) {
+          if (law.id === 1 && isHiroshima && projectAddress?.includes("広島市")) {
             additionalButtons.push({
               label: "ひろしま地図ナビ",
               url: "https://www2.wagmap.jp/hiroshimacity/Portal?mid=4"
@@ -475,6 +538,15 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
             fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
             badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
           }
+          if ((law.id === 4 || law.id === 5) && !isOkayama) {
+            fixedTextWithCopy = "対象地区ではありません。";
+          }
+          if (law.id === 4) {
+            noteForCard = "港湾区域に関する法規制です。港湾区域の開発でない場合は該当しません。";
+          }
+          if (law.id === 5) {
+            noteForCard = "海岸保全区域に関する法規制です。海岸保全区域の開発でない場合は該当しません。";
+          }
 
           if (law.id === 9 && isOkayama) {
             caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
@@ -482,6 +554,18 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
               label: "届出対象行為",
               url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
             });
+          }
+          if (law.id === 9) {
+            const { cityName: landscapeCityName } = parsePrefectureAndCity(projectAddress ?? null);
+            if (landscapeCityName) {
+              additionalButtons.push({
+                label: `${landscapeCityName}の届出対象行為`,
+                url: "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf"
+              });
+            }
+          }
+          if (law.id === 9) {
+            fixedTextWithCopy = "要件に該当しないため、届出不要です。";
           }
 
           if (law.id === 13 && isOkayama) {
@@ -496,12 +580,25 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
               url: "https://www.pref.hiroshima.lg.jp/site/bunkazai/bunkazai-map-map.html"
             });
           }
+          if (law.id === 13) {
+            noteForCard = "地図で確認してください。";
+          }
 
           if (law.id === 15 && isOkayama) {
             additionalButtons.push({
               label: "おかやま全県統合型GIS",
               url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
             });
+          }
+          if (law.id === 15 && isHiroshima) {
+            additionalButtons.push({
+              label: "自然公園の位置図",
+              url: "https://www.pref.hiroshima.lg.jp/soshiki/47/kouikisei.html"
+            });
+          }
+          if (law.id === 15) {
+            fixedTextWithCopy = "対象地区ではありません。";
+            noteForCard = "自然公園区域に関する法規制です。自然公園内の開発でない場合は該当しません。";
           }
 
           if (law.id === 16 && isOkayama) {
@@ -510,33 +607,112 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
               url: "https://www.pref.okayama.jp/page/573469.html"
             });
           }
+          if (law.id === 16 && isHiroshima) {
+            additionalButtons.push({
+              label: "広島県の保全地域一覧",
+              url: "https://www.pref.hiroshima.lg.jp/site/hiroshima-shizenkankyouhozen/"
+            });
+            fixedTextWithCopy = "対象地区ではありません。";
+          }
 
           if (law.id === 17) {
+            fixedTextWithCopy = "対象地区ではありません。";
             additionalButtons.push({
               label: "生息地等保護区",
               url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
             });
           }
 
+          if (law.id === 18 && projectAddress && isHiroshimaBirdProtectionArea(projectAddress)) {
+            return (
+              <LawAlertCard
+                key={law.id}
+                title={law.name}
+                message="鳥獣保護区に該当する可能性があります"
+                detailUrl={HIROSHIMA_BIRD_PROTECTION_URL}
+                variant="red"
+              />
+            );
+          }
           if (law.id === 18 && isOkayama) {
             additionalButtons.push({
               label: "鳥獣保護区等位置図",
               url: "https://www.pref.okayama.jp/uploaded/life/1011233_9758897_misc.pdf"
             });
           }
+          if (law.id === 18 && isHiroshima) {
+            additionalButtons.push({
+              label: "広島県の鳥獣保護区",
+              url: HIROSHIMA_BIRD_PROTECTION_URL
+            });
+          }
+          if (law.id === 18) {
+            fixedTextWithCopy = "対象地区ではありません。";
+            noteForCard = "鳥獣保護区に関する法規制です。";
+          }
 
+          if (law.id === 19 && isHiroshima) {
+            fixedTextWithCopy = "対象の面積要件は○○ha以上のため、今回は該当しません。";
+            noteForCard = "上記は例文です。各都道府県の条例に沿って記入してください。";
+            const { prefectureName: assessmentPrefecture } = parsePrefectureAndCity(projectAddress ?? null);
+            additionalButtons.push({
+              label: `${assessmentPrefecture || "広島県"}の対象事業`,
+              url: "https://www.pref.hiroshima.lg.jp/site/eco/h-h2-assessment-panhu-03.html"
+            });
+          }
           if (law.id === 19 && isOkayama) {
             fixedTextWithCopy = "対象の面積要件は20ha以上のため、今回は該当しません。";
+            noteForCard = "上記は例文です。各都道府県の条例に沿って記入してください。";
+            const { prefectureName: assessmentPrefecture } = parsePrefectureAndCity(projectAddress ?? null);
             additionalButtons.push({
-              label: "条例の対象事業",
+              label: `${assessmentPrefecture || "岡山県"}の対象事業`,
               url: "https://www.pref.okayama.jp/uploaded/life/1005026_9692062_misc.pdf"
             });
+          }
+
+          if (law.id === 14 && projectAddress && isFukuyamaSoilTargetArea(projectAddress)) {
+            return (
+              <LawAlertCard
+                key={law.id}
+                title="土壌汚染対策法"
+                message="土壌汚染対策法の対象区域の可能性があります。"
+                detailUrl={FUKUYAMA_SOIL_DETAIL_URL}
+              />
+            );
+          }
+          if (CONTACT_DEPT_LAW_IDS.includes(law.id as (typeof CONTACT_DEPT_LAW_IDS)[number])) {
+            return (
+              <ContactDeptAlertCard
+                key={law.id}
+                title={law.name}
+                message={CONTACT_DEPT_MESSAGE}
+                onSearch={handleGoogleSearch}
+                lawName={law.name}
+                lawId={law.id}
+              />
+            );
+          }
+          if (law.id === 14) {
+            fixedTextWithCopy = "対象地区ではありません。";
+          }
+          if (law.id === 10 || law.id === 11) {
+            const cats = [
+              projectLandCategories?.landCategory1 ?? null,
+              projectLandCategories?.landCategory2 ?? null,
+              projectLandCategories?.landCategory3 ?? null,
+            ].filter((c): c is string => !!c);
+            const hasFarmland = cats.some((c) => c === "田" || c === "畑");
+            if (cats.length > 0 && !hasFarmland) {
+              fixedTextWithCopy = "農地ではないため該当しません。";
+              noteForCard = "地目が正しく登録されていることを確認してください";
+            }
           }
 
           return (
             <LawSearchCard
               key={law.id}
               lawName={law.name}
+              lawId={law.id}
               onSearch={handleGoogleSearch}
               fixedText={fixedTextWithCopy}
               copiedText={copiedText}
@@ -545,6 +721,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
               additionalButtons={additionalButtons}
               badges={badges}
               caption={caption}
+              note={noteForCard}
             />
           );
         })}
@@ -812,6 +989,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
         let badges: string[] = [];
         let caption: string | undefined;
         let fixedTextWithCopy = law.fixedText;
+        let noteForCard: string | undefined;
 
         if (law.id === 1 && isOkayama) {
           additionalButtons.push({
@@ -819,7 +997,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
             url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
           });
         }
-        if (law.id === 1 && isHiroshima) {
+        if (law.id === 1 && isHiroshima && projectAddress?.includes("広島市")) {
           additionalButtons.push({
             label: "ひろしま地図ナビ",
             url: "https://www2.wagmap.jp/hiroshimacity/Portal?mid=4"
@@ -835,6 +1013,15 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
           fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
           badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
         }
+        if ((law.id === 4 || law.id === 5) && !isOkayama) {
+          fixedTextWithCopy = "対象地区ではありません。";
+        }
+        if (law.id === 4) {
+          noteForCard = "港湾区域に関する法規制です。港湾区域の開発でない場合は該当しません。";
+        }
+        if (law.id === 5) {
+          noteForCard = "海岸保全区域に関する法規制です。海岸保全区域の開発でない場合は該当しません。";
+        }
 
         if (law.id === 9 && isOkayama) {
           caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
@@ -842,6 +1029,18 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
             label: "届出対象行為",
             url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
           });
+        }
+        if (law.id === 9) {
+          const { cityName: landscapeCityName } = parsePrefectureAndCity(projectAddress ?? null);
+          if (landscapeCityName) {
+            additionalButtons.push({
+              label: `${landscapeCityName}の届出対象行為`,
+              url: "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf"
+            });
+          }
+        }
+        if (law.id === 9) {
+          fixedTextWithCopy = "要件に該当しないため、届出不要です。";
         }
 
         if (law.id === 13 && isOkayama) {
@@ -856,12 +1055,25 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
             url: "https://www.pref.hiroshima.lg.jp/site/bunkazai/bunkazai-map-map.html"
           });
         }
+        if (law.id === 13) {
+          noteForCard = "地図で確認してください。";
+        }
 
         if (law.id === 15 && isOkayama) {
           additionalButtons.push({
             label: "おかやま全県統合型GIS",
             url: "https://www.gis.pref.okayama.jp/pref-okayama/PositionSelect?mid=7"
           });
+        }
+        if (law.id === 15 && isHiroshima) {
+          additionalButtons.push({
+            label: "自然公園の位置図",
+            url: "https://www.pref.hiroshima.lg.jp/soshiki/47/kouikisei.html"
+          });
+        }
+        if (law.id === 15) {
+          fixedTextWithCopy = "対象地区ではありません。";
+          noteForCard = "自然公園区域に関する法規制です。自然公園内の開発でない場合は該当しません。";
         }
 
         if (law.id === 16 && isOkayama) {
@@ -870,33 +1082,112 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
             url: "https://www.pref.okayama.jp/page/573469.html"
           });
         }
+        if (law.id === 16 && isHiroshima) {
+          additionalButtons.push({
+            label: "広島県の保全地域一覧",
+            url: "https://www.pref.hiroshima.lg.jp/site/hiroshima-shizenkankyouhozen/"
+          });
+          fixedTextWithCopy = "対象地区ではありません。";
+        }
 
         if (law.id === 17) {
+          fixedTextWithCopy = "対象地区ではありません。";
           additionalButtons.push({
             label: "生息地等保護区",
             url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
           });
         }
 
+        if (law.id === 18 && projectAddress && isHiroshimaBirdProtectionArea(projectAddress)) {
+          return (
+            <LawAlertCard
+              key={law.id}
+              title={law.name}
+              message="鳥獣保護区に該当する可能性があります"
+              detailUrl={HIROSHIMA_BIRD_PROTECTION_URL}
+              variant="red"
+            />
+          );
+        }
         if (law.id === 18 && isOkayama) {
           additionalButtons.push({
             label: "鳥獣保護区等位置図",
             url: "https://www.pref.okayama.jp/uploaded/life/1011233_9758897_misc.pdf"
           });
         }
+        if (law.id === 18 && isHiroshima) {
+          additionalButtons.push({
+            label: "広島県の鳥獣保護区",
+            url: HIROSHIMA_BIRD_PROTECTION_URL
+          });
+        }
+        if (law.id === 18) {
+          fixedTextWithCopy = "対象地区ではありません。";
+          noteForCard = "鳥獣保護区に関する法規制です。";
+        }
 
+        if (law.id === 19 && isHiroshima) {
+          fixedTextWithCopy = "対象の面積要件は○○ha以上のため、今回は該当しません。";
+          noteForCard = "上記は例文です。各都道府県の条例に沿って記入してください。";
+          const { prefectureName: assessmentPrefecture } = parsePrefectureAndCity(projectAddress ?? null);
+          additionalButtons.push({
+            label: `${assessmentPrefecture || "広島県"}の対象事業`,
+            url: "https://www.pref.hiroshima.lg.jp/site/eco/h-h2-assessment-panhu-03.html"
+          });
+        }
         if (law.id === 19 && isOkayama) {
           fixedTextWithCopy = "対象の面積要件は20ha以上のため、今回は該当しません。";
+          noteForCard = "上記は例文です。各都道府県の条例に沿って記入してください。";
+          const { prefectureName: assessmentPrefecture } = parsePrefectureAndCity(projectAddress ?? null);
           additionalButtons.push({
-            label: "条例の対象事業",
+            label: `${assessmentPrefecture || "岡山県"}の対象事業`,
             url: "https://www.pref.okayama.jp/uploaded/life/1005026_9692062_misc.pdf"
           });
+        }
+
+        if (law.id === 14 && projectAddress && isFukuyamaSoilTargetArea(projectAddress)) {
+          return (
+            <LawAlertCard
+              key={law.id}
+              title="土壌汚染対策法"
+              message="土壌汚染対策法の対象区域の可能性があります。"
+              detailUrl={FUKUYAMA_SOIL_DETAIL_URL}
+            />
+          );
+        }
+        if (CONTACT_DEPT_LAW_IDS.includes(law.id as (typeof CONTACT_DEPT_LAW_IDS)[number])) {
+          return (
+            <ContactDeptAlertCard
+              key={law.id}
+              title={law.name}
+              message={CONTACT_DEPT_MESSAGE}
+              onSearch={handleGoogleSearch}
+              lawName={law.name}
+              lawId={law.id}
+            />
+          );
+        }
+        if (law.id === 14) {
+          fixedTextWithCopy = "対象地区ではありません。";
+        }
+        if (law.id === 10 || law.id === 11) {
+          const cats = [
+            projectLandCategories?.landCategory1 ?? null,
+            projectLandCategories?.landCategory2 ?? null,
+            projectLandCategories?.landCategory3 ?? null,
+          ].filter((c): c is string => !!c);
+          const hasFarmland = cats.some((c) => c === "田" || c === "畑");
+          if (cats.length > 0 && !hasFarmland) {
+            fixedTextWithCopy = "農地ではないため該当しません。";
+            noteForCard = "地目が正しく登録されていることを確認してください";
+          }
         }
 
         return (
           <LawSearchCard
             key={law.id}
             lawName={law.name}
+            lawId={law.id}
             onSearch={handleGoogleSearch}
             fixedText={fixedTextWithCopy}
             copiedText={copiedText}
@@ -905,6 +1196,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
             additionalButtons={additionalButtons}
             badges={badges}
             caption={caption}
+            note={noteForCard}
           />
         );
       })}
@@ -1543,6 +1835,18 @@ export default function ProjectDetailPage() {
     const params = new URLSearchParams({ lat, lon, prefecture: prefectureParam });
     return `/legal?${params.toString()}`;
   };
+
+  // 法令タブを直接開いたときも、法令検索ボタンと同じ内容を表示する（座標・住所があれば検索パラメータを自動設定）
+  useEffect(() => {
+    if (activeTab !== "legal") return;
+    if (legalSearchParams != null) return;
+    if (!project?.coordinates || !project?.address) return;
+    const parsed = parseCoordinateString(project.coordinates);
+    if (!parsed) return;
+    const prefectureParam = getPrefectureParam(project.address);
+    if (!prefectureParam || !parsed.lat || !parsed.lon) return;
+    setLegalSearchParams({ lat: parsed.lat, lon: parsed.lon, prefecture: prefectureParam });
+  }, [activeTab, legalSearchParams, project?.coordinates, project?.address]);
 
   // 進捗を日付でソート（すべてDBから取得）
   const sortedTimeline = useMemo(() => {
@@ -2358,6 +2662,15 @@ export default function ProjectDetailPage() {
                 searchParams={legalSearchParams}
                 projectAddress={project?.address || null}
                 projectCoordinates={project?.coordinates || null}
+                projectLandCategories={
+                  project
+                    ? {
+                        landCategory1: project.landCategory1 ?? null,
+                        landCategory2: project.landCategory2 ?? null,
+                        landCategory3: project.landCategory3 ?? null,
+                      }
+                    : null
+                }
               />
             </TabsContent>
 

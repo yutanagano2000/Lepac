@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
+import { MeetingMinutesSection } from "./MeetingMinutesSection";
 
 interface MeetingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -44,12 +45,7 @@ export default async function MeetingDetailPage({ params }: MeetingDetailPagePro
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-sm font-medium text-muted-foreground mb-3">議事録</h2>
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap break-words">
-              {meeting.content || "（内容なし）"}
-            </div>
-          </div>
+          <MeetingMinutesSection meetingId={meeting.id} initialContent={meeting.content} />
         </div>
       </div>
     </div>

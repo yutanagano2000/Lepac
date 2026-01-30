@@ -45,6 +45,36 @@ const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", 
 
 const MANAGER_OPTIONS = ["吉國", "刎本", "松下", "佐東", "川田", "近永", "その他"];
 
+const PROJECT_SEARCH_RECENT_KEY = "geo_checker_recent_project_searches";
+const MAX_RECENT_SEARCHES = 3;
+
+function getRecentSearches(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PROJECT_SEARCH_RECENT_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as unknown;
+    return Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === "string").slice(0, MAX_RECENT_SEARCHES)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function addRecentSearch(query: string): string[] {
+  const q = query.trim();
+  if (!q) return getRecentSearches();
+  const prev = getRecentSearches();
+  const next = [q, ...prev.filter((x) => x !== q)].slice(0, MAX_RECENT_SEARCHES);
+  try {
+    localStorage.setItem(PROJECT_SEARCH_RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
 // 超過情報・コメント検索用テキストを含む案件型
 type ProjectWithOverdue = Project & { hasOverdue: boolean; commentSearchText?: string };
 
@@ -72,6 +102,8 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // 検索フィルタリング（管理番号・案件番号・地権者・現地住所・コメント内容）
   const filteredProjects = projects.filter((project) => {
@@ -102,10 +134,28 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
       });
   };
 
-  // 初期データがあるので、初回マウント時のフェッチは不要（更新時のみ使用）
-  // useEffect(() => {
-  //   fetchProjects();
-  // }, []);
+  // 直近の検索履歴をローカルから読み込み
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
+
+  const handleSearchFocus = () => setShowSuggestions(true);
+  const handleSearchBlur = () => {
+    setTimeout(() => setShowSuggestions(false), 200);
+    const q = searchQuery.trim();
+    if (q) setRecentSearches(addRecentSearch(q));
+  };
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const q = searchQuery.trim();
+      if (q) setRecentSearches(addRecentSearch(q));
+    }
+  };
+  const handleSuggestionClick = (text: string) => {
+    setSearchQuery(text);
+    setRecentSearches(addRecentSearch(text));
+    setShowSuggestions(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,15 +250,41 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
               </p>
             </div>
 
-            {/* 検索欄 */}
+            {/* 検索欄（直近3件のサジェスト付き） */}
             <div className="relative flex-1 max-w-xl">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none" />
               <Input
                 placeholder="管理番号・案件番号・地権者・現地住所・コメントで検索"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={handleSearchFocus}
+                onBlur={handleSearchBlur}
+                onKeyDown={handleSearchKeyDown}
                 className="w-full pl-12 h-12 text-base bg-muted/50 border-0 focus-visible:ring-2 rounded-xl"
               />
+              {showSuggestions && recentSearches.length > 0 && (
+                <div
+                  className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-border bg-card shadow-lg overflow-hidden"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <p className="px-4 py-2 text-xs text-muted-foreground border-b border-border bg-muted/30">
+                    最近の検索
+                  </p>
+                  <ul className="py-1">
+                    {recentSearches.map((text) => (
+                      <li key={text}>
+                        <button
+                          type="button"
+                          className="w-full px-4 py-2.5 text-left text-sm hover:bg-muted/50 focus:bg-muted/50 focus:outline-none"
+                          onMouseDown={() => handleSuggestionClick(text)}
+                        >
+                          {text}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             <Dialog open={open} onOpenChange={setOpen}>
