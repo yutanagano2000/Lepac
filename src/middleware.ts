@@ -3,11 +3,12 @@ import { authConfig } from "./auth.config";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// 許可するIPアドレスのリスト（環境変数から読み込み + ローカル開発用）
+// 許可するIPアドレスのリスト（環境変数から読み込み + ローカル開発用 + 固定許可）
 const ALLOWED_IPS = [
   ...(process.env.ALLOWED_IPS?.split(",").map((ip) => ip.trim()) || []),
   "127.0.0.1",
   "::1",
+  "153.175.16.12",
 ];
 
 function getClientIp(request: NextRequest): string | null {

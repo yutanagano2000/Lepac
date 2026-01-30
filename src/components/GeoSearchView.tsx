@@ -820,6 +820,16 @@ export function GeoSearchView() {
 
                 {/* 特定盛土等規制区域 */}
                 <div className="space-y-3">
+                  {prefecture === "hiroshima" && (
+                    <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/50 dark:border-amber-600 p-4">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                        広島県は未対応です
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        特定盛土等規制区域の判定は広島県では提供しておりません。
+                      </p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 border border-border">
                     <div className="flex-1">
                       <p className="font-medium text-foreground">特定盛土等規制区域</p>
