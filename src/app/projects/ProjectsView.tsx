@@ -75,8 +75,8 @@ function addRecentSearch(query: string): string[] {
   return next;
 }
 
-// 超過情報・コメント検索用テキストを含む案件型
-type ProjectWithOverdue = Project & { hasOverdue: boolean; commentSearchText?: string };
+// 超過情報・コメント・TODO検索用テキストを含む案件型
+type ProjectWithOverdue = Project & { hasOverdue: boolean; commentSearchText?: string; todoSearchText?: string };
 
 interface ProjectsViewProps {
   initialProjects: ProjectWithOverdue[];
@@ -105,7 +105,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // 検索フィルタリング（管理番号・案件番号・地権者・現地住所・コメント内容）
+  // 検索フィルタリング（管理番号・案件番号・地権者・現地住所・コメント・TODO内容）
   const filteredProjects = projects.filter((project) => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
@@ -114,6 +114,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     const l2 = (project.landowner2 ?? "").toLowerCase();
     const l3 = (project.landowner3 ?? "").toLowerCase();
     const commentText = (project.commentSearchText ?? "").toLowerCase();
+    const todoText = (project.todoSearchText ?? "").toLowerCase();
     return (
       project.managementNumber.toLowerCase().includes(query) ||
       project.projectNumber.toLowerCase().includes(query) ||
@@ -121,7 +122,8 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
       l1.includes(query) ||
       l2.includes(query) ||
       l3.includes(query) ||
-      commentText.includes(query)
+      commentText.includes(query) ||
+      todoText.includes(query)
     );
   });
 
@@ -254,7 +256,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
             <div className="relative flex-1 max-w-xl">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none" />
               <Input
-                placeholder="管理番号・案件番号・地権者・現地住所・コメントで検索"
+                placeholder="管理番号・案件番号・地権者・現地住所・コメント・TODOで検索"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={handleSearchFocus}

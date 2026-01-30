@@ -50,6 +50,8 @@ interface LawSearchCardProps {
   caption?: string;
   /** 注意書き（コピーアイコンなしで表示） */
   note?: string;
+  /** 地目に農地（田・畑）が含まれる場合の小さなアラート表示 */
+  farmlandAlert?: boolean;
 }
 
 const LawSearchCard: React.FC<LawSearchCardProps> = ({
@@ -64,12 +66,18 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
   badges = [],
   caption,
   note,
+  farmlandAlert,
 }) => {
   return (
     <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="font-medium text-foreground">{lawName}</p>
+          {farmlandAlert && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+              地目に農地が含まれています
+            </p>
+          )}
           {caption && (
             <p className="text-sm text-muted-foreground mt-2">{caption}</p>
           )}
@@ -521,18 +529,19 @@ export function GeoSearchView() {
             });
           }
 
+          const addressForPortCoast = locationInfo?.fullAddress ?? locationInfo?.shortAddress ?? null;
           // 2. 港湾法
-          if (law.id === 4 && isOkayama) {
+          if (law.id === 4 && isOkayama && !addressForPortCoast?.includes("井原市")) {
             fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
             badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
           }
 
           // 3. 海岸法
-          if (law.id === 5 && isOkayama) {
+          if (law.id === 5 && isOkayama && !addressForPortCoast?.includes("井原市")) {
             fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
             badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
           }
-          if ((law.id === 4 || law.id === 5) && !isOkayama) {
+          if ((law.id === 4 || law.id === 5) && (!isOkayama || addressForPortCoast?.includes("井原市"))) {
             fixedTextWithCopy = "対象地区ではありません。";
           }
           if (law.id === 4) {
@@ -543,25 +552,25 @@ export function GeoSearchView() {
           }
 
           // 4. 景観法
-          if (law.id === 9 && isOkayama) {
-            caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
-            additionalButtons.push({
-              label: "届出対象行為",
-              url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
-            });
-          }
           const addressForLandscape = locationInfo?.fullAddress ?? locationInfo?.shortAddress ?? null;
+          if (law.id === 9 && isOkayama && !addressForLandscape?.includes("井原市")) {
+            caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
+          }
           if (law.id === 9) {
             const { cityName: landscapeCityName } = parsePrefectureAndCity(addressForLandscape ?? null);
             if (landscapeCityName) {
+              const landscapeButtonUrl = isOkayama
+                ? "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
+                : "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf";
               additionalButtons.push({
                 label: `${landscapeCityName}の届出対象行為`,
-                url: "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf"
+                url: landscapeButtonUrl
               });
             }
           }
           if (law.id === 9) {
             fixedTextWithCopy = "要件に該当しないため、届出不要です。";
+            noteForCard = "開発面積や工作物の高さが一般的な要件です。各都道府県の法令を確認してください。";
           }
 
           // 5. 文化財保護法
@@ -672,6 +681,19 @@ export function GeoSearchView() {
               label: `${assessmentPrefecture || "岡山県"}の対象事業`,
               url: "https://www.pref.okayama.jp/uploaded/life/1005026_9692062_misc.pdf"
             });
+          }
+
+          // 農業振興地域法・農地法：井原・笠岡・矢掛の場合は非農地リストの案内
+          const addressForFarmland = locationInfo?.fullAddress ?? locationInfo?.shortAddress ?? null;
+          if (law.id === 10 || law.id === 11) {
+            const isOkayamaNonFarmlandArea =
+              addressForFarmland?.includes("井原市") ||
+              addressForFarmland?.includes("笠岡市") ||
+              addressForFarmland?.includes("矢掛");
+            if (isOkayamaNonFarmlandArea) {
+              fixedTextWithCopy = "非農地認定済みのため不要。地目変更登記を行います。";
+              caption = "井原・笠岡・矢掛の場合は非農地リストがあるので、農地であっても手続きが地目変更のみになります。";
+            }
           }
 
           // 河川法・急傾斜地・砂防・地すべり・森林法：担当部署アラートカード（黄色）

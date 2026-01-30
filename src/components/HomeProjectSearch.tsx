@@ -6,6 +6,36 @@ import Link from "next/link";
 import { Search, ArrowRight, FolderKanban, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
+const PROJECT_SEARCH_RECENT_KEY = "geo_checker_recent_project_searches";
+const MAX_RECENT_SEARCHES = 3;
+
+function getRecentSearches(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PROJECT_SEARCH_RECENT_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as unknown;
+    return Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === "string").slice(0, MAX_RECENT_SEARCHES)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function addRecentSearch(query: string): string[] {
+  const q = query.trim();
+  if (!q) return getRecentSearches();
+  const prev = getRecentSearches();
+  const next = [q, ...prev.filter((x) => x !== q)].slice(0, MAX_RECENT_SEARCHES);
+  try {
+    localStorage.setItem(PROJECT_SEARCH_RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
 type ProjectForSearch = {
   id: number;
   managementNumber: string;
@@ -15,6 +45,7 @@ type ProjectForSearch = {
   landowner2: string | null;
   landowner3: string | null;
   commentSearchText?: string;
+  todoSearchText?: string;
 };
 
 type MeetingForSearch = {
@@ -32,7 +63,34 @@ export function HomeProjectSearch() {
   const [meetings, setMeetings] = useState<MeetingForSearch[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
+
+  const handleSearchFocus = () => {
+    setIsOpen(true);
+    setShowSuggestions(true);
+  };
+  const handleSearchBlur = () => {
+    setTimeout(() => setShowSuggestions(false), 200);
+    const q = searchQuery.trim();
+    if (q) setRecentSearches(addRecentSearch(q));
+  };
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const q = searchQuery.trim();
+      if (q) setRecentSearches(addRecentSearch(q));
+    }
+  };
+  const handleSuggestionClick = (text: string) => {
+    setSearchQuery(text);
+    setRecentSearches(addRecentSearch(text));
+    setShowSuggestions(false);
+  };
 
   useEffect(() => {
     fetch("/api/projects", { cache: "no-store" })
@@ -53,6 +111,7 @@ export function HomeProjectSearch() {
         const l2 = (project.landowner2 ?? "").toLowerCase();
         const l3 = (project.landowner3 ?? "").toLowerCase();
         const commentText = (project.commentSearchText ?? "").toLowerCase();
+        const todoText = (project.todoSearchText ?? "").toLowerCase();
         return (
           project.managementNumber.toLowerCase().includes(query) ||
           (project.projectNumber ?? "").toLowerCase().includes(query) ||
@@ -60,7 +119,8 @@ export function HomeProjectSearch() {
           l1.includes(query) ||
           l2.includes(query) ||
           l3.includes(query) ||
-          commentText.includes(query)
+          commentText.includes(query) ||
+          todoText.includes(query)
         );
       })
     : [];
@@ -109,34 +169,81 @@ export function HomeProjectSearch() {
 
   const maxProjects = 8;
   const maxMeetings = 8;
-  const showDropdown = isOpen && searchQuery.trim() !== "";
+  const showResultsDropdown = isOpen && searchQuery.trim() !== "";
+  const showRecentSuggestions = isOpen && showSuggestions && recentSearches.length > 0 && !searchQuery.trim();
 
   return (
     <div ref={containerRef} className="relative w-full">
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 z-10 pointer-events-none" />
         <Input
           type="search"
-          placeholder="案件・会議の内容で検索"
+          placeholder="管理番号・案件番号・地権者・現地住所・コメント・TODO・会議で検索"
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
             setIsOpen(true);
           }}
-          onFocus={() => query && setIsOpen(true)}
-          onKeyDown={handleKeyDown}
+          onFocus={handleSearchFocus}
+          onBlur={handleSearchBlur}
+          onKeyDown={(e) => {
+            handleSearchKeyDown(e);
+            handleKeyDown(e);
+          }}
           className="w-full pl-12 h-12 text-base bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-visible:ring-2 rounded-xl"
         />
       </div>
 
-      {showDropdown && (
+      {showRecentSuggestions && (
+        <div
+          className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <p className="px-4 py-2 text-xs text-zinc-500 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+            最近の検索
+          </p>
+          <ul className="py-1">
+            {recentSearches.map((text) => (
+              <li key={text}>
+                <button
+                  type="button"
+                  className="w-full px-4 py-2.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 focus:bg-zinc-50 dark:focus:bg-zinc-800 focus:outline-none"
+                  onMouseDown={() => handleSuggestionClick(text)}
+                >
+                  {text}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {showResultsDropdown && (
         <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden">
           {!hasResults ? (
-            <div className="px-4 py-6 text-center text-sm text-zinc-500">
-              該当する案件・会議がありません
+            <div className="px-4 py-6 text-center">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                「{searchQuery.trim()}」に該当する案件・議事録はありません
+              </p>
+              <p className="text-xs text-zinc-500">
+                別のキーワードで検索してみてください
+              </p>
             </div>
           ) : (
-            <div className="max-h-[320px] overflow-y-auto py-2">
+            <div className="max-h-[360px] overflow-y-auto">
+              <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                  「{searchQuery.trim()}」で{" "}
+                  {[
+                    filteredProjects.length > 0 && `案件 ${filteredProjects.length} 件`,
+                    filteredMeetings.length > 0 && `議事録 ${filteredMeetings.length} 件`,
+                  ]
+                    .filter(Boolean)
+                    .join("、")}{" "}
+                  が見つかりました
+                </p>
+              </div>
+              <div className="py-2">
               {filteredProjects.length > 0 && (
                 <>
                   <div className="px-4 py-1.5 text-xs font-medium text-zinc-500 flex items-center gap-1.5">
@@ -207,6 +314,7 @@ export function HomeProjectSearch() {
                   )}
                 </>
               )}
+              </div>
             </div>
           )}
         </div>

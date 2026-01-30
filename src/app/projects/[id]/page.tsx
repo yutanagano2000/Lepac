@@ -135,6 +135,8 @@ interface LawSearchCardProps {
   caption?: string;
   /** ただし書き（コピーアイコンなしで表示） */
   note?: string;
+  /** 地目に農地（田・畑）が含まれる場合の小さなアラート表示 */
+  farmlandAlert?: boolean;
 }
 
 const LawSearchCard: React.FC<LawSearchCardProps> = ({
@@ -149,12 +151,18 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
   badges = [],
   caption,
   note,
+  farmlandAlert,
 }) => {
   return (
     <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <p className="font-medium text-foreground">{lawName}</p>
+          {farmlandAlert && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+              地目に農地が含まれています
+            </p>
+          )}
           {caption && (
             <p className="text-sm text-muted-foreground mt-2">{caption}</p>
           )}
@@ -515,6 +523,8 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           let badges: string[] = [];
           let caption: string | undefined;
           let fixedTextWithCopy = law.fixedText;
+          let noteForCard: string | undefined;
+          let showFarmlandAlert = false;
 
           if (law.id === 1 && isOkayama) {
             additionalButtons.push({
@@ -529,16 +539,16 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             });
           }
 
-          if (law.id === 4 && isOkayama) {
+          if (law.id === 4 && isOkayama && !projectAddress?.includes("井原市")) {
             fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
             badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
           }
 
-          if (law.id === 5 && isOkayama) {
+          if (law.id === 5 && isOkayama && !projectAddress?.includes("井原市")) {
             fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
             badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
           }
-          if ((law.id === 4 || law.id === 5) && !isOkayama) {
+          if ((law.id === 4 || law.id === 5) && (!isOkayama || projectAddress?.includes("井原市"))) {
             fixedTextWithCopy = "対象地区ではありません。";
           }
           if (law.id === 4) {
@@ -548,24 +558,24 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             noteForCard = "海岸保全区域に関する法規制です。海岸保全区域の開発でない場合は該当しません。";
           }
 
-          if (law.id === 9 && isOkayama) {
+          if (law.id === 9 && isOkayama && !projectAddress?.includes("井原市")) {
             caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
-            additionalButtons.push({
-              label: "届出対象行為",
-              url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
-            });
           }
           if (law.id === 9) {
             const { cityName: landscapeCityName } = parsePrefectureAndCity(projectAddress ?? null);
             if (landscapeCityName) {
+              const landscapeButtonUrl = isOkayama
+                ? "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
+                : "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf";
               additionalButtons.push({
                 label: `${landscapeCityName}の届出対象行為`,
-                url: "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf"
+                url: landscapeButtonUrl
               });
             }
           }
           if (law.id === 9) {
             fixedTextWithCopy = "要件に該当しないため、届出不要です。";
+            noteForCard = "開発面積や工作物の高さが一般的な要件です。各都道府県の法令を確認してください。";
           }
 
           if (law.id === 13 && isOkayama) {
@@ -696,15 +706,27 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             fixedTextWithCopy = "対象地区ではありません。";
           }
           if (law.id === 10 || law.id === 11) {
-            const cats = [
-              projectLandCategories?.landCategory1 ?? null,
-              projectLandCategories?.landCategory2 ?? null,
-              projectLandCategories?.landCategory3 ?? null,
-            ].filter((c): c is string => !!c);
-            const hasFarmland = cats.some((c) => c === "田" || c === "畑");
-            if (cats.length > 0 && !hasFarmland) {
-              fixedTextWithCopy = "農地ではないため該当しません。";
-              noteForCard = "地目が正しく登録されていることを確認してください";
+            const isOkayamaNonFarmlandArea =
+              projectAddress?.includes("井原市") ||
+              projectAddress?.includes("笠岡市") ||
+              projectAddress?.includes("矢掛");
+            if (isOkayamaNonFarmlandArea) {
+              fixedTextWithCopy = "非農地認定済みのため不要。地目変更登記を行います。";
+              caption = "井原・笠岡・矢掛の場合は非農地リストがあるので、農地であっても手続きが地目変更のみになります。";
+            } else {
+              const cats = [
+                projectLandCategories?.landCategory1 ?? null,
+                projectLandCategories?.landCategory2 ?? null,
+                projectLandCategories?.landCategory3 ?? null,
+              ].filter((c): c is string => !!c);
+              const hasFarmland = cats.some((c) => c === "田" || c === "畑");
+              if (cats.length > 0 && hasFarmland) {
+                showFarmlandAlert = true;
+              }
+              if (cats.length > 0 && !hasFarmland) {
+                fixedTextWithCopy = "農地ではないため該当しません。";
+                noteForCard = "地目が正しく登録されていることを確認してください";
+              }
             }
           }
 
@@ -722,6 +744,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               badges={badges}
               caption={caption}
               note={noteForCard}
+              farmlandAlert={showFarmlandAlert}
             />
           );
         })}
@@ -990,6 +1013,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
         let caption: string | undefined;
         let fixedTextWithCopy = law.fixedText;
         let noteForCard: string | undefined;
+        let showFarmlandAlert = false;
 
         if (law.id === 1 && isOkayama) {
           additionalButtons.push({
@@ -1004,16 +1028,16 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           });
         }
 
-        if (law.id === 4 && isOkayama) {
+        if (law.id === 4 && isOkayama && !projectAddress?.includes("井原市")) {
           fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
           badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
         }
 
-        if (law.id === 5 && isOkayama) {
+        if (law.id === 5 && isOkayama && !projectAddress?.includes("井原市")) {
           fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
           badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
         }
-        if ((law.id === 4 || law.id === 5) && !isOkayama) {
+        if ((law.id === 4 || law.id === 5) && (!isOkayama || projectAddress?.includes("井原市"))) {
           fixedTextWithCopy = "対象地区ではありません。";
         }
         if (law.id === 4) {
@@ -1023,24 +1047,24 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           noteForCard = "海岸保全区域に関する法規制です。海岸保全区域の開発でない場合は該当しません。";
         }
 
-        if (law.id === 9 && isOkayama) {
+        if (law.id === 9 && isOkayama && !projectAddress?.includes("井原市")) {
           caption = "岡山県は全域が景観区域です。届出対象行為はこちらで確認してください。";
-          additionalButtons.push({
-            label: "届出対象行為",
-            url: "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
-          });
         }
         if (law.id === 9) {
           const { cityName: landscapeCityName } = parsePrefectureAndCity(projectAddress ?? null);
           if (landscapeCityName) {
+            const landscapeButtonUrl = isOkayama
+              ? "https://www.pref.okayama.jp/uploaded/attachment/325065.pdf"
+              : "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf";
             additionalButtons.push({
               label: `${landscapeCityName}の届出対象行為`,
-              url: "https://www.city.fukuyama.hiroshima.jp/uploaded/attachment/130060.pdf"
+              url: landscapeButtonUrl
             });
           }
         }
         if (law.id === 9) {
           fixedTextWithCopy = "要件に該当しないため、届出不要です。";
+          noteForCard = "開発面積や工作物の高さが一般的な要件です。各都道府県の法令を確認してください。";
         }
 
         if (law.id === 13 && isOkayama) {
@@ -1171,15 +1195,27 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           fixedTextWithCopy = "対象地区ではありません。";
         }
         if (law.id === 10 || law.id === 11) {
-          const cats = [
-            projectLandCategories?.landCategory1 ?? null,
-            projectLandCategories?.landCategory2 ?? null,
-            projectLandCategories?.landCategory3 ?? null,
-          ].filter((c): c is string => !!c);
-          const hasFarmland = cats.some((c) => c === "田" || c === "畑");
-          if (cats.length > 0 && !hasFarmland) {
-            fixedTextWithCopy = "農地ではないため該当しません。";
-            noteForCard = "地目が正しく登録されていることを確認してください";
+          const isOkayamaNonFarmlandArea =
+            projectAddress?.includes("井原市") ||
+            projectAddress?.includes("笠岡市") ||
+            projectAddress?.includes("矢掛");
+          if (isOkayamaNonFarmlandArea) {
+            fixedTextWithCopy = "非農地認定済みのため不要。地目変更登記を行います。";
+            caption = "井原・笠岡・矢掛の場合は非農地リストがあるので、農地であっても手続きが地目変更のみになります。";
+          } else {
+            const cats = [
+              projectLandCategories?.landCategory1 ?? null,
+              projectLandCategories?.landCategory2 ?? null,
+              projectLandCategories?.landCategory3 ?? null,
+            ].filter((c): c is string => !!c);
+            const hasFarmland = cats.some((c) => c === "田" || c === "畑");
+            if (cats.length > 0 && hasFarmland) {
+              showFarmlandAlert = true;
+            }
+            if (cats.length > 0 && !hasFarmland) {
+              fixedTextWithCopy = "農地ではないため該当しません。";
+              noteForCard = "地目が正しく登録されていることを確認してください";
+            }
           }
         }
 
@@ -1197,6 +1233,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             badges={badges}
             caption={caption}
             note={noteForCard}
+            farmlandAlert={showFarmlandAlert}
           />
         );
       })}
