@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Search,
   ListTodo,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,8 @@ export type TodoWithProject = {
   content: string;
   dueDate: string;
   createdAt: string;
+  completedAt: string | null;
+  completedMemo: string | null;
   managementNumber: string | null;
 };
 
@@ -90,7 +93,12 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
     const today: TodoWithProject[] = [];
     const upcoming: TodoWithProject[] = [];
     const later: TodoWithProject[] = [];
+    const completed: TodoWithProject[] = [];
     for (const t of filteredTodos) {
+      if (t.completedAt) {
+        completed.push(t);
+        continue;
+      }
       const info = getDueDateInfo(t.dueDate);
       if (info.group === "overdue") overdue.push(t);
       else if (info.group === "today") today.push(t);
@@ -101,25 +109,39 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
     today.sort((a, b) => (a.managementNumber ?? "").localeCompare(b.managementNumber ?? ""));
     upcoming.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     later.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    return { overdue, today, upcoming, later };
+    completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+    return { overdue, today, upcoming, later, completed };
   }, [filteredTodos]);
+
+  const handleReopen = async (todo: TodoWithProject) => {
+    await fetch(`/api/todos/${todo.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completedAt: null, completedMemo: null }),
+    });
+    fetchTodos();
+  };
 
   const TodoItem = ({ todo }: { todo: TodoWithProject }) => {
     const info = getDueDateInfo(todo.dueDate);
     const dueDateFormatted = formatDateJp(new Date(todo.dueDate + "T00:00:00"));
+    const isCompleted = !!todo.completedAt;
     return (
       <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
         <Link
           href={`/projects/${todo.projectId}`}
           className="flex-1 min-w-0 group"
         >
-          <p className="text-sm font-medium text-foreground group-hover:underline truncate">
+          <p className={`text-sm font-medium group-hover:underline truncate ${isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
             {todo.content}
           </p>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-xs text-muted-foreground">
               {dueDateFormatted}
-              <span className="ml-1">({info.label})</span>
+              {!isCompleted && <span className="ml-1">({info.label})</span>}
+              {isCompleted && todo.completedAt && (
+                <span className="ml-1">· 完了: {formatDateJp(new Date(todo.completedAt))}</span>
+              )}
             </span>
             {todo.managementNumber && (
               <span className="text-xs text-primary font-medium">
@@ -127,24 +149,45 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
               </span>
             )}
           </div>
+          {isCompleted && todo.completedMemo && (
+            <p className="text-xs text-muted-foreground mt-1 p-2 rounded bg-muted/50">
+              {todo.completedMemo}
+            </p>
+          )}
         </Link>
         <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={(e) => {
-              e.preventDefault();
-              handleDelete(todo.id);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href={`/projects/${todo.projectId}`}>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+          {isCompleted ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={(e) => {
+                e.preventDefault();
+                handleReopen(todo);
+              }}
+            >
+              再開
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete(todo.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                <Link href={`/projects/${todo.projectId}`}>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -264,6 +307,16 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
               description="8日以降に期限のTODO"
               icon={ListTodo}
               items={grouped.later}
+              emptyMessage=""
+            />
+          )}
+
+          {grouped.completed.length > 0 && (
+            <Section
+              title="完了済み"
+              description="完了したTODO"
+              icon={CheckCircle2}
+              items={grouped.completed}
               emptyMessage=""
             />
           )}

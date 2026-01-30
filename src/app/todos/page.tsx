@@ -13,6 +13,8 @@ export default async function TodosPage() {
       content: todos.content,
       dueDate: todos.dueDate,
       createdAt: todos.createdAt,
+      completedAt: todos.completedAt,
+      completedMemo: todos.completedMemo,
       managementNumber: projects.managementNumber,
     })
     .from(todos)

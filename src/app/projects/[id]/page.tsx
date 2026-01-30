@@ -1083,6 +1083,15 @@ export default function ProjectDetailPage() {
   const [newTodoDueDate, setNewTodoDueDate] = useState<string>("");
   const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
   const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
+  const [todoEditOpen, setTodoEditOpen] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [editTodoContent, setEditTodoContent] = useState("");
+  const [editTodoDueDate, setEditTodoDueDate] = useState("");
+  const [editTodoCalendarOpen, setEditTodoCalendarOpen] = useState(false);
+  const [editTodoSelectedDate, setEditTodoSelectedDate] = useState<Date | undefined>(undefined);
+  const [todoCompleteOpen, setTodoCompleteOpen] = useState(false);
+  const [completingTodo, setCompletingTodo] = useState<Todo | null>(null);
+  const [completeTodoMemo, setCompleteTodoMemo] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
   const [newComment, setNewComment] = useState("");
@@ -1323,7 +1332,60 @@ export default function ProjectDetailPage() {
   };
 
   const handleTodoDelete = async (todoId: number) => {
-    await fetch(`/api/projects/${id}/todos?todoId=${todoId}`, { method: "DELETE" });
+    await fetch(`/api/todos/${todoId}`, { method: "DELETE" });
+    fetchTodos();
+  };
+
+  const openTodoEditDialog = (todo: Todo) => {
+    setEditingTodo(todo);
+    setEditTodoContent(todo.content);
+    setEditTodoDueDate(todo.dueDate);
+    setEditTodoSelectedDate(new Date(todo.dueDate + "T00:00:00"));
+    setTodoEditOpen(true);
+  };
+
+  const handleTodoEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTodo || !editTodoContent.trim() || !editTodoDueDate) return;
+    await fetch(`/api/todos/${editingTodo.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: editTodoContent.trim(), dueDate: editTodoDueDate }),
+    });
+    setTodoEditOpen(false);
+    setEditingTodo(null);
+    fetchTodos();
+  };
+
+  const openTodoCompleteDialog = (todo: Todo) => {
+    setCompletingTodo(todo);
+    setCompleteTodoMemo("");
+    setTodoCompleteOpen(true);
+  };
+
+  const handleTodoCompleteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!completingTodo) return;
+    await fetch(`/api/todos/${completingTodo.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        completedAt: new Date().toISOString(),
+        completedMemo: completeTodoMemo.trim() || null,
+      }),
+    });
+    setTodoCompleteOpen(false);
+    setCompletingTodo(null);
+    setCompleteTodoMemo("");
+    fetchTodos();
+  };
+
+  const handleTodoReopen = async (todo: Todo) => {
+    await fetch(`/api/todos/${todo.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completedAt: null, completedMemo: null }),
+    });
     fetchTodos();
   };
 
@@ -2229,23 +2291,74 @@ export default function ProjectDetailPage() {
                       todos.map((todo) => (
                         <div
                           key={todo.id}
-                          className="flex items-start justify-between gap-2 p-3 rounded-lg bg-muted/50 border border-border"
+                          className={cn(
+                            "flex items-start justify-between gap-2 p-3 rounded-lg border border-border",
+                            todo.completedAt ? "bg-muted/30 opacity-90" : "bg-muted/50"
+                          )}
                         >
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm">{todo.content}</p>
+                            <p className={cn("text-sm", todo.completedAt && "line-through text-muted-foreground")}>
+                              {todo.content}
+                            </p>
                             <p className="text-xs text-muted-foreground mt-1">
                               期日: {formatDateJp(new Date(todo.dueDate + "T00:00:00"))}
+                              {todo.completedAt && (
+                                <>
+                                  {" · "}
+                                  完了: {formatDateJp(new Date(todo.completedAt))}
+                                </>
+                              )}
                             </p>
+                            {todo.completedAt && todo.completedMemo && (
+                              <p className="text-xs text-muted-foreground mt-1 p-2 rounded bg-background/50">
+                                {todo.completedMemo}
+                              </p>
+                            )}
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-                            onClick={() => handleTodoDelete(todo.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex gap-1 shrink-0">
+                            {todo.completedAt ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleTodoReopen(todo)}
+                              >
+                                再開
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openTodoEditDialog(todo)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-green-600 hover:text-green-700"
+                                  onClick={() => openTodoCompleteDialog(todo)}
+                                  title="完了"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => handleTodoDelete(todo.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))
                     )}
@@ -2519,6 +2632,119 @@ export default function ProjectDetailPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* TODO完了ダイアログ */}
+          <Dialog open={todoCompleteOpen} onOpenChange={setTodoCompleteOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>TODOを完了</DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  完了メモを残すことができます（任意）
+                </p>
+              </DialogHeader>
+              {completingTodo && (
+                <form onSubmit={handleTodoCompleteSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="complete-todo-memo">完了メモ</Label>
+                    <Textarea
+                      id="complete-todo-memo"
+                      value={completeTodoMemo}
+                      onChange={(e) => setCompleteTodoMemo(e.target.value)}
+                      placeholder="完了時のメモを入力..."
+                      rows={3}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTodoCompleteOpen(false)}
+                    >
+                      キャンセル
+                    </Button>
+                    <Button type="submit">
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      完了する
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* TODO編集ダイアログ */}
+          <Dialog open={todoEditOpen} onOpenChange={setTodoEditOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>TODOを編集</DialogTitle>
+              </DialogHeader>
+              {editingTodo && (
+                <form onSubmit={handleTodoEditSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-todo-content">内容</Label>
+                    <Textarea
+                      id="edit-todo-content"
+                      value={editTodoContent}
+                      onChange={(e) => setEditTodoContent(e.target.value)}
+                      placeholder="この日までに行うことを入力..."
+                      rows={3}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>期日</Label>
+                    <Popover open={editTodoCalendarOpen} onOpenChange={setEditTodoCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !editTodoSelectedDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {editTodoSelectedDate
+                            ? formatDateJp(editTodoSelectedDate)
+                            : "期日を選択"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={editTodoSelectedDate}
+                          onSelect={(date) => {
+                            setEditTodoSelectedDate(date);
+                            if (date) {
+                              const y = date.getFullYear();
+                              const m = String(date.getMonth() + 1).padStart(2, "0");
+                              const d = String(date.getDate()).padStart(2, "0");
+                              setEditTodoDueDate(`${y}-${m}-${d}`);
+                              setEditTodoCalendarOpen(false);
+                            }
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTodoEditOpen(false)}
+                    >
+                      キャンセル
+                    </Button>
+                    <Button type="submit" disabled={!editTodoContent.trim() || !editTodoDueDate}>
+                      保存
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </DialogContent>
+          </Dialog>
 
         </div>
       </div>

@@ -104,9 +104,13 @@ async function initDb() {
       content TEXT NOT NULL,
       due_date TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      completed_at TEXT,
+      completed_memo TEXT,
       FOREIGN KEY (project_id) REFERENCES projects(id)
     )
   `);
+  try { await c.execute(`ALTER TABLE todos ADD COLUMN completed_at TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE todos ADD COLUMN completed_memo TEXT`); } catch (e) {}
 
   await c.execute(`
     CREATE TABLE IF NOT EXISTS meetings (

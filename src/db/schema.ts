@@ -46,6 +46,8 @@ export const todos = sqliteTable("todos", {
   content: text("content").notNull(),
   dueDate: text("due_date").notNull(), // この日までに行う（YYYY-MM-DD）
   createdAt: text("created_at").notNull(),
+  completedAt: text("completed_at"), // 完了日時（ISO文字列）
+  completedMemo: text("completed_memo"), // 完了時のメモ
 });
 
 export type Project = typeof projects.$inferSelect;
