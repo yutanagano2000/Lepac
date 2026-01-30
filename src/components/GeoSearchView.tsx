@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import {
+  parseCoordinateString,
+  normalizeCoordinateString,
+} from "@/lib/coordinates";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -161,26 +165,15 @@ export function GeoSearchView() {
     shortAddress: string;
   } | null>(null);
 
-  // カンマ区切り座標を解析する関数
+  // 座標入力を解析（カンマ・スラッシュ・空白区切りに対応）し、有効なら正規化表示
   const handleCoordinateInput = (value: string) => {
     setCoordinateInput(value);
-    
-    // カンマで分割
-    const parts = value.split(',').map(part => part.trim());
-    
-    if (parts.length === 2) {
-      const [lat, lon] = parts;
-      // 数値として有効かチェック
-      if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lon))) {
-        setLatitude(lat);
-        setLongitude(lon);
-      } else {
-        // 無効な場合はクリア
-        setLatitude("");
-        setLongitude("");
-      }
+    const parsed = parseCoordinateString(value);
+    if (parsed) {
+      setLatitude(parsed.lat);
+      setLongitude(parsed.lon);
+      setCoordinateInput(normalizeCoordinateString(value));
     } else {
-      // カンマが1つでない場合はクリア
       setLatitude("");
       setLongitude("");
     }
@@ -362,7 +355,7 @@ export function GeoSearchView() {
           {/* 座標入力（カンマ区切り） */}
           <div className="space-y-2">
             <label htmlFor="coordinate" className="text-sm font-medium text-foreground">
-              座標（緯度,経度）
+              座標（緯度,経度 または 緯度/経度）
             </label>
             <Input
               id="coordinate"
@@ -373,7 +366,7 @@ export function GeoSearchView() {
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              緯度と経度をカンマ区切りで入力してください
+              緯度と経度をカンマまたはスラッシュ区切りで入力してください
             </p>
           </div>
 

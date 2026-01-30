@@ -6,6 +6,10 @@ import Link from "next/link";
 import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
+import {
+  parseCoordinateString,
+  normalizeCoordinateString,
+} from "@/lib/coordinates";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -206,21 +210,14 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
   const [hasSearched, setHasSearched] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  // カンマ区切り座標を解析する関数
+  // 座標入力を解析（カンマ・スラッシュ・空白区切りに対応）し、有効なら正規化表示
   const handleCoordinateInput = (value: string) => {
     setCoordinateInput(value);
-    
-    const parts = value.split(',').map(part => part.trim());
-    
-    if (parts.length === 2) {
-      const [lat, lon] = parts;
-      if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lon))) {
-        setLatitude(lat);
-        setLongitude(lon);
-      } else {
-        setLatitude("");
-        setLongitude("");
-      }
+    const parsed = parseCoordinateString(value);
+    if (parsed) {
+      setLatitude(parsed.lat);
+      setLongitude(parsed.lon);
+      setCoordinateInput(normalizeCoordinateString(value));
     } else {
       setLatitude("");
       setLongitude("");
@@ -289,10 +286,8 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
       return { lat: searchParams.lat, lon: searchParams.lon };
     }
     if (projectCoordinates) {
-      const parts = projectCoordinates.split(/[\s,]+/).map((p) => p.trim());
-      if (parts.length >= 2) {
-        return { lat: parts[0], lon: parts[1] };
-      }
+      const parsed = parseCoordinateString(projectCoordinates);
+      if (parsed) return parsed;
     }
     if (latitude && longitude) {
       return { lat: latitude, lon: longitude };
@@ -325,18 +320,18 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
           {/* 座標入力（カンマ区切り） */}
           <div className="space-y-2">
             <label htmlFor="coordinate" className="text-sm font-medium text-foreground">
-              座標（緯度,経度）
+              座標（緯度,経度 または 緯度/経度）
             </label>
             <Input
               id="coordinate"
               type="text"
-              placeholder="例: 34.580590,133.457655"
+              placeholder="例: 34.580590,133.457655 または 34.58/133.45"
               value={coordinateInput}
               onChange={(e) => handleCoordinateInput(e.target.value)}
               className="w-full"
             />
             <p className="text-xs text-muted-foreground">
-              緯度と経度をカンマ区切りで入力してください
+              緯度と経度をカンマまたはスラッシュ区切りで入力してください
             </p>
           </div>
 
@@ -709,10 +704,8 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates }: Le
       return { lat: searchParams.lat, lon: searchParams.lon };
     }
     if (projectCoordinates) {
-      const parts = projectCoordinates.split(/[\s,]+/).map((p) => p.trim());
-      if (parts.length >= 2) {
-        return { lat: parts[0], lon: parts[1] };
-      }
+      const parsed = parseCoordinateString(projectCoordinates);
+      if (parsed) return parsed;
     }
     return null;
   };
@@ -1184,7 +1177,7 @@ export default function ProjectDetailPage() {
       body: JSON.stringify({
         ...project,
         address: detailForm.address,
-        coordinates: detailForm.coordinates,
+        coordinates: normalizeCoordinateString(detailForm.coordinates) || detailForm.coordinates,
         landowner1: detailForm.landowner1,
         landowner2: detailForm.landowner2,
         landowner3: detailForm.landowner3,
@@ -1514,27 +1507,21 @@ export default function ProjectDetailPage() {
   };
 
   const getMappleUrl = (coords: string | null) => {
-    if (!coords) return null;
-    const parts = coords.split(/[\s,]+/).map((p) => p.trim());
-    if (parts.length < 2) return null;
-    const [lat, lng] = parts;
-    return `https://labs.mapple.com/mapplexml.html#16/${lat}/${lng}`;
+    const parsed = coords ? parseCoordinateString(coords) : null;
+    if (!parsed) return null;
+    return `https://labs.mapple.com/mapplexml.html#16/${parsed.lat}/${parsed.lon}`;
   };
 
   const getGoogleMapsUrl = (coords: string | null) => {
-    if (!coords) return null;
-    const parts = coords.split(/[\s,]+/).map((p) => p.trim());
-    if (parts.length < 2) return null;
-    const [lat, lng] = parts;
-    return `https://www.google.com/maps?q=${lat},${lng}`;
+    const parsed = coords ? parseCoordinateString(coords) : null;
+    if (!parsed) return null;
+    return `https://www.google.com/maps?q=${parsed.lat},${parsed.lon}`;
   };
 
   const getHazardMapUrl = (coords: string | null) => {
-    if (!coords) return null;
-    const parts = coords.split(/[\s,]+/).map((p) => p.trim());
-    if (parts.length < 2) return null;
-    const [lat, lng] = parts;
-    return `https://disaportal.gsi.go.jp/maps/?ll=${lat},${lng}&z=16&base=ort&vs=c1j0l0u0t0h0z0`;
+    const parsed = coords ? parseCoordinateString(coords) : null;
+    if (!parsed) return null;
+    return `https://disaportal.gsi.go.jp/maps/?ll=${parsed.lat},${parsed.lon}&z=16&base=ort&vs=c1j0l0u0t0h0z0`;
   };
 
   // 現地住所から都道府県の選択値（法令検索用）を取得
@@ -1548,10 +1535,9 @@ export default function ProjectDetailPage() {
   // 法令確認画面へのURL（座標・都道府県をクエリで渡す）
   const getLegalSearchUrl = () => {
     if (!project?.coordinates || !project?.address) return null;
-    const parts = project.coordinates.split(/[\s,]+/).map((p) => p.trim());
-    if (parts.length < 2) return null;
-    const lat = parts[0];
-    const lon = parts[1];
+    const parsed = parseCoordinateString(project.coordinates);
+    if (!parsed) return null;
+    const { lat, lon } = parsed;
     const prefectureParam = getPrefectureParam(project.address);
     if (!prefectureParam || !lat || !lon) return null;
     const params = new URLSearchParams({ lat, lon, prefecture: prefectureParam });
@@ -2462,7 +2448,11 @@ export default function ProjectDetailPage() {
                     id="coordinates"
                     value={detailForm.coordinates}
                     onChange={(e) => setDetailForm({ ...detailForm, coordinates: e.target.value })}
-                    placeholder="例: 36.6485, 138.1942"
+                    onBlur={() => {
+                      const normalized = normalizeCoordinateString(detailForm.coordinates);
+                      if (normalized) setDetailForm({ ...detailForm, coordinates: normalized });
+                    }}
+                    placeholder="例: 36.6485, 138.1942（スラッシュ区切りも可）"
                   />
                 </div>
                 <div className="space-y-2">
