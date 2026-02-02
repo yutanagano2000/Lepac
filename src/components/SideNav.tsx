@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Home, FolderKanban, Scale, Wrench, LogOut, CheckSquare, ExternalLink, Calendar, CalendarDays, MessageSquare, ListTodo, MapPin } from "lucide-react";
+import { Globe, Home, FolderKanban, Scale, Wrench, LogOut, CheckSquare, ExternalLink, Calendar, CalendarDays, MessageSquare, MapPin, GitBranch } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const items = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/projects", label: "案件", icon: FolderKanban },
-  { href: "/todos", label: "TODO", icon: ListTodo },
+  { href: "/todos", label: "タイムライン", icon: GitBranch },
   { href: "/meetings", label: "会議", icon: MessageSquare },
   { href: "/map", label: "マップ", icon: MapPin },
   { href: "/schedule", label: "スケジュール", icon: CalendarDays },
@@ -83,7 +84,11 @@ export function SideNav() {
           </a>
         </nav>
 
-        <div className="mt-auto border-t border-sidebar-border pt-4">
+        <div className="mt-auto border-t border-sidebar-border pt-4 space-y-2">
+          <div className="flex items-center justify-between px-3 py-1">
+            <span className="text-sm text-muted-foreground">テーマ</span>
+            <ThemeToggle />
+          </div>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent text-muted-foreground hover:text-foreground"

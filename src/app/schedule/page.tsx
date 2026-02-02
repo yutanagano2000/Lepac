@@ -24,14 +24,6 @@ import {
 import { calculateWorkflowTimeline, formatDateJp, type WorkflowTimelinePhase, WORKFLOW_PHASES, type ResponsibleType } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 
-function formatYyyyMd(date: Date | undefined) {
-  if (!date) return "";
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
-  return `${y}.${m}.${d}`;
-}
-
 function formatStartDate(date: Date): string {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
@@ -52,11 +44,11 @@ function ResponsibleBadges({ responsibles }: { responsibles?: ReadonlyArray<Resp
   if (!responsibles || responsibles.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1 shrink-0">
+    <div className="flex items-center gap-1.5 shrink-0">
       {responsibles.map((responsible, index) => (
-        <div key={index} className="flex items-center gap-1">
+        <div key={index} className="flex items-center gap-1.5">
           <span className={cn(
-            "px-2 py-0.5 rounded-md text-xs font-medium text-white",
+            "px-2 py-0.5 rounded text-xs font-medium text-white",
             responsibleColors[responsible]
           )}>
             {responsible}
@@ -86,260 +78,409 @@ export default function SchedulePage() {
     setTimeline(calculatedTimeline);
   };
 
+  // サブフェーズがあるフェーズのみ抽出
+  const phasesWithSubPhases = timeline.filter(item => item.subPhases && item.subPhases.length > 0);
+
+  const hasTimeline = timeline.length > 0;
+
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-3xl py-10">
-        <div className="space-y-6">
-          {/* ヘッダー */}
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold">スケジュール</h1>
-            <p className="text-sm text-muted-foreground">
-              販売先と開始日を入力して、スケジュールを生成します
-            </p>
-          </div>
+    <div className={cn(
+      "min-h-screen flex flex-col items-center bg-background px-4 py-8",
+      !hasTimeline && "justify-center"
+    )}>
+      {/* タイトル */}
+      <div className="mb-8">
+        <h1 className="text-4xl font-normal tracking-tight text-foreground">
+          スケジュール
+        </h1>
+      </div>
 
-          {/* フォーム */}
-          <Card>
-            <CardContent className="pt-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="client">販売先</Label>
-                    <div className="flex gap-2">
-                      <Select value={client} onValueChange={setClient} required>
-                        <SelectTrigger id="client" className="flex-1">
-                          <SelectValue placeholder="選択してください" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="双日">双日</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <div className="w-10 shrink-0" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="start-date">開始日</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="start-date"
-                        value={dateText}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setDateText(value);
-                          // YYYY-MM-DD形式の入力を受け付ける
-                          const match = value.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
-                          if (match) {
-                            const [, y, m, d] = match;
-                            const year = Number(y);
-                            const month = Number(m);
-                            const day = Number(d);
-                            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-                              const parsed = new Date(year, month - 1, day);
-                              if (!isNaN(parsed.getTime())) {
-                                setCompletionDate(parsed);
-                              }
-                            }
-                          } else if (value === "") {
-                            setCompletionDate(undefined);
-                          }
-                        }}
-                        placeholder="例: 2026-03-15"
-                        className="flex-1"
-                        required
-                      />
-                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                        <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" size="icon">
-                            <CalendarIcon className="h-4 w-4" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                          <Calendar
-                            mode="single"
-                            selected={completionDate}
-                            onSelect={(d) => {
-                              if (d) {
-                                setCompletionDate(d);
-                                setDateText(formatStartDate(d));
-                              }
-                              setIsCalendarOpen(false);
-                            }}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={!client || !completionDate}>
-                    スケジュールを生成
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+      {/* 入力フォーム */}
+      <div className={cn(
+        "w-full space-y-6",
+        hasTimeline ? "max-w-6xl" : "max-w-2xl"
+      )}>
+        <div className={cn(
+          "bg-card rounded-[2rem] border border-border shadow-lg p-8 space-y-6",
+          hasTimeline && "max-w-2xl mx-auto"
+        )}>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* 販売先 */}
+            <div className="space-y-2">
+              <Label htmlFor="client" className="text-sm font-medium text-foreground">
+                販売先
+              </Label>
+              <Select value={client} onValueChange={setClient} required>
+                <SelectTrigger id="client" className="w-full">
+                  <SelectValue placeholder="選択してください" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="双日">双日</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* スケジュール表示 */}
-          {timeline.length > 0 && (
-            <div className="relative">
-              <div className="mb-4 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <h2 className="font-semibold">{client}様のスケジュール</h2>
+            {/* 開始日 */}
+            <div className="space-y-2">
+              <Label htmlFor="start-date" className="text-sm font-medium text-foreground">
+                開始日
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="start-date"
+                  value={dateText}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setDateText(value);
+                    const match = value.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+                    if (match) {
+                      const [, y, m, d] = match;
+                      const year = Number(y);
+                      const month = Number(m);
+                      const day = Number(d);
+                      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                        const parsed = new Date(year, month - 1, day);
+                        if (!isNaN(parsed.getTime())) {
+                          setCompletionDate(parsed);
+                        }
+                      }
+                    } else if (value === "") {
+                      setCompletionDate(undefined);
+                    }
+                  }}
+                  placeholder="例: 2026-03-15"
+                  className="flex-1"
+                  required
+                />
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0">
+                      <CalendarIcon className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={completionDate}
+                      onSelect={(d) => {
+                        if (d) {
+                          setCompletionDate(d);
+                          setDateText(formatStartDate(d));
+                        }
+                        setIsCalendarOpen(false);
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              <Accordion
-                type="multiple"
+              <p className="text-xs text-muted-foreground">
+                年月日をハイフン、スラッシュ、またはドット区切りで入力してください
+              </p>
+            </div>
+
+            {/* 生成ボタン */}
+            <div className="pt-2">
+              <Button
+                type="submit"
+                size="lg"
                 className="w-full"
-                defaultValue={timeline.map((item) => item.key)}
+                disabled={!client || !completionDate}
               >
+                スケジュールを生成
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* 横型タイムライン表示 */}
+        {timeline.length > 0 && (
+          <div className="bg-card rounded-[2rem] border border-border shadow-lg p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-semibold">{client}様のスケジュール</h2>
+            </div>
+
+            {/* 横型タイムライン（スクロールなし・大きなサークル） */}
+            <div className="w-full py-6">
+              {/* ノード行 */}
+              <div className="flex items-center">
                 {timeline.map((item, index) => {
-                  // 日付がない工程（工事着工～完了）は常に「予定」として扱う
                   const now = new Date();
                   const isPast = item.date ? item.date < now : false;
                   const hasDate = item.date !== undefined || (item.startDate !== undefined && item.endDate !== undefined);
 
-                  // 対応するワークフロー定義を取得
-                  const workflowPhase = WORKFLOW_PHASES.find(phase => phase.key === item.key);
+                  return (
+                    <div key={item.key} className="flex items-center flex-1">
+                      {/* ノード */}
+                      <div className="flex flex-col items-center flex-1">
+                        <div
+                          className={cn(
+                            "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-3 shadow-md transition-all",
+                            item.key === "waiting_period"
+                              ? "border-secondary bg-secondary"
+                              : !hasDate
+                              ? "border-gray-300 bg-gray-100 dark:border-gray-600 dark:bg-gray-800"
+                              : isPast
+                              ? "border-green-500 bg-green-500"
+                              : "border-primary/50 bg-primary/10"
+                          )}
+                        >
+                          {item.key === "waiting_period" ? (
+                            <Clock className="h-6 w-6 text-white" />
+                          ) : !hasDate ? (
+                            <span className="text-lg font-bold text-gray-400">{index + 1}</span>
+                          ) : isPast ? (
+                            <Check className="h-6 w-6 text-white" />
+                          ) : (
+                            <span className="text-lg font-bold text-primary">{index + 1}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 接続線 */}
+                      {index < timeline.length - 1 && (
+                        <div
+                          className={cn(
+                            "h-1 w-4 -mx-2 z-10",
+                            isPast
+                              ? "bg-green-500"
+                              : "bg-muted-foreground/30"
+                          )}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* タイトル・日付行 */}
+              <div className="flex items-stretch mt-4">
+                {timeline.map((item) => {
+                  const now = new Date();
+                  const isPast = item.date ? item.date < now : false;
+                  const hasDate = item.date !== undefined || (item.startDate !== undefined && item.endDate !== undefined);
+                  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
 
                   return (
-                    <AccordionItem
-                      key={item.key}
-                      value={item.key}
-                      className={`border-b ${
-                        item.key === "waiting_period" ? "bg-muted/30" : ""
-                      }`}
-                    >
-                      <AccordionTrigger className="hover:no-underline px-4 py-3">
-                        <div className="flex items-center gap-3 w-full">
-                          {/* ノード */}
-                          <div
-                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-                              item.key === "waiting_period"
-                                ? "border-secondary bg-secondary"  // 待機期間はsecondaryカラー
-                                : !hasDate
-                                ? "border-gray-400 bg-background"  // 日付なしは灰色
-                                : isPast
-                                ? "border-green-500 bg-green-500"  // 過去の日付は完了扱い
-                                : "border-muted-foreground bg-background"  // 未来の日付は予定
-                            }`}
-                          >
-                            {item.key === "waiting_period" ? (
-                              <Clock className="h-3 w-3 text-white" />
-                            ) : !hasDate ? (
-                              <Circle className="h-3 w-3 text-gray-400" />
-                            ) : isPast ? (
-                              <Check className="h-3 w-3 text-white" />
-                            ) : (
-                              <Circle className="h-3 w-3 text-muted-foreground" />
-                            )}
-                          </div>
-                          {/* タイトルと期間 */}
-                          <div className="flex items-center gap-3 text-left flex-1 min-w-0">
-                            <p className={`font-medium truncate ${!hasDate || !isPast ? "text-muted-foreground" : ""}`}>
-                              {item.title}
-                            </p>
-                            {item.startDate && item.endDate ? (
-                              item.key === "initial_acquisition" || item.key === "submission_decision" ? (
-                                // 案件スタートと提出先の判断は日付表示
-                                <span className="text-sm font-bold text-primary shrink-0 px-2 py-1 bg-primary/10 rounded">
-                                  日付: {formatDateJp(item.startDate)}
-                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
-                                    <span className="ml-2 text-xs font-normal">
-                                      {workflowPhase.duration}営業日
-                                    </span>
-                                  )}
-                                </span>
-                              ) : item.key === "waiting_period" ? (
-                                // 待機期間は特別な表示
-                                <span className="text-sm font-bold text-secondary-foreground shrink-0 px-2 py-1 bg-secondary rounded">
-                                  待機期間: {formatDateJp(item.startDate)} ～ {formatDateJp(item.endDate)}
-                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
-                                    <span className="ml-2 text-xs font-normal">
-                                      {workflowPhase.duration}営業日
-                                    </span>
-                                  )}
-                                </span>
-                              ) : (
-                                // その他のフェーズは期間表示
-                                <span className="text-sm font-bold text-primary shrink-0 px-2 py-1 bg-primary/10 rounded">
-                                  期間: {formatDateJp(item.startDate)} ～ {formatDateJp(item.endDate)}
-                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
-                                    <span className="ml-2 text-xs font-normal">
-                                      {workflowPhase.duration}営業日
-                                    </span>
-                                  )}
-                                </span>
-                              )
-                            ) : null}
-                          </div>
-                          {/* フェーズ情報 */}
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded shrink-0">
-                            {item.phase}
-                          </span>
-                        </div>
-                      </AccordionTrigger>
+                    <div key={`label-${item.key}`} className="flex-1 flex flex-col items-center px-1">
+                      {/* タイトル（高さ固定） */}
+                      <div className="h-8 flex items-center justify-center mb-2">
+                        <p className={cn(
+                          "text-xs font-semibold leading-tight text-center line-clamp-2",
+                          !hasDate || !isPast ? "text-muted-foreground" : "text-foreground"
+                        )}>
+                          {item.title}
+                        </p>
+                      </div>
 
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="ml-9 space-y-2">
-                          {/* サブ項目のタイムライン */}
-                          {item.subPhases && item.subPhases.length > 0 && (
-                            <div className="space-y-2">
-                              {item.subPhases.map((subPhase, subIndex) => (
-                                <div key={subPhase.key} className="flex items-center gap-3">
-                                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-muted-foreground/50 bg-background">
-                                    <div className="h-2 w-2 rounded-full bg-muted-foreground/50"></div>
-                                  </div>
+                      {/* 日付カード */}
+                      {item.startDate ? (
+                        <div className={cn(
+                          "flex flex-col items-center rounded-lg border overflow-hidden min-w-[52px] shadow-sm",
+                          isPast
+                            ? "border-green-500 bg-green-50 dark:bg-green-950"
+                            : "border-primary/30 bg-card"
+                        )}>
+                          {/* 月ヘッダー */}
+                          <div className={cn(
+                            "w-full text-center py-0.5 text-[10px] font-bold text-white",
+                            isPast ? "bg-green-500" : "bg-primary"
+                          )}>
+                            {item.startDate.getMonth() + 1}月
+                          </div>
+                          {/* 日 */}
+                          <div className="py-1 px-2 text-center">
+                            <span className={cn(
+                              "text-xl font-bold",
+                              isPast ? "text-green-600 dark:text-green-400" : "text-foreground"
+                            )}>
+                              {item.startDate.getDate()}
+                            </span>
+                            <span className={cn(
+                              "text-[10px] ml-0.5",
+                              item.startDate.getDay() === 0 ? "text-red-500" :
+                              item.startDate.getDay() === 6 ? "text-blue-500" :
+                              "text-muted-foreground"
+                            )}>
+                              ({weekdays[item.startDate.getDay()]})
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/50 min-w-[52px]">
+                          {/* 未定ヘッダー */}
+                          <div className="w-full text-center py-0.5 text-[10px] font-bold text-muted-foreground bg-muted">
+                            --月
+                          </div>
+                          {/* 未定本体 */}
+                          <div className="py-1 px-2 text-center">
+                            <span className="text-lg font-bold text-muted-foreground">--</span>
+                            <span className="text-[10px] ml-0.5 text-muted-foreground/70">(-)</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 各フェーズの詳細タスク（アコーディオン形式・展開状態） */}
+            {phasesWithSubPhases.length > 0 && (
+              <Accordion
+                type="multiple"
+                className="w-full space-y-3"
+                defaultValue={phasesWithSubPhases.map((item) => item.key)}
+              >
+                  {phasesWithSubPhases.map((item) => {
+                    const now = new Date();
+                    const isPast = item.date ? item.date < now : false;
+                    const hasDate = item.date !== undefined || (item.startDate !== undefined && item.endDate !== undefined);
+                    const workflowPhase = WORKFLOW_PHASES.find(phase => phase.key === item.key);
+                    const originalIndex = timeline.findIndex(t => t.key === item.key);
+
+                    return (
+                      <AccordionItem
+                        key={item.key}
+                        value={item.key}
+                        className={cn(
+                          "border rounded-lg overflow-hidden",
+                          item.key === "waiting_period" && "bg-secondary/10"
+                        )}
+                      >
+                        <AccordionTrigger className="hover:no-underline px-5 py-4 hover:bg-muted/50">
+                          <div className="flex items-center gap-4 w-full">
+                            {/* 順番号 */}
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground text-sm font-semibold shrink-0">
+                              {originalIndex + 1}
+                            </div>
+
+                            {/* ステータスノード */}
+                            <div
+                              className={cn(
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2",
+                                item.key === "waiting_period"
+                                  ? "border-secondary bg-secondary"
+                                  : !hasDate
+                                  ? "border-gray-400 bg-background"
+                                  : isPast
+                                  ? "border-green-500 bg-green-500"
+                                  : "border-muted-foreground bg-background"
+                              )}
+                            >
+                              {item.key === "waiting_period" ? (
+                                <Clock className="h-5 w-5 text-white" />
+                              ) : !hasDate ? (
+                                <Circle className="h-5 w-5 text-gray-400" />
+                              ) : isPast ? (
+                                <Check className="h-5 w-5 text-white" />
+                              ) : (
+                                <Circle className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
+
+                            {/* タイトルと期間 */}
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <p className={cn(
+                                  "text-base font-semibold",
+                                  !hasDate || !isPast ? "text-muted-foreground" : "text-foreground"
+                                )}>
+                                  {item.title}
+                                </p>
+                                <span className={cn(
+                                  "text-xs px-2 py-1 rounded",
+                                  item.key === "waiting_period"
+                                    ? "bg-secondary text-secondary-foreground"
+                                    : "bg-muted text-muted-foreground"
+                                )}>
+                                  {item.phase}
+                                </span>
+                              </div>
+                              {item.startDate && item.endDate && (
+                                <p className="text-sm text-primary mt-1">
+                                  {formatDateJp(item.startDate)}
+                                  {item.key !== "initial_acquisition" && item.key !== "submission_decision" && (
+                                    <span className="text-muted-foreground"> ～ {formatDateJp(item.endDate)}</span>
+                                  )}
+                                  {workflowPhase && workflowPhase.duration !== undefined && workflowPhase.duration > 0 && (
+                                    <span className="text-muted-foreground ml-2">({workflowPhase.duration}営業日)</span>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* サブタスク数 */}
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded shrink-0">
+                              {item.subPhases!.length}件のタスク
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+
+                        <AccordionContent className="px-5 pb-5">
+                          <div className="ml-[72px] space-y-3 border-l-2 border-muted pl-6">
+                            {item.subPhases!.map((subPhase, subIndex) => (
+                              <div
+                                key={subPhase.key}
+                                className="flex items-start gap-4 p-4 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
+                              >
+                                {/* サブタスク番号 */}
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0 mt-0.5">
+                                  {subIndex + 1}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
                                   {subPhase.type === 'branch' ? (
-                                    <div className="flex-1 space-y-1">
+                                    <div className="space-y-3">
                                       <p className="text-sm font-medium">{subPhase.title}</p>
-                                      <div className="flex gap-4 mt-2">
+                                      <div className="flex flex-wrap gap-2">
                                         {subPhase.branches?.map((branch, branchIndex) => (
-                                          <div key={branchIndex} className="flex items-center gap-2">
-                                            <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                                            <span className="text-xs font-medium">{branch.name}</span>
-                                            <span className="text-xs text-muted-foreground">({branch.condition})</span>
+                                          <div key={branchIndex} className="flex items-center gap-2 text-sm bg-blue-50 dark:bg-blue-950 px-3 py-1.5 rounded-lg">
+                                            <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>
+                                            <span className="font-medium">{branch.name}</span>
+                                            <span className="text-muted-foreground">({branch.condition})</span>
                                           </div>
                                         ))}
                                       </div>
                                     </div>
                                   ) : (
-                                    <>
-                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <span className="text-sm flex-1">{subPhase.title}</span>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-sm font-medium">{subPhase.title}</span>
                                         <ResponsibleBadges responsibles={subPhase.responsibles} />
                                       </div>
                                       {subPhase.date && (
-                                        <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded shrink-0">
-                                          予定: {formatDateJp(subPhase.date)}
+                                        <p className="text-sm">
+                                          <span className="text-primary font-medium">予定: {formatDateJp(subPhase.date)}</span>
                                           {subPhase.duration !== undefined && subPhase.duration > 0 && (
-                                            <span className="ml-2">
-                                              {subPhase.duration}営業日
+                                            <span className="text-muted-foreground ml-2">
+                                              ({subPhase.duration}営業日)
                                             </span>
                                           )}
-                                        </span>
+                                        </p>
                                       )}
-                                    </>
+                                    </div>
                                   )}
                                 </div>
-                              ))}
-                            </div>
-                          )}
+                              </div>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              )}
+          </div>
+        )}
 
-                          {!hasDate && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Circle className="h-4 w-4" />
-                              <p className="text-sm">予定日は未定です</p>
-                            </div>
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            </div>
-          )}
-        </div>
+        {/* 説明テキスト（タイムライン未表示時のみ） */}
+        {!hasTimeline && (
+          <p className="text-center text-sm text-muted-foreground">
+            販売先と開始日を入力して「スケジュールを生成」ボタンを押してください
+          </p>
+        )}
       </div>
     </div>
   );

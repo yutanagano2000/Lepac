@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
-import { cn } from "@/lib/utils";
+import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
 import {
   parseCoordinateString,
   normalizeCoordinateString,
@@ -539,16 +539,11 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             });
           }
 
-          if (law.id === 4 && isOkayama && !projectAddress?.includes("井原市")) {
-            fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
-            badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
+          if (law.id === 4) {
+            fixedTextWithCopy = "対象地区ではありません。";
           }
 
-          if (law.id === 5 && isOkayama && !projectAddress?.includes("井原市")) {
-            fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
-            badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
-          }
-          if ((law.id === 4 || law.id === 5) && (!isOkayama || projectAddress?.includes("井原市"))) {
+          if (law.id === 5) {
             fixedTextWithCopy = "対象地区ではありません。";
           }
           if (law.id === 4) {
@@ -602,7 +597,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           }
           if (law.id === 15 && isHiroshima) {
             additionalButtons.push({
-              label: "自然公園の位置図",
+              label: "広島県の自然公園",
               url: "https://www.pref.hiroshima.lg.jp/soshiki/47/kouikisei.html"
             });
           }
@@ -626,7 +621,20 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           }
 
           if (law.id === 17) {
-            fixedTextWithCopy = "対象地区ではありません。";
+            // 中国四国地方の県かどうか判定
+            const chushikokuPrefectures = ["岡山県", "広島県", "山口県", "鳥取県", "島根県", "香川県", "愛媛県", "徳島県", "高知県"];
+            const { prefectureName: speciesPrefecture } = parsePrefectureAndCity(projectAddress);
+            const isChushikoku = speciesPrefecture && chushikokuPrefectures.includes(speciesPrefecture);
+
+            if (isChushikoku) {
+              fixedTextWithCopy = "中国四国地方環境事務所管内には、種の保存法に基づき指定された生息地等保護区はありません。";
+              additionalButtons.push({
+                label: "参照リンク",
+                url: "https://chushikoku.env.go.jp/procure/page_00068.html"
+              });
+            } else {
+              fixedTextWithCopy = "対象地区ではありません。";
+            }
             additionalButtons.push({
               label: "生息地等保護区",
               url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
@@ -748,6 +756,32 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             />
           );
         })}
+
+        {/* ○○県の太陽光に関する条例 */}
+        {hasSearched && currentPrefecture && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">
+              {currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : ""}の太陽光に関する条例
+            </h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="font-medium text-foreground">
+                  {currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : ""}の太陽光発電に関する条例を検索
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  const prefName = currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : "";
+                  const query = encodeURIComponent(`${prefName}　太陽光　条例`);
+                  window.open(`https://www.google.com/search?q=${query}`, "_blank");
+                }}
+                className="shrink-0 ml-4"
+              >
+                Googleで検索
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* 都道府県条例カード（岡山県） */}
         {hasSearched && currentPrefecture === "okayama" && (
@@ -1038,16 +1072,11 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           });
         }
 
-        if (law.id === 4 && isOkayama && !projectAddress?.includes("井原市")) {
-          fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
-          badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
+        if (law.id === 4) {
+          fixedTextWithCopy = "対象地区ではありません。";
         }
 
-        if (law.id === 5 && isOkayama && !projectAddress?.includes("井原市")) {
-          fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
-          badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
-        }
-        if ((law.id === 4 || law.id === 5) && (!isOkayama || projectAddress?.includes("井原市"))) {
+        if (law.id === 5) {
           fixedTextWithCopy = "対象地区ではありません。";
         }
         if (law.id === 4) {
@@ -1125,7 +1154,20 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
         }
 
         if (law.id === 17) {
-          fixedTextWithCopy = "対象地区ではありません。";
+          // 中国四国地方の県かどうか判定
+          const chushikokuPrefectures = ["岡山県", "広島県", "山口県", "鳥取県", "島根県", "香川県", "愛媛県", "徳島県", "高知県"];
+          const { prefectureName: speciesPrefecture } = parsePrefectureAndCity(projectAddress);
+          const isChushikoku = speciesPrefecture && chushikokuPrefectures.includes(speciesPrefecture);
+
+          if (isChushikoku) {
+            fixedTextWithCopy = "中国四国地方環境事務所管内には、種の保存法に基づき指定された生息地等保護区はありません。";
+            additionalButtons.push({
+              label: "参照リンク",
+              url: "https://chushikoku.env.go.jp/procure/page_00068.html"
+            });
+          } else {
+            fixedTextWithCopy = "対象地区ではありません。";
+          }
           additionalButtons.push({
             label: "生息地等保護区",
             url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
@@ -1247,6 +1289,32 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           />
         );
       })}
+
+      {/* ○○県の太陽光に関する条例 */}
+      {hasSearched && currentPrefecture && (
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h2 className="text-xl font-semibold text-foreground mb-4">
+            {currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : ""}の太陽光に関する条例
+          </h2>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="font-medium text-foreground">
+                {currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : ""}の太陽光発電に関する条例を検索
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                const prefName = currentPrefecture === "hiroshima" ? "広島県" : currentPrefecture === "okayama" ? "岡山県" : "";
+                const query = encodeURIComponent(`${prefName}　太陽光　条例`);
+                window.open(`https://www.google.com/search?q=${query}`, "_blank");
+              }}
+              className="shrink-0 ml-4"
+            >
+              Googleで検索
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 都道府県条例カード（岡山県） */}
       {hasSearched && currentPrefecture === "okayama" && (
@@ -1434,6 +1502,9 @@ export default function ProjectDetailPage() {
   const [todoCompleteOpen, setTodoCompleteOpen] = useState(false);
   const [completingTodo, setCompletingTodo] = useState<Todo | null>(null);
   const [completeTodoMemo, setCompleteTodoMemo] = useState("");
+  const [todoAddMessageOpen, setTodoAddMessageOpen] = useState(false);
+  const [addingMessageTodo, setAddingMessageTodo] = useState<Todo | null>(null);
+  const [newTodoMessage, setNewTodoMessage] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
   const [newComment, setNewComment] = useState("");
@@ -1708,12 +1779,16 @@ export default function ProjectDetailPage() {
   const handleTodoCompleteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!completingTodo) return;
+    // 完了メモがある場合は配列形式で保存
+    const completedMemo = completeTodoMemo.trim()
+      ? addTodoMessage(null, completeTodoMemo.trim())
+      : null;
     await fetch(`/api/todos/${completingTodo.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         completedAt: new Date().toISOString(),
-        completedMemo: completeTodoMemo.trim() || null,
+        completedMemo,
       }),
     });
     setTodoCompleteOpen(false);
@@ -1723,11 +1798,37 @@ export default function ProjectDetailPage() {
   };
 
   const handleTodoReopen = async (todo: Todo) => {
+    // 再開時はメッセージを保持（completedAtのみクリア）
     await fetch(`/api/todos/${todo.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completedAt: null, completedMemo: null }),
+      body: JSON.stringify({ completedAt: null }),
     });
+    fetchTodos();
+  };
+
+  // 完了済みTODOにメッセージを追加
+  const openAddMessageDialog = (todo: Todo) => {
+    setAddingMessageTodo(todo);
+    setNewTodoMessage("");
+    setTodoAddMessageOpen(true);
+  };
+
+  const handleAddMessageSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addingMessageTodo || !newTodoMessage.trim()) return;
+    const updatedMemo = addTodoMessage(
+      addingMessageTodo.completedMemo,
+      newTodoMessage.trim()
+    );
+    await fetch(`/api/todos/${addingMessageTodo.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completedMemo: updatedMemo }),
+    });
+    setTodoAddMessageOpen(false);
+    setAddingMessageTodo(null);
+    setNewTodoMessage("");
     fetchTodos();
   };
 
@@ -1923,7 +2024,7 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-5xl py-10">
+      <div className="mx-auto max-w-7xl py-10">
         <div className="space-y-6">
           {/* ヘッダー */}
           <div className="flex items-center gap-3">
@@ -2224,7 +2325,7 @@ export default function ProjectDetailPage() {
             </DialogContent>
           </Dialog>
 
-          {/* 統合タイムライン */}
+          {/* 統合タイムライン（横型） */}
           <div className="relative">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -2243,57 +2344,29 @@ export default function ProjectDetailPage() {
             {sortedTimeline.length === 0 ? (
               <p className="text-sm text-muted-foreground">タイムラインがありません</p>
             ) : (
-              <div className="space-y-0">
-                {(() => {
-                  // 直近の未完了項目のインデックスを計算
-                  const firstPendingIndex = sortedTimeline.findIndex(
-                    (item) => item.status !== "completed"
-                  );
-                  return sortedTimeline.map((item, index) => {
-                    const isCompleted = item.status === "completed";
-                    const isFirstPending = index === firstPendingIndex;
-                    
-                    // 予定日までの日数を計算
-                    const now = new Date();
-                    const daysUntilDue = Math.ceil((item.date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                    const isOverdue = !isCompleted && daysUntilDue < 0;
-                    
-                    return (
-                    <div key={item.id} className="relative flex gap-4">
-                      {/* 縦線とノード */}
-                      <div className="flex flex-col items-center">
-                        <div
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${
-                            isCompleted
-                              ? "border-green-500 bg-green-500"
-                              : isOverdue
-                              ? "border-red-500 bg-background"
-                              : "border-muted-foreground bg-background"
-                          }`}
-                        >
-                          {isCompleted ? (
-                            <Check className="h-4 w-4 text-white" />
-                          ) : (
-                            <Circle className={`h-4 w-4 ${isOverdue ? "text-red-500" : "text-muted-foreground"}`} />
-                          )}
-                        </div>
-                        {index < sortedTimeline.length - 1 && (
-                          <div
-                            className={`w-0.5 flex-1 ${
-                              isCompleted
-                                ? "bg-green-500"
-                                : "border-l-2 border-dashed border-muted-foreground"
-                            }`}
-                          />
-                        )}
-                      </div>
-                      {/* コンテンツ */}
-                      <div className="flex-1 pb-6">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
+              <div className="w-full overflow-x-auto">
+                <div className="flex items-start gap-0 min-w-fit py-4">
+                  {(() => {
+                    // 直近の未完了項目のインデックスを計算
+                    const firstPendingIndex = sortedTimeline.findIndex(
+                      (item) => item.status !== "completed"
+                    );
+                    return sortedTimeline.map((item, index) => {
+                      const isCompleted = item.status === "completed";
+                      const isFirstPending = index === firstPendingIndex;
+
+                      // 予定日までの日数を計算
+                      const now = new Date();
+                      const daysUntilDue = Math.ceil((item.date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                      const isOverdue = !isCompleted && daysUntilDue < 0;
+
+                      return (
+                        <div key={item.id} className="flex flex-col items-center flex-1 min-w-[100px]">
+                          {/* 上部：タイトルと編集ボタン */}
+                          <div className="text-center mb-2 px-1">
+                            <div className="flex items-center justify-center gap-1">
                               <p
-                                className={`font-medium ${
+                                className={`text-sm font-medium whitespace-nowrap ${
                                   isCompleted ? "" : "text-muted-foreground"
                                 }`}
                               >
@@ -2305,58 +2378,108 @@ export default function ProjectDetailPage() {
                                   const p = progressList.find((pr) => pr.id === item.id);
                                   if (p) openEditDialog(p);
                                 }}
-                                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                               >
-                                <Pencil className="h-3.5 w-3.5" />
+                                <Pencil className="h-3 w-3" />
                               </button>
                             </div>
+                          </div>
+
+                          {/* 中央：ノードと横線 */}
+                          <div className="flex items-center w-full">
+                            {/* 左側の線 */}
+                            {index > 0 && (
+                              <div
+                                className={`flex-1 h-0.5 ${
+                                  sortedTimeline[index - 1].status === "completed"
+                                    ? "bg-green-500"
+                                    : "border-t-2 border-dashed border-muted-foreground"
+                                }`}
+                              />
+                            )}
+                            {index === 0 && <div className="flex-1" />}
+
+                            {/* ノード */}
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${
+                                isCompleted
+                                  ? "border-green-500 bg-green-500"
+                                  : isOverdue
+                                  ? "border-red-500 bg-background"
+                                  : "border-muted-foreground bg-background"
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <Check className="h-5 w-5 text-white" />
+                              ) : (
+                                <Circle className={`h-5 w-5 ${isOverdue ? "text-red-500" : "text-muted-foreground"}`} />
+                              )}
+                            </div>
+
+                            {/* 右側の線 */}
+                            {index < sortedTimeline.length - 1 && (
+                              <div
+                                className={`flex-1 h-0.5 ${
+                                  isCompleted
+                                    ? "bg-green-500"
+                                    : "border-t-2 border-dashed border-muted-foreground"
+                                }`}
+                              />
+                            )}
+                            {index === sortedTimeline.length - 1 && <div className="flex-1" />}
+                          </div>
+
+                          {/* 下部：日付と説明、アクションボタン */}
+                          <div className="text-center mt-2 px-1">
+                            <p className="text-sm text-muted-foreground whitespace-nowrap">
+                              {formatDateJp(item.date)}
+                            </p>
+                            {item.completedAt && (
+                              <p className={`text-xs ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
+                                → {formatDateJp(item.completedAt)}
+                              </p>
+                            )}
                             {item.description && (
-                              <p className="mt-1 text-sm text-muted-foreground">
+                              <p className="mt-1 text-xs text-muted-foreground max-w-[90px] truncate" title={item.description}>
                                 {item.description}
                               </p>
                             )}
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {formatDateJp(item.date)}
-                              {item.completedAt && (
-                                <span className={`ml-2 ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
-                                  → {formatDateJp(item.completedAt)}
-                                </span>
+
+                            {/* アクションボタン */}
+                            <div className="mt-2 flex flex-col gap-1">
+                              {/* 未完了にするボタン（直近の完了タスク） */}
+                              {isCompleted && (
+                                firstPendingIndex === -1
+                                  ? index === sortedTimeline.length - 1
+                                  : index === firstPendingIndex - 1
+                              ) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7 px-2 border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                                  onClick={() => markAsIncomplete(item.id)}
+                                >
+                                  未完了
+                                </Button>
                               )}
-                            </p>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            {/* 未完了にするボタン（直近の完了タスク） */}
-                            {isCompleted && (
-                              firstPendingIndex === -1 
-                                ? index === sortedTimeline.length - 1
-                                : index === firstPendingIndex - 1
-                            ) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                                onClick={() => markAsIncomplete(item.id)}
-                              >
-                                未完了にする
-                              </Button>
-                            )}
-                            {/* 完了にするボタン（直近の未完了タスク） */}
-                            {isFirstPending && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => markAsCompleted(item.id)}
-                              >
-                                完了にする
-                              </Button>
-                            )}
+                              {/* 完了にするボタン（直近の未完了タスク） */}
+                              {isFirstPending && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7 px-2"
+                                  onClick={() => markAsCompleted(item.id)}
+                                >
+                                  完了
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                    );
-                  });
-                })()}
+                      );
+                    });
+                  })()}
+                </div>
               </div>
             )}
           </div>
@@ -2656,23 +2779,52 @@ export default function ProjectDetailPage() {
                                 </>
                               )}
                             </p>
-                            {todo.completedAt && todo.completedMemo && (
-                              <p className="text-xs text-muted-foreground mt-1 p-2 rounded bg-background/50">
-                                {todo.completedMemo}
-                              </p>
+                            {/* メッセージツリー表示 */}
+                            {todo.completedMemo && (
+                              <div className="mt-2 space-y-1">
+                                {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
+                                  <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                    <div className="flex flex-col items-center">
+                                      <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
+                                      {idx < arr.length - 1 && (
+                                        <div className="w-0.5 h-full bg-zinc-300 dark:bg-zinc-700 min-h-[16px]"></div>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 p-2 rounded bg-background/50 border border-border/50">
+                                      <p className="text-xs">{msg.message}</p>
+                                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                        {formatDateJp(new Date(msg.createdAt))}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <div className="flex gap-1 shrink-0">
                             {todo.completedAt ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => handleTodoReopen(todo)}
-                              >
-                                再開
-                              </Button>
+                              <div className="flex flex-col gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => openAddMessageDialog(todo)}
+                                  title="メッセージを追加"
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  メモ
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => handleTodoReopen(todo)}
+                                >
+                                  再開
+                                </Button>
+                              </div>
                             ) : (
                               <>
                                 <Button
@@ -3026,6 +3178,60 @@ export default function ProjectDetailPage() {
                     <Button type="submit">
                       <CheckCircle2 className="h-4 w-4 mr-2" />
                       完了する
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* TODOメッセージ追加ダイアログ */}
+          <Dialog open={todoAddMessageOpen} onOpenChange={setTodoAddMessageOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>メッセージを追加</DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  完了済みTODOにメッセージを追加します
+                </p>
+              </DialogHeader>
+              {addingMessageTodo && (
+                <form onSubmit={handleAddMessageSubmit} className="space-y-4">
+                  {/* 既存メッセージの表示 */}
+                  {addingMessageTodo.completedMemo && (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      <Label className="text-xs text-muted-foreground">既存のメッセージ</Label>
+                      {parseTodoMessages(addingMessageTodo.completedMemo).map((msg, idx) => (
+                        <div key={idx} className="text-xs p-2 rounded bg-muted/50 border border-border/50">
+                          <p>{msg.message}</p>
+                          <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                            {formatDateJp(new Date(msg.createdAt))}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="new-todo-message">新しいメッセージ</Label>
+                    <Textarea
+                      id="new-todo-message"
+                      value={newTodoMessage}
+                      onChange={(e) => setNewTodoMessage(e.target.value)}
+                      placeholder="メッセージを入力..."
+                      rows={3}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTodoAddMessageOpen(false)}
+                    >
+                      キャンセル
+                    </Button>
+                    <Button type="submit" disabled={!newTodoMessage.trim()}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      追加
                     </Button>
                   </div>
                 </form>

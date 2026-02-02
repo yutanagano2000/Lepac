@@ -22,6 +22,8 @@ const DOC_TYPES = [
   "身分証明書",
   "印鑑登録証明書",
   "固定資産評価証明書",
+  "登記識別情報通知",
+  "登記申請書",
 ] as const;
 
 const ID_TYPES = [
@@ -54,7 +56,7 @@ export default function FilenamePage() {
 
   // 書類が変更されたら不要なステートをクリア
   React.useEffect(() => {
-    if (docType === "身分証明書") {
+    if (docType === "身分証明書" || docType === "登記識別情報通知") {
       setDate(undefined);
     } else {
       setIdType("");
@@ -71,6 +73,11 @@ export default function FilenamePage() {
     if (t === "身分証明書") {
       if (!idType) return "";
       return `【${t}】${n}_${idType}`;
+    }
+
+    // 登記識別情報通知の場合（日付不要）
+    if (t === "登記識別情報通知") {
+      return `【${t}】${n}`;
     }
 
     // その他の書類の場合（日付が必要）
@@ -148,7 +155,7 @@ export default function FilenamePage() {
               </CardContent>
             </Card>
 
-            {/* ③ 動的カード（身分証明書の場合は証明書種類、その他は日付） */}
+            {/* ③ 動的カード（身分証明書の場合は証明書種類、登記識別情報通知は不要、その他は日付） */}
             {docType === "身分証明書" ? (
               <Card>
                 <CardHeader>
@@ -169,7 +176,7 @@ export default function FilenamePage() {
                   </Select>
                 </CardContent>
               </Card>
-            ) : (
+            ) : docType === "登記識別情報通知" ? null : (
               <Card>
                 <CardHeader>
                   <CardTitle>日付</CardTitle>
@@ -236,6 +243,8 @@ export default function FilenamePage() {
             <span className="font-mono">
               {docType === "身分証明書"
                 ? "【書類】氏名様_証明書種類"
+                : docType === "登記識別情報通知"
+                ? "【書類】氏名様"
                 : "【書類】氏名様_YYYY.M.D"}
             </span>
           </p>

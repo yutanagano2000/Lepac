@@ -1,24 +1,18 @@
 import { db } from "@/db";
-import { todos, projects } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
-import TodosView from "./TodosView";
+import { projects, progress } from "@/db/schema";
+import TimelineView from "./TimelineView";
 
 export const dynamic = "force-dynamic";
 
-export default async function TodosPage() {
-  const rows = await db
-    .select({
-      id: todos.id,
-      projectId: todos.projectId,
-      content: todos.content,
-      dueDate: todos.dueDate,
-      createdAt: todos.createdAt,
-      completedAt: todos.completedAt,
-      completedMemo: todos.completedMemo,
-      managementNumber: projects.managementNumber,
-    })
-    .from(todos)
-    .leftJoin(projects, eq(todos.projectId, projects.id))
-    .orderBy(asc(todos.dueDate));
-  return <TodosView initialTodos={rows} />;
+export default async function TimelinePage() {
+  const allProjects = await db.select().from(projects);
+  const allProgress = await db.select().from(progress);
+
+  // 各プロジェクトに進捗データを紐付け
+  const projectsWithProgress = allProjects.map((project) => ({
+    ...project,
+    progressItems: allProgress.filter((p) => p.projectId === project.id),
+  }));
+
+  return <TimelineView projects={projectsWithProgress} />;
 }

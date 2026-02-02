@@ -242,12 +242,12 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
 
   return (
     <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-5xl py-10">
+      <div className="mx-auto max-w-7xl py-10">
         <div className="space-y-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1 shrink-0">
-              <h1 className="text-xl font-semibold">案件一覧</h1>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-2 shrink-0">
+              <h1 className="text-3xl font-semibold">案件一覧</h1>
+              <p className="text-lg text-muted-foreground">
                 担当する案件を確認できます
               </p>
             </div>
@@ -562,19 +562,19 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
           <div className="rounded-xl border border-border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>管理番号</TableHead>
-                  <TableHead>担当</TableHead>
-                  <TableHead>販売先</TableHead>
-                  <TableHead>案件番号</TableHead>
-                  <TableHead>完成月</TableHead>
-                  <TableHead className="w-12"></TableHead>
+                <TableRow className="h-16">
+                  <TableHead className="text-lg font-semibold px-6">管理番号</TableHead>
+                  <TableHead className="text-lg font-semibold px-6">担当</TableHead>
+                  <TableHead className="text-lg font-semibold px-6">販売先</TableHead>
+                  <TableHead className="text-lg font-semibold px-6">案件番号</TableHead>
+                  <TableHead className="text-lg font-semibold px-6">完成月</TableHead>
+                  <TableHead className="w-32"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProjects.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableRow className="h-20">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground text-lg py-8">
                       {searchQuery ? "検索結果がありません" : "案件がありません"}
                     </TableCell>
                   </TableRow>
@@ -582,40 +582,40 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                   filteredProjects.map((project) => (
                     <TableRow
                       key={project.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-muted/50 h-20"
                       onClick={() => {
                         router.push(`/projects/${project.id}`);
                       }}
                     >
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
+                      <TableCell className="font-medium text-lg py-5 px-6">
+                        <div className="flex items-center gap-3">
                           {project.hasOverdue && (
-                            <AlertCircle className="h-4 w-4 text-red-500" />
+                            <AlertCircle className="h-6 w-6 text-red-500" />
                           )}
                           {project.managementNumber}
                         </div>
                       </TableCell>
-                      <TableCell>{project.manager}</TableCell>
-                      <TableCell>{project.client}</TableCell>
-                      <TableCell>{project.projectNumber}</TableCell>
-                      <TableCell>{formatCompletionMonth(project.completionMonth) || "-"}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
+                      <TableCell className="text-lg py-5 px-6">{project.manager}</TableCell>
+                      <TableCell className="text-lg py-5 px-6">{project.client}</TableCell>
+                      <TableCell className="text-lg py-5 px-6">{project.projectNumber}</TableCell>
+                      <TableCell className="text-lg py-5 px-6">{formatCompletionMonth(project.completionMonth) || "-"}</TableCell>
+                      <TableCell className="py-5">
+                        <div className="flex gap-2">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-12 w-12"
                             onClick={(e) => openEditDialog(project, e)}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-6 w-6" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            className="h-12 w-12 text-destructive hover:text-destructive"
                             onClick={(e) => openDeleteDialog(project, e)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-6 w-6" />
                           </Button>
                         </div>
                       </TableCell>

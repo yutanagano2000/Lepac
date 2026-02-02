@@ -11,6 +11,7 @@ import {
   Search,
   ListTodo,
   CheckCircle2,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +23,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { formatDateJp } from "@/lib/timeline";
 import { parseTodoMessages } from "@/lib/utils";
+import { HomeProjectSearch } from "@/components/HomeProjectSearch";
 
 export type TodoWithProject = {
   id: number;
@@ -36,7 +39,7 @@ export type TodoWithProject = {
   managementNumber: string | null;
 };
 
-interface TodosViewProps {
+interface HomeTodosViewProps {
   initialTodos: TodoWithProject[];
 }
 
@@ -51,14 +54,17 @@ function getDueDateInfo(dueDateStr: string) {
   if (diffDays < 0) return { group: "overdue" as const, label: `${Math.abs(diffDays)}日超過`, diffDays };
   if (diffDays === 0) return { group: "today" as const, label: "今日", diffDays };
   if (diffDays === 1) return { group: "upcoming" as const, label: "明日", diffDays };
-  if (diffDays <= 7) return { group: "upcoming" as const, label: `あと${diffDays}日`, diffDays };
+  if (diffDays <= 3) return { group: "upcoming" as const, label: `あと${diffDays}日`, diffDays };
   return { group: "later" as const, label: `あと${diffDays}日`, diffDays };
 }
 
-export default function TodosView({ initialTodos }: TodosViewProps) {
+export function HomeTodosView({ initialTodos }: HomeTodosViewProps) {
   const [todos, setTodos] = useState<TodoWithProject[]>(initialTodos);
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+
+  // 日本時間で現在日時を取得
+  const nowJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
 
   const fetchTodos = () => {
     fetch("/api/todos", { cache: "no-store" })
@@ -115,7 +121,6 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
   }, [filteredTodos]);
 
   const handleReopen = async (todo: TodoWithProject) => {
-    // 再開時はメッセージを保持（completedAtのみクリア）
     await fetch(`/api/todos/${todo.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -151,7 +156,6 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
               </span>
             )}
           </div>
-          {/* メッセージツリー表示 */}
           {todo.completedMemo && (
             <div className="mt-2 space-y-1">
               {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
@@ -253,43 +257,110 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
 
   return (
     <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-5xl py-10">
-        <div className="space-y-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <ListTodo className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-xl font-semibold">TODO</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              今日やること・近日中のTODOを整理して確認できます
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[200px] max-w-sm">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="内容で検索"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={projectFilter} onValueChange={setProjectFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="案件で絞り込み" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">すべての案件</SelectItem>
-                  {projectOptions.map((mn) => (
-                    <SelectItem key={mn} value={mn}>
-                      {mn}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="mx-auto max-w-6xl py-8 md:py-12">
+        <div className="flex flex-col gap-8">
+          {/* 案件検索バー */}
+          <div className="w-full">
+            <HomeProjectSearch />
           </div>
 
+          {/* Header Section */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-foreground">
+                <LayoutDashboard className="h-5 w-5" />
+                <span className="text-sm font-semibold uppercase tracking-wider">ダッシュボード</span>
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight">TODO</h1>
+              <p className="text-muted-foreground text-sm">
+                {nowJst.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Tokyo' })}
+              </p>
+            </div>
+            <Button asChild variant="default">
+              <Link href="/projects">
+                案件一覧を確認
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          <Separator />
+
+          {/* Stats Summary */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">超過</p>
+                    <p className="text-2xl font-bold">{grouped.overdue.length}</p>
+                  </div>
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">今日</p>
+                    <p className="text-2xl font-bold">{grouped.today.length}</p>
+                  </div>
+                  <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">３日以内</p>
+                    <p className="text-2xl font-bold">{grouped.upcoming.length}</p>
+                  </div>
+                  <Clock className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">完了</p>
+                    <p className="text-2xl font-bold">{grouped.completed.length}</p>
+                  </div>
+                  <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="内容で検索"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="案件で絞り込み" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての案件</SelectItem>
+                {projectOptions.map((mn) => (
+                  <SelectItem key={mn} value={mn}>
+                    {mn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* TODO Grid */}
           <div className="grid gap-6 lg:grid-cols-3">
             <Section
               title="超過"
@@ -311,18 +382,18 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
               emptyMessage="本日のTODOはありません"
             />
             <Section
-              title="近日中"
-              description="7日以内に期限のTODO"
+              title="３日以内"
+              description="3日以内に期限のTODO"
               icon={Clock}
               items={grouped.upcoming}
-              emptyMessage="近日中のTODOはありません"
+              emptyMessage="３日以内のTODOはありません"
             />
           </div>
 
           {grouped.later.length > 0 && (
             <Section
               title="それ以降"
-              description="8日以降に期限のTODO"
+              description="4日以降に期限のTODO"
               icon={ListTodo}
               items={grouped.later}
               emptyMessage=""

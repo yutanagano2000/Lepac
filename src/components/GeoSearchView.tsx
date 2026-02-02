@@ -529,19 +529,13 @@ export function GeoSearchView() {
             });
           }
 
-          const addressForPortCoast = locationInfo?.fullAddress ?? locationInfo?.shortAddress ?? null;
           // 2. 港湾法
-          if (law.id === 4 && isOkayama && !addressForPortCoast?.includes("井原市")) {
-            fixedTextWithCopy = "港湾法第38条の２により、一定規模以上の廃棄物処理施設の建設又は改良、一定規模以上の工場又は事業場の新設や増設をする場合には、届出が必要となります。";
-            badges = ["岡山港", "宇野港", "水島港", "東備港", "児島港", "笠岡港", "下津井港", "牛窓港"];
+          if (law.id === 4) {
+            fixedTextWithCopy = "対象地区ではありません。";
           }
 
           // 3. 海岸法
-          if (law.id === 5 && isOkayama && !addressForPortCoast?.includes("井原市")) {
-            fixedTextWithCopy = "「海岸法」に基づいて指定した一定の区域を海岸保全区域といいます。この区域内では、海岸管理者（県や市町村）が必要に応じて海岸保全施設（堤防や護岸など）を整備するほか、一定の行為（工作物の設置や土地の掘削など）については、許可が必要となる場合があります。";
-            badges = ["東備港", "牛窓港", "岡山港", "山田港", "宇野港", "児島港", "下津井港", "水島港", "笠岡港", "北木島港", "鴻島港", "寒河港", "犬島港", "石島港", "松島港", "豊浦港", "前浦港", "大浦港", "大飛島港", "小飛島港"];
-          }
-          if ((law.id === 4 || law.id === 5) && (!isOkayama || addressForPortCoast?.includes("井原市"))) {
+          if (law.id === 5) {
             fixedTextWithCopy = "対象地区ではありません。";
           }
           if (law.id === 4) {
@@ -599,7 +593,7 @@ export function GeoSearchView() {
           }
           if (law.id === 15 && isHiroshima) {
             additionalButtons.push({
-              label: "自然公園の位置図",
+              label: "広島県の自然公園",
               url: "https://www.pref.hiroshima.lg.jp/soshiki/47/kouikisei.html"
             });
           }
@@ -625,7 +619,19 @@ export function GeoSearchView() {
 
           // 8. 絶滅の恐れがある野生動植物の種の保存に関する法律（常時表示）
           if (law.id === 17) {
-            fixedTextWithCopy = "対象地区ではありません。";
+            // 中国四国地方の県かどうか判定
+            const chushikokuPrefectures = ["岡山県", "広島県", "山口県", "鳥取県", "島根県", "香川県", "愛媛県", "徳島県", "高知県"];
+            const isChushikoku = locationInfo?.prefecture && chushikokuPrefectures.includes(locationInfo.prefecture);
+
+            if (isChushikoku) {
+              fixedTextWithCopy = "中国四国地方環境事務所管内には、種の保存法に基づき指定された生息地等保護区はありません。";
+              additionalButtons.push({
+                label: "参照リンク",
+                url: "https://chushikoku.env.go.jp/procure/page_00068.html"
+              });
+            } else {
+              fixedTextWithCopy = "対象地区ではありません。";
+            }
             additionalButtons.push({
               label: "生息地等保護区",
               url: "https://www.env.go.jp/nature/kisho/hogoku/list.html"
@@ -727,6 +733,27 @@ export function GeoSearchView() {
             />
           );
         })}
+
+        {/* ○○県の太陽光に関する条例 */}
+        {hasSearched && locationInfo?.prefecture && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-semibold text-foreground mb-4">{locationInfo.prefecture}の太陽光に関する条例</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="font-medium text-foreground">{locationInfo.prefecture}の太陽光発電に関する条例を検索</p>
+              </div>
+              <Button
+                onClick={() => {
+                  const query = encodeURIComponent(`${locationInfo.prefecture}　太陽光　条例`);
+                  window.open(`https://www.google.com/search?q=${query}`, "_blank");
+                }}
+                className="shrink-0 ml-4"
+              >
+                Googleで検索
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* 都道府県条例カード（岡山県） */}
         {hasSearched && prefecture === "okayama" && (

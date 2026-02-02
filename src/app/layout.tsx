@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SideNav } from "@/components/SideNav";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { initDb } from "@/db";
 
 const geistSans = Geist({
@@ -26,16 +27,23 @@ export default async function RootLayout({
 }>) {
   await initDb();
   return (
-    <html lang="ja" className="dark">
+    <html lang="ja" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="min-h-screen bg-background">
-          <div className="flex">
-            <SideNav />
-            <main className="min-w-0 flex-1">{children}</main>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <div className="min-h-screen bg-background">
+            <div className="flex">
+              <SideNav />
+              <main className="min-w-0 flex-1">{children}</main>
+            </div>
           </div>
-        </div>
+        </ThemeProvider>
       </body>
     </html>
   );
