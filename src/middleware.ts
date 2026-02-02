@@ -10,6 +10,7 @@ const ALLOWED_IPS = [
   "::1",
   "153.175.16.12",
   "1.73.154.231",
+  "210.155.18.80",
 ];
 
 function getClientIp(request: NextRequest): string | null {
