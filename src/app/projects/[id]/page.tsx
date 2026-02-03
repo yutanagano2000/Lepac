@@ -32,7 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Project, Progress, Comment, Todo } from "@/db/schema";
+import type { Project, Progress, Comment, Todo, ProjectFile } from "@/db/schema";
+import { ProjectFiles } from "@/components/ProjectFiles";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -1489,6 +1490,7 @@ export default function ProjectDetailPage() {
   const [progressList, setProgressList] = useState<Progress[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [files, setFiles] = useState<ProjectFile[]>([]);
   const [newTodoContent, setNewTodoContent] = useState("");
   const [newTodoDueDate, setNewTodoDueDate] = useState<string>("");
   const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
@@ -1521,12 +1523,31 @@ export default function ProjectDetailPage() {
     landowner1: "",
     landowner2: "",
     landowner3: "",
+    // 地権者追加情報
+    landownerAddress1: "",
+    landownerAddress2: "",
+    landownerAddress3: "",
+    inheritanceStatus1: "",
+    inheritanceStatus2: "",
+    inheritanceStatus3: "",
+    correctionRegistration1: "",
+    correctionRegistration2: "",
+    correctionRegistration3: "",
+    mortgageStatus1: "",
+    mortgageStatus2: "",
+    mortgageStatus3: "",
+    // 地目・面積
     landCategory1: "",
     landCategory2: "",
     landCategory3: "",
     landArea1: "",
     landArea2: "",
     landArea3: "",
+    // 環境データ
+    verticalSnowLoad: "",
+    windSpeed: "",
+    // 外部連携
+    dococabiLink: "",
   });
   const [open, setOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -1588,6 +1609,12 @@ export default function ProjectDetailPage() {
       .then(setTodos);
   };
 
+  const fetchFiles = () => {
+    fetch(`/api/projects/${id}/files`)
+      .then((res) => res.json())
+      .then(setFiles);
+  };
+
   const handleDetailUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!project) return;
@@ -1601,12 +1628,31 @@ export default function ProjectDetailPage() {
         landowner1: detailForm.landowner1,
         landowner2: detailForm.landowner2,
         landowner3: detailForm.landowner3,
+        // 地権者追加情報
+        landownerAddress1: detailForm.landownerAddress1,
+        landownerAddress2: detailForm.landownerAddress2,
+        landownerAddress3: detailForm.landownerAddress3,
+        inheritanceStatus1: detailForm.inheritanceStatus1,
+        inheritanceStatus2: detailForm.inheritanceStatus2,
+        inheritanceStatus3: detailForm.inheritanceStatus3,
+        correctionRegistration1: detailForm.correctionRegistration1,
+        correctionRegistration2: detailForm.correctionRegistration2,
+        correctionRegistration3: detailForm.correctionRegistration3,
+        mortgageStatus1: detailForm.mortgageStatus1,
+        mortgageStatus2: detailForm.mortgageStatus2,
+        mortgageStatus3: detailForm.mortgageStatus3,
+        // 地目・面積
         landCategory1: detailForm.landCategory1,
         landCategory2: detailForm.landCategory2,
         landCategory3: detailForm.landCategory3,
         landArea1: detailForm.landArea1,
         landArea2: detailForm.landArea2,
         landArea3: detailForm.landArea3,
+        // 環境データ
+        verticalSnowLoad: detailForm.verticalSnowLoad,
+        windSpeed: detailForm.windSpeed,
+        // 外部連携
+        dococabiLink: detailForm.dococabiLink,
       }),
     });
     setDetailEditOpen(false);
@@ -1621,12 +1667,31 @@ export default function ProjectDetailPage() {
       landowner1: project.landowner1 ?? "",
       landowner2: project.landowner2 ?? "",
       landowner3: project.landowner3 ?? "",
+      // 地権者追加情報
+      landownerAddress1: project.landownerAddress1 ?? "",
+      landownerAddress2: project.landownerAddress2 ?? "",
+      landownerAddress3: project.landownerAddress3 ?? "",
+      inheritanceStatus1: project.inheritanceStatus1 ?? "",
+      inheritanceStatus2: project.inheritanceStatus2 ?? "",
+      inheritanceStatus3: project.inheritanceStatus3 ?? "",
+      correctionRegistration1: project.correctionRegistration1 ?? "",
+      correctionRegistration2: project.correctionRegistration2 ?? "",
+      correctionRegistration3: project.correctionRegistration3 ?? "",
+      mortgageStatus1: project.mortgageStatus1 ?? "",
+      mortgageStatus2: project.mortgageStatus2 ?? "",
+      mortgageStatus3: project.mortgageStatus3 ?? "",
+      // 地目・面積
       landCategory1: project.landCategory1 ?? "",
       landCategory2: project.landCategory2 ?? "",
       landCategory3: project.landCategory3 ?? "",
       landArea1: project.landArea1 ?? "",
       landArea2: project.landArea2 ?? "",
       landArea3: project.landArea3 ?? "",
+      // 環境データ
+      verticalSnowLoad: project.verticalSnowLoad ?? "",
+      windSpeed: project.windSpeed ?? "",
+      // 外部連携
+      dococabiLink: project.dococabiLink ?? "",
     });
     setDetailEditOpen(true);
   };
@@ -1845,6 +1910,7 @@ export default function ProjectDetailPage() {
     fetchProject();
     fetchComments();
     fetchTodos();
+    fetchFiles();
     // generate APIは1回だけ呼び出す（React Strict Modeでの二重実行防止）
     if (!hasGeneratedRef.current) {
       hasGeneratedRef.current = true;
@@ -2344,8 +2410,8 @@ export default function ProjectDetailPage() {
             {sortedTimeline.length === 0 ? (
               <p className="text-sm text-muted-foreground">タイムラインがありません</p>
             ) : (
-              <div className="w-full overflow-x-auto">
-                <div className="flex items-start gap-0 min-w-fit py-4">
+              <div className="w-full">
+                <div className="flex items-start gap-0 py-4">
                   {(() => {
                     // 直近の未完了項目のインデックスを計算
                     const firstPendingIndex = sortedTimeline.findIndex(
@@ -2361,14 +2427,15 @@ export default function ProjectDetailPage() {
                       const isOverdue = !isCompleted && daysUntilDue < 0;
 
                       return (
-                        <div key={item.id} className="flex flex-col items-center flex-1 min-w-[100px]">
+                        <div key={item.id} className="flex flex-col items-center flex-1 min-w-0">
                           {/* 上部：タイトルと編集ボタン */}
-                          <div className="text-center mb-2 px-1">
-                            <div className="flex items-center justify-center gap-1">
+                          <div className="text-center mb-2 px-0.5">
+                            <div className="flex items-center justify-center gap-0.5">
                               <p
-                                className={`text-sm font-medium whitespace-nowrap ${
+                                className={`text-[10px] sm:text-xs font-medium truncate max-w-full ${
                                   isCompleted ? "" : "text-muted-foreground"
                                 }`}
+                                title={item.title}
                               >
                                 {item.title}
                               </p>
@@ -2378,9 +2445,9 @@ export default function ProjectDetailPage() {
                                   const p = progressList.find((pr) => pr.id === item.id);
                                   if (p) openEditDialog(p);
                                 }}
-                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
                               >
-                                <Pencil className="h-3 w-3" />
+                                <Pencil className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                               </button>
                             </div>
                           </div>
@@ -2401,7 +2468,7 @@ export default function ProjectDetailPage() {
 
                             {/* ノード */}
                             <div
-                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${
+                              className={`flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full border-2 ${
                                 isCompleted
                                   ? "border-green-500 bg-green-500"
                                   : isOverdue
@@ -2410,9 +2477,9 @@ export default function ProjectDetailPage() {
                               }`}
                             >
                               {isCompleted ? (
-                                <Check className="h-5 w-5 text-white" />
+                                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                               ) : (
-                                <Circle className={`h-5 w-5 ${isOverdue ? "text-red-500" : "text-muted-foreground"}`} />
+                                <Circle className={`h-3 w-3 sm:h-4 sm:w-4 ${isOverdue ? "text-red-500" : "text-muted-foreground"}`} />
                               )}
                             </div>
 
@@ -2430,17 +2497,17 @@ export default function ProjectDetailPage() {
                           </div>
 
                           {/* 下部：日付と説明、アクションボタン */}
-                          <div className="text-center mt-2 px-1">
-                            <p className="text-sm text-muted-foreground whitespace-nowrap">
+                          <div className="text-center mt-2 px-0.5">
+                            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                               {formatDateJp(item.date)}
                             </p>
                             {item.completedAt && (
-                              <p className={`text-xs ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
+                              <p className={`text-[9px] sm:text-[10px] ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
                                 → {formatDateJp(item.completedAt)}
                               </p>
                             )}
                             {item.description && (
-                              <p className="mt-1 text-xs text-muted-foreground max-w-[90px] truncate" title={item.description}>
+                              <p className="mt-1 text-[9px] sm:text-[10px] text-muted-foreground truncate max-w-full" title={item.description}>
                                 {item.description}
                               </p>
                             )}
@@ -2483,6 +2550,179 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </div>
+
+          {/* TODO（この日までに行うリマインダー） */}
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <ListTodo className="h-4 w-4 text-muted-foreground" />
+                <h2 className="font-semibold">TODO</h2>
+              </div>
+              <form onSubmit={handleTodoSubmit} className="space-y-3">
+                <div className="flex gap-2 flex-wrap items-end">
+                  <div className="flex-1 min-w-[200px] space-y-1">
+                    <Label htmlFor="new-todo-content" className="text-xs text-muted-foreground">内容</Label>
+                    <Textarea
+                      id="new-todo-content"
+                      value={newTodoContent}
+                      onChange={(e) => setNewTodoContent(e.target.value)}
+                      placeholder="この日までに行うことを入力..."
+                      rows={2}
+                      className="resize-y"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">期日</Label>
+                    <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "w-[180px] justify-start text-left font-normal",
+                            !newTodoSelectedDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newTodoSelectedDate
+                            ? formatDateJp(newTodoSelectedDate)
+                            : "期日を選択"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={newTodoSelectedDate}
+                          onSelect={(date) => {
+                            setNewTodoSelectedDate(date);
+                            if (date) {
+                              const y = date.getFullYear();
+                              const m = String(date.getMonth() + 1).padStart(2, "0");
+                              const d = String(date.getDate()).padStart(2, "0");
+                              setNewTodoDueDate(`${y}-${m}-${d}`);
+                              setNewTodoCalendarOpen(false);
+                            }
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <Button type="submit" size="default" disabled={!newTodoContent.trim() || !newTodoDueDate}>
+                    追加
+                  </Button>
+                </div>
+              </form>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {todos.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">TODOはありません</p>
+                ) : (
+                  todos.map((todo) => (
+                    <div
+                      key={todo.id}
+                      className={cn(
+                        "flex items-start justify-between gap-2 p-3 rounded-lg border border-border",
+                        todo.completedAt ? "bg-muted/30 opacity-90" : "bg-muted/50"
+                      )}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className={cn("text-sm", todo.completedAt && "line-through text-muted-foreground")}>
+                          {todo.content}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          期日: {formatDateJp(new Date(todo.dueDate + "T00:00:00"))}
+                          {todo.completedAt && (
+                            <>
+                              {" · "}
+                              完了: {formatDateJp(new Date(todo.completedAt))}
+                            </>
+                          )}
+                        </p>
+                        {/* メッセージツリー表示 */}
+                        {todo.completedMemo && (
+                          <div className="mt-2 space-y-1">
+                            {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
+                              <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                <div className="flex flex-col items-center">
+                                  <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
+                                  {idx < arr.length - 1 && (
+                                    <div className="w-0.5 h-full bg-zinc-300 dark:bg-zinc-700 min-h-[16px]"></div>
+                                  )}
+                                </div>
+                                <div className="flex-1 p-2 rounded bg-background/50 border border-border/50">
+                                  <p className="text-xs">{msg.message}</p>
+                                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                    {formatDateJp(new Date(msg.createdAt))}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {todo.completedAt ? (
+                          <div className="flex flex-col gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => openAddMessageDialog(todo)}
+                              title="メッセージを追加"
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              メモ
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => handleTodoReopen(todo)}
+                            >
+                              再開
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => openTodoEditDialog(todo)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-green-600 hover:text-green-700"
+                              onClick={() => openTodoCompleteDialog(todo)}
+                              title="完了"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => handleTodoDelete(todo.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* タブ UI */}
           <Tabs defaultValue="details" className="w-full" value={activeTab} onValueChange={setActiveTab}>
@@ -2606,10 +2846,112 @@ export default function ProjectDetailPage() {
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">地権者</span>
                     <div className="col-span-2 flex items-start gap-2">
-                      <div className="space-y-1 text-sm flex-1">
-                        {project.landowner1 && <div>{project.landowner1}</div>}
-                        {project.landowner2 && <div>{project.landowner2}</div>}
-                        {project.landowner3 && <div>{project.landowner3}</div>}
+                      <div className="space-y-3 text-sm flex-1">
+                        {/* 地権者1 */}
+                        {project.landowner1 && (
+                          <div className="p-2 rounded-lg bg-muted/30 space-y-1">
+                            <div className="font-medium">{project.landowner1}</div>
+                            {project.landownerAddress1 && (
+                              <div className="text-xs text-muted-foreground">住所: {project.landownerAddress1}</div>
+                            )}
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.inheritanceStatus1 === "有" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
+                                project.inheritanceStatus1 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                相続: {project.inheritanceStatus1 || "未確認"}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.correctionRegistration1 === "有" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
+                                project.correctionRegistration1 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                更正登記: {project.correctionRegistration1 || "未確認"}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.mortgageStatus1 === "有" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                project.mortgageStatus1 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                抵当権: {project.mortgageStatus1 || "未確認"}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {/* 地権者2 */}
+                        {project.landowner2 && (
+                          <div className="p-2 rounded-lg bg-muted/30 space-y-1">
+                            <div className="font-medium">{project.landowner2}</div>
+                            {project.landownerAddress2 && (
+                              <div className="text-xs text-muted-foreground">住所: {project.landownerAddress2}</div>
+                            )}
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.inheritanceStatus2 === "有" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
+                                project.inheritanceStatus2 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                相続: {project.inheritanceStatus2 || "未確認"}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.correctionRegistration2 === "有" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
+                                project.correctionRegistration2 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                更正登記: {project.correctionRegistration2 || "未確認"}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.mortgageStatus2 === "有" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                project.mortgageStatus2 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                抵当権: {project.mortgageStatus2 || "未確認"}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {/* 地権者3 */}
+                        {project.landowner3 && (
+                          <div className="p-2 rounded-lg bg-muted/30 space-y-1">
+                            <div className="font-medium">{project.landowner3}</div>
+                            {project.landownerAddress3 && (
+                              <div className="text-xs text-muted-foreground">住所: {project.landownerAddress3}</div>
+                            )}
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.inheritanceStatus3 === "有" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
+                                project.inheritanceStatus3 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                相続: {project.inheritanceStatus3 || "未確認"}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.correctionRegistration3 === "有" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" :
+                                project.correctionRegistration3 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                更正登記: {project.correctionRegistration3 || "未確認"}
+                              </span>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full",
+                                project.mortgageStatus3 === "有" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                                project.mortgageStatus3 === "無" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                                "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                              )}>
+                                抵当権: {project.mortgageStatus3 || "未確認"}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         {!project.landowner1 && !project.landowner2 && !project.landowner3 && (
                           <span>未登録</span>
                         )}
@@ -2683,6 +3025,42 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   </div>
+                  {/* 環境データ */}
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">環境データ</span>
+                    <div className="col-span-2 space-y-1 text-sm">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">垂直積雪量:</span>
+                          <span className="font-medium">{project.verticalSnowLoad || "未登録"}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">風速:</span>
+                          <span className="font-medium">{project.windSpeed || "未登録"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* どこキャビ連携 */}
+                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                    <span className="text-sm font-medium text-muted-foreground">どこキャビ</span>
+                    <div className="col-span-2 text-sm">
+                      {project.dococabiLink ? (
+                        <Button variant="outline" size="sm" asChild className="h-8">
+                          <a
+                            href={project.dococabiLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="h-3 w-3 mr-2" />
+                            どこキャビを開く
+                          </a>
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">未登録</span>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex justify-end pt-2">
                     <Button variant="outline" size="sm" onClick={openDetailEditDialog}>
                       <Pencil className="h-4 w-4 mr-2" />
@@ -2692,176 +3070,11 @@ export default function ProjectDetailPage() {
                 </CardContent>
               </Card>
 
-              {/* TODO（この日までに行うリマインダー） */}
+              {/* ファイル */}
               <Card className="mt-6">
-                <CardContent className="pt-6 space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <ListTodo className="h-4 w-4 text-muted-foreground" />
-                    <h2 className="font-semibold">TODO</h2>
-                  </div>
-                  <form onSubmit={handleTodoSubmit} className="space-y-3">
-                    <div className="flex gap-2 flex-wrap items-end">
-                      <div className="flex-1 min-w-[200px] space-y-1">
-                        <Label htmlFor="new-todo-content" className="text-xs text-muted-foreground">内容</Label>
-                        <Textarea
-                          id="new-todo-content"
-                          value={newTodoContent}
-                          onChange={(e) => setNewTodoContent(e.target.value)}
-                          placeholder="この日までに行うことを入力..."
-                          rows={2}
-                          className="resize-y"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">期日</Label>
-                        <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className={cn(
-                                "w-[180px] justify-start text-left font-normal",
-                                !newTodoSelectedDate && "text-muted-foreground"
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {newTodoSelectedDate
-                                ? formatDateJp(newTodoSelectedDate)
-                                : "期日を選択"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={newTodoSelectedDate}
-                              onSelect={(date) => {
-                                setNewTodoSelectedDate(date);
-                                if (date) {
-                                  const y = date.getFullYear();
-                                  const m = String(date.getMonth() + 1).padStart(2, "0");
-                                  const d = String(date.getDate()).padStart(2, "0");
-                                  setNewTodoDueDate(`${y}-${m}-${d}`);
-                                  setNewTodoCalendarOpen(false);
-                                }
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <Button type="submit" size="default" disabled={!newTodoContent.trim() || !newTodoDueDate}>
-                        追加
-                      </Button>
-                    </div>
-                  </form>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {todos.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">TODOはありません</p>
-                    ) : (
-                      todos.map((todo) => (
-                        <div
-                          key={todo.id}
-                          className={cn(
-                            "flex items-start justify-between gap-2 p-3 rounded-lg border border-border",
-                            todo.completedAt ? "bg-muted/30 opacity-90" : "bg-muted/50"
-                          )}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className={cn("text-sm", todo.completedAt && "line-through text-muted-foreground")}>
-                              {todo.content}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              期日: {formatDateJp(new Date(todo.dueDate + "T00:00:00"))}
-                              {todo.completedAt && (
-                                <>
-                                  {" · "}
-                                  完了: {formatDateJp(new Date(todo.completedAt))}
-                                </>
-                              )}
-                            </p>
-                            {/* メッセージツリー表示 */}
-                            {todo.completedMemo && (
-                              <div className="mt-2 space-y-1">
-                                {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
-                                  <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
-                                    <div className="flex flex-col items-center">
-                                      <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
-                                      {idx < arr.length - 1 && (
-                                        <div className="w-0.5 h-full bg-zinc-300 dark:bg-zinc-700 min-h-[16px]"></div>
-                                      )}
-                                    </div>
-                                    <div className="flex-1 p-2 rounded bg-background/50 border border-border/50">
-                                      <p className="text-xs">{msg.message}</p>
-                                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                                        {formatDateJp(new Date(msg.createdAt))}
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex gap-1 shrink-0">
-                            {todo.completedAt ? (
-                              <div className="flex flex-col gap-1">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => openAddMessageDialog(todo)}
-                                  title="メッセージを追加"
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  メモ
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => handleTodoReopen(todo)}
-                                >
-                                  再開
-                                </Button>
-                              </div>
-                            ) : (
-                              <>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => openTodoEditDialog(todo)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-green-600 hover:text-green-700"
-                                  onClick={() => openTodoCompleteDialog(todo)}
-                                  title="完了"
-                                >
-                                  <CheckCircle2 className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-destructive hover:text-destructive"
-                                  onClick={() => handleTodoDelete(todo.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                <CardContent className="pt-6">
+                  <h3 className="font-semibold mb-4">ファイル</h3>
+                  <ProjectFiles projectId={Number(id)} initialFiles={files} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -2950,7 +3163,7 @@ export default function ProjectDetailPage() {
 
           {/* 詳細情報編集ダイアログ */}
           <Dialog open={detailEditOpen} onOpenChange={setDetailEditOpen}>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>詳細情報を編集</DialogTitle>
               </DialogHeader>
@@ -2977,24 +3190,172 @@ export default function ProjectDetailPage() {
                     placeholder="例: 36.6485, 138.1942（スラッシュ区切りも可）"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <Label>地権者</Label>
-                  <div className="space-y-2">
+                  {/* 地権者1 */}
+                  <div className="p-3 border rounded-lg space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">地権者1</div>
                     <Input
                       value={detailForm.landowner1}
                       onChange={(e) => setDetailForm({ ...detailForm, landowner1: e.target.value })}
-                      placeholder="地権者1"
+                      placeholder="氏名"
                     />
+                    <Input
+                      value={detailForm.landownerAddress1}
+                      onChange={(e) => setDetailForm({ ...detailForm, landownerAddress1: e.target.value })}
+                      placeholder="住所"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select
+                        value={detailForm.inheritanceStatus1}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, inheritanceStatus1: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="相続" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">相続: 有</SelectItem>
+                          <SelectItem value="無">相続: 無</SelectItem>
+                          <SelectItem value="未確認">相続: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={detailForm.correctionRegistration1}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, correctionRegistration1: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="更正登記" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">更正登記: 有</SelectItem>
+                          <SelectItem value="無">更正登記: 無</SelectItem>
+                          <SelectItem value="未確認">更正登記: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={detailForm.mortgageStatus1}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, mortgageStatus1: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="抵当権" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">抵当権: 有</SelectItem>
+                          <SelectItem value="無">抵当権: 無</SelectItem>
+                          <SelectItem value="未確認">抵当権: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {/* 地権者2 */}
+                  <div className="p-3 border rounded-lg space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">地権者2</div>
                     <Input
                       value={detailForm.landowner2}
                       onChange={(e) => setDetailForm({ ...detailForm, landowner2: e.target.value })}
-                      placeholder="地権者2"
+                      placeholder="氏名"
                     />
+                    <Input
+                      value={detailForm.landownerAddress2}
+                      onChange={(e) => setDetailForm({ ...detailForm, landownerAddress2: e.target.value })}
+                      placeholder="住所"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select
+                        value={detailForm.inheritanceStatus2}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, inheritanceStatus2: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="相続" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">相続: 有</SelectItem>
+                          <SelectItem value="無">相続: 無</SelectItem>
+                          <SelectItem value="未確認">相続: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={detailForm.correctionRegistration2}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, correctionRegistration2: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="更正登記" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">更正登記: 有</SelectItem>
+                          <SelectItem value="無">更正登記: 無</SelectItem>
+                          <SelectItem value="未確認">更正登記: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={detailForm.mortgageStatus2}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, mortgageStatus2: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="抵当権" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">抵当権: 有</SelectItem>
+                          <SelectItem value="無">抵当権: 無</SelectItem>
+                          <SelectItem value="未確認">抵当権: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {/* 地権者3 */}
+                  <div className="p-3 border rounded-lg space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">地権者3</div>
                     <Input
                       value={detailForm.landowner3}
                       onChange={(e) => setDetailForm({ ...detailForm, landowner3: e.target.value })}
-                      placeholder="地権者3"
+                      placeholder="氏名"
                     />
+                    <Input
+                      value={detailForm.landownerAddress3}
+                      onChange={(e) => setDetailForm({ ...detailForm, landownerAddress3: e.target.value })}
+                      placeholder="住所"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select
+                        value={detailForm.inheritanceStatus3}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, inheritanceStatus3: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="相続" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">相続: 有</SelectItem>
+                          <SelectItem value="無">相続: 無</SelectItem>
+                          <SelectItem value="未確認">相続: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={detailForm.correctionRegistration3}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, correctionRegistration3: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="更正登記" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">更正登記: 有</SelectItem>
+                          <SelectItem value="無">更正登記: 無</SelectItem>
+                          <SelectItem value="未確認">更正登記: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={detailForm.mortgageStatus3}
+                        onValueChange={(value) => setDetailForm({ ...detailForm, mortgageStatus3: value })}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="抵当権" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="有">抵当権: 有</SelectItem>
+                          <SelectItem value="無">抵当権: 無</SelectItem>
+                          <SelectItem value="未確認">抵当権: 未確認</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -3083,6 +3444,40 @@ export default function ProjectDetailPage() {
                       </span>
                     </div>
                   </div>
+                </div>
+                {/* 環境データ */}
+                <div className="space-y-2">
+                  <Label>環境データ</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="verticalSnowLoad" className="text-xs text-muted-foreground">垂直積雪量</Label>
+                      <Input
+                        id="verticalSnowLoad"
+                        value={detailForm.verticalSnowLoad}
+                        onChange={(e) => setDetailForm({ ...detailForm, verticalSnowLoad: e.target.value })}
+                        placeholder="例: 30cm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="windSpeed" className="text-xs text-muted-foreground">風速</Label>
+                      <Input
+                        id="windSpeed"
+                        value={detailForm.windSpeed}
+                        onChange={(e) => setDetailForm({ ...detailForm, windSpeed: e.target.value })}
+                        placeholder="例: 34m/s"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {/* どこキャビ連携 */}
+                <div className="space-y-2">
+                  <Label htmlFor="dococabiLink">どこキャビ連携URL</Label>
+                  <Input
+                    id="dococabiLink"
+                    value={detailForm.dococabiLink}
+                    onChange={(e) => setDetailForm({ ...detailForm, dococabiLink: e.target.value })}
+                    placeholder="https://..."
+                  />
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setDetailEditOpen(false)}>

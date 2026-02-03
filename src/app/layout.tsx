@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SideNav } from "@/components/SideNav";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { FeedbackInput } from "@/components/FeedbackInput";
 import { initDb } from "@/db";
 
 const geistSans = Geist({
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ALAN - 法令検索アプリ",
-  description: "座標と都道府県を入力して、工事に関連する法令を検索します。",
+  title: "ALAN - 建設業界向けアプリ",
+  description: "建設業界向けの案件管理・TODO管理・法令検索アプリケーション",
 };
 
 export default async function RootLayout({
@@ -40,7 +41,10 @@ export default async function RootLayout({
           <div className="min-h-screen bg-background">
             <div className="flex">
               <SideNav />
-              <main className="min-w-0 flex-1">{children}</main>
+              <main className="min-w-0 flex-1">
+                {children}
+                <FeedbackInput />
+              </main>
             </div>
           </div>
         </ThemeProvider>

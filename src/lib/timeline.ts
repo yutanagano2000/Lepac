@@ -54,20 +54,16 @@ export const WORKFLOW_PHASES = [
   },
   {
     key: "submission_decision",
-    title: "提出先の判断",
+    title: "提出可否の判断",
     duration: 0,
     unit: "business_days",
     phase: "02 判断",
     subPhases: [
       {
-        key: "decision_branch",
-        title: "提出先分岐",
-        type: "branch",
-        branchCriteria: "判断基準：「確実な案件」または「写真より現地の状態が良い」⇒双日優先",
-        branches: [
-          { name: "エクソル", condition: "その他の条件" },
-          { name: "双日", condition: "確実な案件または現地の状態が良い場合" }
-        ]
+        key: "decision_check",
+        title: "提出可否チェック",
+        note: "大規模造成が必要な場合はこの時点でNG",
+        responsibles: ['事務', '設計'] as const
       }
     ]
   },
@@ -164,6 +160,7 @@ export interface WorkflowSubPhase {
   duration?: number; // 工数
   unit?: 'business_days' | 'calendar_days'; // 工数の単位
   responsibles?: ReadonlyArray<ResponsibleType>; // 担当者
+  note?: string; // 注記（警告テキストなど）
 }
 
 // ワークフロー用TimelinePhase（フェーズ情報付き）

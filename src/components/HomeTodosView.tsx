@@ -12,6 +12,7 @@ import {
   ListTodo,
   CheckCircle2,
   LayoutDashboard,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,13 +25,15 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDateJp } from "@/lib/timeline";
-import { parseTodoMessages } from "@/lib/utils";
+import { parseTodoMessages, cn } from "@/lib/utils";
 import { HomeProjectSearch } from "@/components/HomeProjectSearch";
 
 export type TodoWithProject = {
   id: number;
-  projectId: number;
+  projectId: number | null; // nullの場合は案件に紐づかないプレーンTODO
   content: string;
   dueDate: string;
   createdAt: string;
@@ -41,6 +44,7 @@ export type TodoWithProject = {
 
 interface HomeTodosViewProps {
   initialTodos: TodoWithProject[];
+  showCreateForm?: boolean; // プレーンTODO作成フォームを表示するか（TODO画面のみ）
 }
 
 function getDueDateInfo(dueDateStr: string) {
@@ -58,10 +62,17 @@ function getDueDateInfo(dueDateStr: string) {
   return { group: "later" as const, label: `あと${diffDays}日`, diffDays };
 }
 
-export function HomeTodosView({ initialTodos }: HomeTodosViewProps) {
+export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodosViewProps) {
   const [todos, setTodos] = useState<TodoWithProject[]>(initialTodos);
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+
+  // プレーンTODO作成フォーム用のstate
+  const [newTodoContent, setNewTodoContent] = useState("");
+  const [newTodoDueDate, setNewTodoDueDate] = useState("");
+  const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
+  const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   // 日本時間で現在日時を取得
   const nowJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
@@ -129,54 +140,93 @@ export function HomeTodosView({ initialTodos }: HomeTodosViewProps) {
     fetchTodos();
   };
 
+  // プレーンTODOを作成
+  const handleCreatePlainTodo = async () => {
+    if (!newTodoContent.trim() || !newTodoDueDate) return;
+    setIsCreating(true);
+    try {
+      await fetch("/api/todos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: newTodoContent.trim(),
+          dueDate: newTodoDueDate,
+        }),
+      });
+      setNewTodoContent("");
+      setNewTodoDueDate("");
+      setNewTodoSelectedDate(undefined);
+      fetchTodos();
+    } catch (err) {
+      console.error("TODO作成に失敗しました:", err);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const TodoItem = ({ todo }: { todo: TodoWithProject }) => {
     const info = getDueDateInfo(todo.dueDate);
     const dueDateFormatted = formatDateJp(new Date(todo.dueDate + "T00:00:00"));
     const isCompleted = !!todo.completedAt;
+    const hasProject = todo.projectId !== null;
+
+    const innerContent = (
+      <>
+        <p className={`text-sm font-medium ${hasProject ? "group-hover:underline" : ""} truncate ${isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
+          {todo.content}
+        </p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <span className="text-xs text-muted-foreground">
+            {dueDateFormatted}
+            {!isCompleted && <span className="ml-1">({info.label})</span>}
+            {isCompleted && todo.completedAt && (
+              <span className="ml-1">· 完了: {formatDateJp(new Date(todo.completedAt))}</span>
+            )}
+          </span>
+          {todo.managementNumber ? (
+            <span className="text-xs text-primary font-medium">
+              {todo.managementNumber}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground/70 italic">
+              個人TODO
+            </span>
+          )}
+        </div>
+        {todo.completedMemo && (
+          <div className="mt-2 space-y-1">
+            {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
+              <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <div className="flex flex-col items-center">
+                  <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
+                  {idx < arr.length - 1 && (
+                    <div className="w-0.5 h-full bg-zinc-300 dark:bg-zinc-700 min-h-[16px]"></div>
+                  )}
+                </div>
+                <div className="flex-1 p-2 rounded bg-muted/50 border border-border/50">
+                  <p className="text-xs">{msg.message}</p>
+                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                    {formatDateJp(new Date(msg.createdAt))}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    );
+
     return (
       <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
-        <Link
-          href={`/projects/${todo.projectId}`}
-          className="flex-1 min-w-0 group"
-        >
-          <p className={`text-sm font-medium group-hover:underline truncate ${isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
-            {todo.content}
-          </p>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <span className="text-xs text-muted-foreground">
-              {dueDateFormatted}
-              {!isCompleted && <span className="ml-1">({info.label})</span>}
-              {isCompleted && todo.completedAt && (
-                <span className="ml-1">· 完了: {formatDateJp(new Date(todo.completedAt))}</span>
-              )}
-            </span>
-            {todo.managementNumber && (
-              <span className="text-xs text-primary font-medium">
-                {todo.managementNumber}
-              </span>
-            )}
+        {hasProject ? (
+          <Link href={`/projects/${todo.projectId}`} className="flex-1 min-w-0 group">
+            {innerContent}
+          </Link>
+        ) : (
+          <div className="flex-1 min-w-0">
+            {innerContent}
           </div>
-          {todo.completedMemo && (
-            <div className="mt-2 space-y-1">
-              {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
-                <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <div className="flex flex-col items-center">
-                    <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
-                    {idx < arr.length - 1 && (
-                      <div className="w-0.5 h-full bg-zinc-300 dark:bg-zinc-700 min-h-[16px]"></div>
-                    )}
-                  </div>
-                  <div className="flex-1 p-2 rounded bg-muted/50 border border-border/50">
-                    <p className="text-xs">{msg.message}</p>
-                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                      {formatDateJp(new Date(msg.createdAt))}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Link>
+        )}
         <div className="flex items-center gap-1 shrink-0">
           {isCompleted ? (
             <Button
@@ -203,11 +253,13 @@ export function HomeTodosView({ initialTodos }: HomeTodosViewProps) {
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                <Link href={`/projects/${todo.projectId}`}>
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+              {hasProject && (
+                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                  <Link href={`/projects/${todo.projectId}`}>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -333,6 +385,76 @@ export function HomeTodosView({ initialTodos }: HomeTodosViewProps) {
               </CardContent>
             </Card>
           </div>
+
+          {/* プレーンTODO作成フォーム（TODO画面のみ） */}
+          {showCreateForm && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  TODOを追加
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  案件に紐づかないTODOを作成できます
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Input
+                    placeholder="TODOの内容を入力"
+                    value={newTodoContent}
+                    onChange={(e) => setNewTodoContent(e.target.value)}
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                        handleCreatePlainTodo();
+                      }
+                    }}
+                  />
+                  <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full sm:w-[180px] justify-start text-left font-normal",
+                          !newTodoSelectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTodoSelectedDate
+                          ? formatDateJp(newTodoSelectedDate)
+                          : "期日を選択"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={newTodoSelectedDate}
+                        onSelect={(date) => {
+                          setNewTodoSelectedDate(date);
+                          if (date) {
+                            const y = date.getFullYear();
+                            const m = String(date.getMonth() + 1).padStart(2, "0");
+                            const d = String(date.getDate()).padStart(2, "0");
+                            setNewTodoDueDate(`${y}-${m}-${d}`);
+                            setNewTodoCalendarOpen(false);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Button
+                    onClick={handleCreatePlainTodo}
+                    disabled={!newTodoContent.trim() || !newTodoDueDate || isCreating}
+                  >
+                    {isCreating ? "作成中..." : "追加"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3">

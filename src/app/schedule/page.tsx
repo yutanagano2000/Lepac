@@ -431,37 +431,27 @@ export default function SchedulePage() {
                                 </div>
 
                                 <div className="flex-1 min-w-0">
-                                  {subPhase.type === 'branch' ? (
-                                    <div className="space-y-3">
-                                      <p className="text-sm font-medium">{subPhase.title}</p>
-                                      <div className="flex flex-wrap gap-2">
-                                        {subPhase.branches?.map((branch, branchIndex) => (
-                                          <div key={branchIndex} className="flex items-center gap-2 text-sm bg-blue-50 dark:bg-blue-950 px-3 py-1.5 rounded-lg">
-                                            <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>
-                                            <span className="font-medium">{branch.name}</span>
-                                            <span className="text-muted-foreground">({branch.condition})</span>
-                                          </div>
-                                        ))}
-                                      </div>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                      <span className="text-sm font-medium">{subPhase.title}</span>
+                                      <ResponsibleBadges responsibles={subPhase.responsibles} />
                                     </div>
-                                  ) : (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-3 flex-wrap">
-                                        <span className="text-sm font-medium">{subPhase.title}</span>
-                                        <ResponsibleBadges responsibles={subPhase.responsibles} />
-                                      </div>
-                                      {subPhase.date && (
-                                        <p className="text-sm">
-                                          <span className="text-primary font-medium">予定: {formatDateJp(subPhase.date)}</span>
-                                          {subPhase.duration !== undefined && subPhase.duration > 0 && (
-                                            <span className="text-muted-foreground ml-2">
-                                              ({subPhase.duration}営業日)
-                                            </span>
-                                          )}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
+                                    {subPhase.note && (
+                                      <p className="text-sm text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-950 px-3 py-1.5 rounded-lg">
+                                        {subPhase.note}
+                                      </p>
+                                    )}
+                                    {subPhase.date && (
+                                      <p className="text-sm">
+                                        <span className="text-primary font-medium">予定: {formatDateJp(subPhase.date)}</span>
+                                        {subPhase.duration !== undefined && subPhase.duration > 0 && (
+                                          <span className="text-muted-foreground ml-2">
+                                            ({subPhase.duration}営業日)
+                                          </span>
+                                        )}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ))}

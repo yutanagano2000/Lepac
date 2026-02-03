@@ -22,3 +22,29 @@ export async function GET() {
     .orderBy(asc(todos.dueDate));
   return NextResponse.json(rows);
 }
+
+// プレーンなTODOを作成（案件に紐づかない）
+export async function POST(request: Request) {
+  const body = await request.json();
+  const content = body.content?.trim() ?? "";
+  const dueDate = body.dueDate ?? "";
+
+  if (!content || !dueDate) {
+    return NextResponse.json(
+      { error: "content and dueDate are required" },
+      { status: 400 }
+    );
+  }
+
+  const [result] = await db
+    .insert(todos)
+    .values({
+      projectId: null, // 案件に紐づかない
+      content,
+      dueDate,
+      createdAt: new Date().toISOString(),
+    })
+    .returning();
+
+  return NextResponse.json(result);
+}

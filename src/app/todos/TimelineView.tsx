@@ -257,17 +257,17 @@ export default function TimelineView({ projects }: TimelineViewProps) {
           {/* Timeline Table */}
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="w-full overflow-hidden">
+                <table className="w-full table-fixed">
                   <thead>
                     <tr className="border-b">
-                      <th className="sticky left-0 bg-card z-10 px-2 py-3 text-left font-medium text-muted-foreground min-w-[180px]">
+                      <th className="sticky left-0 bg-card z-10 px-2 py-3 text-left font-medium text-muted-foreground w-[140px]">
                         <Popover open={filterOpen} onOpenChange={setFilterOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               variant="ghost"
                               className={cn(
-                                "h-auto p-2 font-medium text-muted-foreground hover:text-foreground justify-start gap-2",
+                                "h-auto p-2 font-semibold text-muted-foreground hover:text-foreground justify-start gap-2 text-sm",
                                 isFiltered && "text-primary"
                               )}
                             >
@@ -275,7 +275,7 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                               案件
                               <ChevronDown className="h-3 w-3" />
                               {isFiltered && (
-                                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                                   {selectedProjectIds.size}
                                 </Badge>
                               )}
@@ -357,9 +357,10 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                       {PHASES.map((phase) => (
                         <th
                           key={phase.key}
-                          className="px-3 py-4 text-center font-medium text-muted-foreground min-w-[90px] text-sm whitespace-nowrap"
+                          className="px-0 py-3 text-center font-semibold text-muted-foreground text-xs"
+                          title={phase.title}
                         >
-                          {phase.title}
+                          <span className="block truncate leading-tight">{phase.title}</span>
                         </th>
                       ))}
                     </tr>
@@ -369,7 +370,7 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                       <tr>
                         <td
                           colSpan={PHASES.length + 1}
-                          className="px-4 py-8 text-center text-muted-foreground"
+                          className="px-4 py-8 text-center text-muted-foreground text-base"
                         >
                           案件が見つかりません
                         </td>
@@ -382,43 +383,42 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                             key={project.id}
                             className="border-b hover:bg-muted/30 transition-colors"
                           >
-                            <td className="sticky left-0 bg-card z-10 px-4 py-4">
+                            <td className="sticky left-0 bg-card z-10 px-2 py-3 w-[140px]">
                               <Link
                                 href={`/projects/${project.id}`}
-                                className="group flex items-center gap-3"
+                                className="group flex items-center gap-1"
                               >
-                                <div>
-                                  <p className="text-base font-semibold group-hover:underline">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-bold group-hover:underline truncate">
                                     {project.managementNumber}
                                   </p>
-                                  <p className="text-sm text-muted-foreground truncate max-w-[140px]">
+                                  <p className="text-xs text-muted-foreground truncate">
                                     {project.client}
                                   </p>
                                 </div>
-                                <ChevronRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                               </Link>
                             </td>
                             {PHASES.map((phase, index) => {
                               const phaseStatus = getPhaseStatus(project, phase.title);
                               const isCompleted = phaseStatus.status === "completed";
                               const isCurrent = index === currentPhaseIndex;
-                              const isPast = index < currentPhaseIndex;
 
                               return (
                                 <td
                                   key={phase.key}
-                                  className="px-3 py-4 text-center"
+                                  className="px-0 py-2 text-center"
                                 >
                                   <button
                                     onClick={() => openEditDialog(project, phase)}
                                     className={cn(
-                                      "group relative w-full flex flex-col items-center gap-1.5 p-2 rounded hover:bg-muted/50 transition-colors",
+                                      "group relative w-full flex flex-col items-center gap-1 p-1 rounded hover:bg-muted/50 transition-colors",
                                     )}
                                   >
                                     {/* Progress indicator */}
                                     <div
                                       className={cn(
-                                        "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+                                        "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
                                         isCompleted && "bg-green-500 text-white",
                                         isCurrent && !isCompleted && "bg-blue-500 text-white",
                                         !isCompleted && !isCurrent && "bg-zinc-200 dark:bg-zinc-700"
@@ -429,7 +429,7 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                                       ) : isCurrent ? (
                                         <Clock className="h-4 w-4" />
                                       ) : (
-                                        <span className="text-xs text-muted-foreground font-medium">
+                                        <span className="text-xs text-muted-foreground font-bold">
                                           {index + 1}
                                         </span>
                                       )}
@@ -437,7 +437,7 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                                     {/* Date */}
                                     <span
                                       className={cn(
-                                        "text-sm font-medium",
+                                        "text-xs font-semibold truncate w-full",
                                         isCompleted
                                           ? "text-green-600 dark:text-green-400"
                                           : "text-muted-foreground"
@@ -446,7 +446,7 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                                       {phaseStatus.date ? formatDateShort(phaseStatus.date) : "-"}
                                     </span>
                                     {/* Edit icon on hover */}
-                                    <Pencil className="absolute top-1 right-1 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <Pencil className="absolute top-0 right-0 h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                                   </button>
                                 </td>
                               );
