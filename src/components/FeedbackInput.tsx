@@ -72,8 +72,8 @@ export function FeedbackInput() {
         </div>
       )}
 
-      {/* フィードバック入力エリア */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      {/* フィードバック入力エリア - サイドバー(w-72)を避ける */}
+      <div className="fixed bottom-0 left-72 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-4xl mx-auto px-4 py-3">
           {isOpen ? (
             <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">

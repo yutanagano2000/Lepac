@@ -32,7 +32,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("ユーザー名またはパスワードが正しくありません");
       } else {
-        router.push("/projects");
+        router.push("/");
         router.refresh();
       }
     } catch (err) {
@@ -46,7 +46,7 @@ export default function LoginPage() {
     setLineLoading(true);
     setError("");
     try {
-      await signIn("line", { callbackUrl: "/projects" });
+      await signIn("line", { callbackUrl: "/" });
     } catch (err) {
       setError("LINE認証中にエラーが発生しました");
       setLineLoading(false);

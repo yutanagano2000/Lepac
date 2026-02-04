@@ -13,7 +13,7 @@ export const authConfig = {
                          nextUrl.pathname.startsWith("/api/register-initial-user");
 
       if (isLoginPage) {
-        if (isLoggedIn) return Response.redirect(new URL("/projects", nextUrl));
+        if (isLoggedIn) return Response.redirect(new URL("/", nextUrl));
         return true;
       }
 

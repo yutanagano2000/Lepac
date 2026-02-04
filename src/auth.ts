@@ -45,47 +45,63 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
     async signIn({ user, account, profile }) {
+      console.log("[LINE Auth] signIn callback started", { provider: account?.provider });
+
       // LINE認証の場合、ユーザーをDBに登録/更新
-      if (account?.provider === "line" && profile) {
-        const lineId = profile.sub as string;
-        const name = user.name || profile.name as string || "LINE User";
-        const image = user.image || profile.picture as string;
+      if (account?.provider === "line") {
+        try {
+          const lineId = (profile?.sub as string) || user.id || "";
+          if (!lineId) {
+            console.error("[LINE Auth] No lineId found");
+            return false;
+          }
+          const name = user.name || (profile?.name as string) || "LINE User";
+          const image = user.image || (profile?.picture as string);
 
-        // 既存ユーザーを検索
-        const [existingUser] = await db
-          .select()
-          .from(users)
-          .where(eq(users.lineId, lineId));
+          console.log("[LINE Auth] Processing user:", { lineId, name });
 
-        if (existingUser) {
-          // 既存ユーザーの情報を更新
-          await db
-            .update(users)
-            .set({ name, image })
-            .where(eq(users.lineId, lineId));
+          // 既存ユーザーを検索
+          const [existingUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.lineId as any, lineId));
 
-          // user.idを既存のDBのIDに設定
-          user.id = String(existingUser.id);
-          (user as any).username = existingUser.username;
-        } else {
-          // 新規ユーザーを作成
-          const username = `line_${lineId.substring(0, 8)}`;
-          const hashedPassword = await bcrypt.hash(lineId, 10); // ダミーパスワード
+          if (existingUser) {
+            console.log("[LINE Auth] Existing user found:", existingUser.id);
+            // 既存ユーザーの情報を更新
+            await db
+              .update(users)
+              .set({ name, image })
+              .where(eq(users.lineId as any, lineId));
 
-          const [newUser] = await db
-            .insert(users)
-            .values({
-              username,
-              name,
-              password: hashedPassword,
-              lineId,
-              image,
-              role: "user",
-            })
-            .returning();
+            // user.idを既存のDBのIDに設定
+            user.id = String(existingUser.id);
+            (user as any).username = existingUser.username;
+          } else {
+            console.log("[LINE Auth] Creating new user");
+            // 新規ユーザーを作成
+            const username = `line_${lineId.substring(0, 8)}`;
+            const hashedPassword = await bcrypt.hash(lineId, 10); // ダミーパスワード
 
-          user.id = String(newUser.id);
-          (user as any).username = newUser.username;
+            const [newUser] = await db
+              .insert(users)
+              .values({
+                username,
+                name,
+                password: hashedPassword,
+                lineId,
+                image,
+                role: "user",
+              })
+              .returning();
+
+            console.log("[LINE Auth] New user created:", newUser.id);
+            user.id = String(newUser.id);
+            (user as any).username = newUser.username;
+          }
+        } catch (error) {
+          console.error("[LINE Auth] Error in signIn callback:", error);
+          return false;
         }
       }
       return true;

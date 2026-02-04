@@ -37,11 +37,11 @@ export default async function middleware(request: NextRequest) {
   // ローカル開発時はIP制限をスキップ
   const isLocalDev = process.env.NODE_ENV === "development";
 
-  // IP制限チェック
-  if (!isLocalDev && clientIp && !ALLOWED_IPS.includes(clientIp)) {
-    console.log(`Access denied for IP: ${clientIp}`);
-    return new NextResponse("Access Denied", { status: 403 });
-  }
+  // IP制限チェック（一時的に無効化）
+  // if (!isLocalDev && clientIp && !ALLOWED_IPS.includes(clientIp)) {
+  //   console.log(`Access denied for IP: ${clientIp}`);
+  //   return new NextResponse("Access Denied", { status: 403 });
+  // }
 
   // 既存のNextAuth認証処理
   // @ts-expect-error NextAuth middleware type compatibility
