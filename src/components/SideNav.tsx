@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FolderKanban, Scale, Wrench, LogOut, Calendar, CalendarDays, MapPin, GitBranch, ListTodo, MessageSquarePlus } from "lucide-react";
+import { Home, FolderKanban, Scale, Wrench, LogOut, Calendar, CalendarDays, MapPin, GitBranch, ListTodo, MessageSquarePlus, Users } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ const items = [
   { href: "/projects", label: "案件", icon: FolderKanban },
   { href: "/todos", label: "タイムライン", icon: GitBranch },
   { href: "/calendar", label: "カレンダー", icon: Calendar },
+  { href: "/meetings", label: "会議", icon: Users },
   { href: "/map", label: "マップ", icon: MapPin },
   { href: "/schedule", label: "スケジュール", icon: CalendarDays },
   { href: "/legal", label: "法令確認", icon: Scale },
@@ -45,9 +46,11 @@ export function SideNav() {
                   ? pathname.startsWith("/map")
                   : item.href === "/calendar"
                     ? pathname.startsWith("/calendar")
-                    : item.href === "/feedbacks"
-                      ? pathname.startsWith("/feedbacks")
-                      : pathname === item.href;
+                    : item.href === "/meetings"
+                      ? pathname.startsWith("/meetings")
+                      : item.href === "/feedbacks"
+                        ? pathname.startsWith("/feedbacks")
+                        : pathname === item.href;
             const Icon = item.icon;
             return (
               <Link
