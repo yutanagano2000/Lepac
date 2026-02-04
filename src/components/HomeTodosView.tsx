@@ -39,6 +39,8 @@ export type TodoWithProject = {
   createdAt: string;
   completedAt: string | null;
   completedMemo: string | null;
+  userId: number | null;
+  userName: string | null;
   managementNumber: string | null;
 };
 
@@ -190,6 +192,11 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
           ) : (
             <span className="text-xs text-muted-foreground/70 italic">
               個人TODO
+            </span>
+          )}
+          {todo.userName && (
+            <span className="text-xs text-muted-foreground">
+              · {todo.userName}
             </span>
           )}
         </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { todos, projects } from "@/db/schema";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export async function GET() {
       createdAt: todos.createdAt,
       completedAt: todos.completedAt,
       completedMemo: todos.completedMemo,
+      userId: todos.userId,
+      userName: todos.userName,
       managementNumber: projects.managementNumber,
     })
     .from(todos)
@@ -25,6 +28,7 @@ export async function GET() {
 
 // プレーンなTODOを作成（案件に紐づかない）
 export async function POST(request: Request) {
+  const session = await auth();
   const body = await request.json();
   const content = body.content?.trim() ?? "";
   const dueDate = body.dueDate ?? "";
@@ -36,6 +40,10 @@ export async function POST(request: Request) {
     );
   }
 
+  // セッションからユーザー情報を取得
+  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const userName = session?.user?.name || (session?.user as any)?.username || null;
+
   const [result] = await db
     .insert(todos)
     .values({
@@ -43,6 +51,8 @@ export async function POST(request: Request) {
       content,
       dueDate,
       createdAt: new Date().toISOString(),
+      userId,
+      userName,
     })
     .returning();
 

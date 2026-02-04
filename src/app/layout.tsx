@@ -3,7 +3,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SideNav } from "@/components/SideNav";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { SessionProvider } from "@/components/SessionProvider";
 import { FeedbackInput } from "@/components/FeedbackInput";
+import { Header } from "@/components/Header";
 import { initDb } from "@/db";
 
 const geistSans = Geist({
@@ -32,22 +34,27 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          disableTransitionOnChange
-        >
-          <div className="min-h-screen bg-background">
-            <div className="flex">
-              <SideNav />
-              <main className="min-w-0 flex-1">
-                {children}
-                <FeedbackInput />
-              </main>
+        <SessionProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem={false}
+            disableTransitionOnChange
+          >
+            <div className="min-h-screen bg-background">
+              <div className="flex">
+                <SideNav />
+                <div className="min-w-0 flex-1 flex flex-col">
+                  <Header />
+                  <main className="flex-1">
+                    {children}
+                    <FeedbackInput />
+                  </main>
+                </div>
+              </div>
             </div>
-          </div>
-        </ThemeProvider>
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

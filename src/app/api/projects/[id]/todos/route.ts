@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
+import { auth } from "@/auth";
 
 export async function GET(
   _request: Request,
@@ -24,6 +25,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
   const { id } = await params;
   const projectId = Number(id);
   if (isNaN(projectId)) {
@@ -38,6 +40,11 @@ export async function POST(
       { status: 400 }
     );
   }
+
+  // セッションからユーザー情報を取得
+  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const userName = session?.user?.name || (session?.user as any)?.username || null;
+
   const [result] = await db
     .insert(todos)
     .values({
@@ -45,6 +52,8 @@ export async function POST(
       content,
       dueDate,
       createdAt: new Date().toISOString(),
+      userId,
+      userName,
     })
     .returning();
   return NextResponse.json(result);

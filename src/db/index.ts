@@ -324,6 +324,11 @@ async function initDb() {
   }
   try { await c.execute(`ALTER TABLE todos ADD COLUMN completed_at TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE todos ADD COLUMN completed_memo TEXT`); } catch (e) {}
+  // アカウント機能用カラム追加
+  try { await c.execute(`ALTER TABLE todos ADD COLUMN user_id INTEGER`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE todos ADD COLUMN user_name TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE comments ADD COLUMN user_id INTEGER`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE comments ADD COLUMN user_name TEXT`); } catch (e) {}
 
   await c.execute(`
     CREATE TABLE IF NOT EXISTS meetings (

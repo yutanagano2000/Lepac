@@ -203,6 +203,8 @@ export const comments = sqliteTable("comments", {
   projectId: integer("project_id").notNull(),
   content: text("content").notNull(),
   createdAt: text("created_at").notNull(),
+  userId: integer("user_id"), // 投稿者
+  userName: text("user_name"), // 投稿者名（キャッシュ用）
 });
 
 // TODOテーブル（案件ごと・期日付きリマインダー、ダッシュボード表示用）
@@ -215,6 +217,8 @@ export const todos = sqliteTable("todos", {
   createdAt: text("created_at").notNull(),
   completedAt: text("completed_at"), // 完了日時（ISO文字列）
   completedMemo: text("completed_memo"), // 完了時のメモ
+  userId: integer("user_id"), // 作成者
+  userName: text("user_name"), // 作成者名（キャッシュ用）
 });
 
 export type Project = typeof projects.$inferSelect;

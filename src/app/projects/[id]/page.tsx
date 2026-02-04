@@ -3387,6 +3387,9 @@ export default function ProjectDetailPage() {
                               <p className="text-sm">{comment.content}</p>
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {formatDateJp(new Date(comment.createdAt))}
+                                {comment.userName && (
+                                  <span className="ml-2">· {comment.userName}</span>
+                                )}
                               </p>
                             </div>
                             <div className="flex gap-1">

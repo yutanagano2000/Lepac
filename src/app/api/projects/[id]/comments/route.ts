@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { comments } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { auth } from "@/auth";
 
 export async function GET(
   request: Request,
@@ -20,14 +21,22 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
   const { id } = await params;
   const body = await request.json();
+
+  // セッションからユーザー情報を取得
+  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const userName = session?.user?.name || (session?.user as any)?.username || null;
+
   const [result] = await db
     .insert(comments)
     .values({
       projectId: Number(id),
       content: body.content,
       createdAt: new Date().toISOString(),
+      userId,
+      userName,
     })
     .returning();
   return NextResponse.json(result);

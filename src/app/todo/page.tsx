@@ -15,6 +15,8 @@ export default async function TodoPage() {
       createdAt: todos.createdAt,
       completedAt: todos.completedAt,
       completedMemo: todos.completedMemo,
+      userId: todos.userId,
+      userName: todos.userName,
       managementNumber: projects.managementNumber,
     })
     .from(todos)
