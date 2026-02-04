@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { feedbacks } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function GET() {
 
 // 要望投稿
 export async function POST(request: Request) {
+  const session = await auth();
   const body = await request.json();
   const { content, pagePath, pageTitle } = body;
 
@@ -27,6 +29,10 @@ export async function POST(request: Request) {
     );
   }
 
+  // セッションからユーザー情報を取得
+  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const userName = session?.user?.name || (session?.user as any)?.username || null;
+
   const [result] = await db
     .insert(feedbacks)
     .values({
@@ -36,6 +42,8 @@ export async function POST(request: Request) {
       status: "pending",
       likes: 0,
       createdAt: new Date().toISOString(),
+      userId,
+      userName,
     })
     .returning();
 

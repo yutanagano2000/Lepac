@@ -371,6 +371,10 @@ async function initDb() {
       created_at TEXT NOT NULL
     )
   `);
+  // フィードバック投稿者情報カラム追加
+  try { await c.execute(`ALTER TABLE feedbacks ADD COLUMN user_id INTEGER`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE feedbacks ADD COLUMN user_name TEXT`); } catch (e) {}
+
 
   // 工事進捗テーブル（工程表の代わり）
   await c.execute(`

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   ThumbsUp,
   MessageCircle,
@@ -11,7 +12,8 @@ import {
   Plus,
   Trash2,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,6 +48,8 @@ import type { Feedback } from "@/db/schema";
 interface ReplyMessage {
   message: string;
   createdAt: string;
+  userId?: number | null;
+  userName?: string | null;
 }
 
 function parseReplies(repliesStr: string | null): ReplyMessage[] {
@@ -97,6 +101,7 @@ const STATUS_CONFIG = {
 };
 
 export default function FeedbacksPage() {
+  const { data: session } = useSession();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [replyingId, setReplyingId] = useState<number | null>(null);
@@ -133,12 +138,18 @@ export default function FeedbacksPage() {
   const handleReply = async (feedback: Feedback) => {
     if (!replyContent.trim()) return;
 
+    // セッションからユーザー情報を取得
+    const userId = session?.user?.id ? parseInt(session.user.id) : null;
+    const userName = session?.user?.name || (session?.user as any)?.username || null;
+
     const currentReplies = parseReplies(feedback.replies);
     const newReplies = [
       ...currentReplies,
       {
         message: replyContent.trim(),
         createdAt: new Date().toISOString(),
+        userId,
+        userName,
       },
     ];
 
@@ -263,6 +274,12 @@ export default function FeedbacksPage() {
 
                         {/* メタ情報 */}
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                          {(feedback as any).userName && (
+                            <span className="flex items-center gap-1">
+                              <User className="h-3.5 w-3.5" />
+                              {(feedback as any).userName}
+                            </span>
+                          )}
                           <span>{formatDate(feedback.createdAt)}</span>
                           <span className="px-2 py-1 rounded bg-muted text-xs">
                             {feedback.pageTitle || feedback.pagePath}
@@ -327,9 +344,15 @@ export default function FeedbacksPage() {
                             </div>
                             <div className="flex-1 p-2 rounded bg-background border text-sm">
                               <p>{reply.message}</p>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {formatDateShort(reply.createdAt)}
-                              </p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                                {reply.userName && (
+                                  <span className="flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {reply.userName}
+                                  </span>
+                                )}
+                                <span>{formatDateShort(reply.createdAt)}</span>
+                              </div>
                             </div>
                           </div>
                         ))}

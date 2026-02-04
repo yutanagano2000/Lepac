@@ -286,6 +286,8 @@ export const feedbacks = sqliteTable("feedbacks", {
   replies: text("replies"), // JSON形式の返信（Gitツリー形式）
   likes: integer("likes").notNull().default(0), // いいね数
   createdAt: text("created_at").notNull(),
+  userId: integer("user_id"), // 投稿者ID
+  userName: text("user_name"), // 投稿者名（キャッシュ用）
 });
 
 export type Feedback = typeof feedbacks.$inferSelect;
