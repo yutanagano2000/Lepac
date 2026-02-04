@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Trash2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 // イベントの型定義
 interface CalendarEvent {
@@ -77,6 +78,9 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
     description: "",
     type: "custom" as const,
   });
+
+  // 削除確認ダイアログ用
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleEventClick = (info: EventClickArg) => {
     const event = events.find((e) => e.id === info.event.id);
@@ -143,9 +147,14 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
     });
   };
 
+  const openDeleteDialog = () => {
+    setDeleteDialogOpen(true);
+  };
+
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
     setEvents(events.filter((e) => e.id !== selectedEvent.id));
+    setDeleteDialogOpen(false);
     setIsEventDialogOpen(false);
     setSelectedEvent(null);
   };
@@ -276,7 +285,7 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleDeleteEvent}
+                  onClick={openDeleteDialog}
                   className="text-muted-foreground hover:text-destructive ml-auto"
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
@@ -352,6 +361,15 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 削除確認ダイアログ */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteEvent}
+        title="予定の削除"
+        description="この予定を削除してもよろしいですか？"
+      />
     </div>
   );
 }

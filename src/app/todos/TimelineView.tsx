@@ -14,6 +14,8 @@ import {
   X,
   ChevronDown,
   Loader2,
+  AlertTriangle,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,6 +158,13 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
   const isFiltered = selectedProjectIds.size > 0;
 
+  // 今日の日付（時刻を除去）
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
   // プロジェクトのフェーズ状況を取得
   const getPhaseStatus = (project: ProjectWithProgress, phaseTitle: string) => {
     const progressItem = project.progressItems.find((p) => p.title === phaseTitle);
@@ -180,6 +189,36 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     }
     return 0;
   };
+
+  // アラート判定: 進行中フェーズで期日超過または期日未設定
+  const isPhaseAlert = (project: ProjectWithProgress, phaseIndex: number): boolean => {
+    const currentPhaseIndex = getCurrentPhaseIndex(project);
+    // 進行中のフェーズのみ判定
+    if (phaseIndex !== currentPhaseIndex) return false;
+
+    const phase = PHASES[phaseIndex];
+    const phaseStatus = getPhaseStatus(project, phase.title);
+
+    // 期日未設定
+    if (!phaseStatus.date) return true;
+
+    // 期日超過
+    const dueDate = new Date(phaseStatus.date);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < today;
+  };
+
+  // アラート数を計算（表示中の案件のみ）
+  const alertCount = useMemo(() => {
+    let count = 0;
+    for (const project of filteredProjects) {
+      const currentPhaseIndex = getCurrentPhaseIndex(project);
+      if (currentPhaseIndex < PHASES.length && isPhaseAlert(project, currentPhaseIndex)) {
+        count++;
+      }
+    }
+    return count;
+  }, [filteredProjects, today]);
 
   const openEditDialog = (project: ProjectWithProgress, phase: (typeof PHASES)[number]) => {
     setEditingProject(project);
@@ -269,13 +308,55 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
         <div className="space-y-6">
           {/* Header */}
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <GitBranch className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-xl font-semibold">タイムライン</h1>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5 text-muted-foreground" />
+                <h1 className="text-xl font-semibold">タイムライン</h1>
+              </div>
+              {/* アラートサマリー */}
+              {alertCount > 0 && (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                  <Flame className="h-5 w-5 text-red-500 animate-pulse" />
+                  <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                    {alertCount}件のアラート
+                  </span>
+                </div>
+              )}
             </div>
-            <p className="text-sm text-muted-foreground">
-              複数案件のフェーズ進捗を比較・管理できます
-            </p>
+
+            {/* テーマメッセージ */}
+            <div className={cn(
+              "flex items-center gap-3 p-4 rounded-xl border",
+              alertCount > 0
+                ? "bg-red-500/5 border-red-500/30"
+                : "bg-green-500/5 border-green-500/30"
+            )}>
+              {alertCount > 0 ? (
+                <>
+                  <AlertTriangle className="h-6 w-6 text-red-500 shrink-0" />
+                  <div>
+                    <p className="font-bold text-red-600 dark:text-red-400">
+                      真っ赤をなくす作業
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      期日超過・期日未設定のフェーズを解消してください
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Check className="h-6 w-6 text-green-500 shrink-0" />
+                  <div>
+                    <p className="font-bold text-green-600 dark:text-green-400">
+                      すべてのフェーズが正常です
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      期日超過・期日未設定のフェーズはありません
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="flex items-center gap-3">
               <div className="relative flex-1 max-w-sm">
@@ -292,6 +373,10 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
           {/* Legend */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <span className="font-medium text-red-600 dark:text-red-400">アラート</span>
+            </div>
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
               <span>完了</span>
@@ -449,18 +534,31 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                     ) : (
                       filteredProjects.map((project) => {
                         const currentPhaseIndex = getCurrentPhaseIndex(project);
+                        const hasAlert = currentPhaseIndex < PHASES.length && isPhaseAlert(project, currentPhaseIndex);
                         return (
                           <tr
                             key={project.id}
-                            className="border-b hover:bg-muted/30 transition-colors"
+                            className={cn(
+                              "border-b hover:bg-muted/30 transition-colors",
+                              hasAlert && "bg-red-500/5"
+                            )}
                           >
-                            <td className="sticky left-0 bg-card z-10 px-2 py-3 w-[140px]">
+                            <td className={cn(
+                              "sticky left-0 z-10 px-2 py-3 w-[140px]",
+                              hasAlert ? "bg-red-500/10" : "bg-card"
+                            )}>
                               <Link
                                 href={`/projects/${project.id}`}
                                 className="group flex items-center gap-1"
                               >
+                                {hasAlert && (
+                                  <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mr-1" />
+                                )}
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-bold group-hover:underline truncate">
+                                  <p className={cn(
+                                    "text-sm font-bold group-hover:underline truncate",
+                                    hasAlert && "text-red-600 dark:text-red-400"
+                                  )}>
                                     {project.managementNumber}
                                   </p>
                                   <p className="text-xs text-muted-foreground truncate">
@@ -474,11 +572,15 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                               const phaseStatus = getPhaseStatus(project, phase.title);
                               const isCompleted = phaseStatus.status === "completed";
                               const isCurrent = index === currentPhaseIndex;
+                              const isAlert = isPhaseAlert(project, index);
 
                               return (
                                 <td
                                   key={phase.key}
-                                  className="px-0 py-2 text-center"
+                                  className={cn(
+                                    "px-0 py-2 text-center",
+                                    isAlert && "bg-red-500/10"
+                                  )}
                                 >
                                   <button
                                     onClick={() => openEditDialog(project, phase)}
@@ -491,12 +593,15 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                                       className={cn(
                                         "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
                                         isCompleted && "bg-green-500 text-white",
-                                        isCurrent && !isCompleted && "bg-blue-500 text-white",
-                                        !isCompleted && !isCurrent && "bg-zinc-200 dark:bg-zinc-700"
+                                        isAlert && "bg-red-500 text-white animate-pulse",
+                                        isCurrent && !isCompleted && !isAlert && "bg-blue-500 text-white",
+                                        !isCompleted && !isCurrent && !isAlert && "bg-zinc-200 dark:bg-zinc-700"
                                       )}
                                     >
                                       {isCompleted ? (
                                         <Check className="h-4 w-4" />
+                                      ) : isAlert ? (
+                                        <AlertTriangle className="h-4 w-4" />
                                       ) : isCurrent ? (
                                         <Clock className="h-4 w-4" />
                                       ) : (
@@ -511,6 +616,8 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                                         "text-xs font-semibold truncate w-full",
                                         isCompleted
                                           ? "text-green-600 dark:text-green-400"
+                                          : isAlert
+                                          ? "text-red-600 dark:text-red-400"
                                           : "text-muted-foreground"
                                       )}
                                     >

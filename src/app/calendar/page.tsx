@@ -56,86 +56,30 @@ export default function CalendarPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const calendarEvents: CalendarEvent[] = [];
+        // 一括取得APIを使用
+        const res = await fetch("/api/calendar/events");
+        if (!res.ok) throw new Error("Failed to fetch calendar events");
 
-        // TODOを取得
-        const todosRes = await fetch("/api/todos");
-        if (todosRes.ok) {
-          const todos = await todosRes.json();
-          for (const todo of todos) {
-            const colors = getEventColor("todo", todo.completedAt ? "completed" : undefined);
-            calendarEvents.push({
-              id: `todo-${todo.id}`,
-              title: todo.content,
-              start: todo.dueDate,
-              allDay: true,
-              backgroundColor: colors.bg,
-              borderColor: colors.border,
-              textColor: colors.text,
-              extendedProps: {
-                type: "todo",
-                projectId: todo.projectId,
-                status: todo.completedAt ? "completed" : "pending",
-              },
-            });
-          }
-        }
-
-        // プロジェクトと進捗を取得
-        const projectsRes = await fetch("/api/projects");
-        if (projectsRes.ok) {
-          const projects = await projectsRes.json();
-          for (const project of projects) {
-            const progressRes = await fetch(`/api/projects/${project.id}/progress`);
-            if (progressRes.ok) {
-              const progressList = await progressRes.json();
-              for (const progress of progressList) {
-                const date = progress.completedAt || progress.createdAt;
-                if (!date) continue;
-
-                const colors = getEventColor("progress", progress.status);
-                calendarEvents.push({
-                  id: `progress-${progress.id}`,
-                  title: `${project.managementNumber}: ${progress.title}`,
-                  start: date.split("T")[0],
-                  allDay: true,
-                  backgroundColor: colors.bg,
-                  borderColor: colors.border,
-                  textColor: colors.text,
-                  extendedProps: {
-                    type: "progress",
-                    projectId: project.id,
-                    projectName: project.managementNumber,
-                    description: progress.description,
-                    status: progress.status,
-                  },
-                });
-              }
-            }
-          }
-        }
-
-        // 会議を取得
-        const meetingsRes = await fetch("/api/meetings");
-        if (meetingsRes.ok) {
-          const meetings = await meetingsRes.json();
-          for (const meeting of meetings) {
-            const colors = getEventColor("meeting");
-            calendarEvents.push({
-              id: `meeting-${meeting.id}`,
-              title: meeting.title,
-              start: meeting.meetingDate,
-              allDay: true,
-              backgroundColor: colors.bg,
-              borderColor: colors.border,
-              textColor: colors.text,
-              extendedProps: {
-                type: "meeting",
-                description: meeting.content,
-              },
-            });
-          }
-        }
+        const data = await res.json();
+        const calendarEvents: CalendarEvent[] = data.map((event: any) => {
+          const colors = getEventColor(event.type, event.status);
+          return {
+            id: event.id,
+            title: event.title,
+            start: event.start,
+            allDay: true,
+            backgroundColor: colors.bg,
+            borderColor: colors.border,
+            textColor: colors.text,
+            extendedProps: {
+              type: event.type,
+              projectId: event.projectId,
+              projectName: event.projectName,
+              description: event.description,
+              status: event.status,
+            },
+          };
+        });
 
         setEvents(calendarEvents);
       } catch (error) {

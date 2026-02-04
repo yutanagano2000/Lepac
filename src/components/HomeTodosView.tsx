@@ -30,6 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { formatDateJp } from "@/lib/timeline";
 import { parseTodoMessages, cn } from "@/lib/utils";
 import { HomeProjectSearch } from "@/components/HomeProjectSearch";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 export type TodoWithProject = {
   id: number;
@@ -76,6 +77,11 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
   const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // 削除確認ダイアログ用
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [todoToDelete, setTodoToDelete] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // 日本時間で現在日時を取得
   const nowJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
 
@@ -86,9 +92,22 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
       .catch((err) => console.error("TODO一覧の取得に失敗しました:", err));
   };
 
-  const handleDelete = async (todoId: number) => {
-    await fetch(`/api/todos/${todoId}`, { method: "DELETE" });
-    fetchTodos();
+  const openDeleteDialog = (todoId: number) => {
+    setTodoToDelete(todoId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!todoToDelete) return;
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/todos/${todoToDelete}`, { method: "DELETE" });
+      fetchTodos();
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setTodoToDelete(null);
+    }
   };
 
   const projectOptions = useMemo(() => {
@@ -255,7 +274,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
                 className="h-8 w-8 text-destructive hover:text-destructive"
                 onClick={(e) => {
                   e.preventDefault();
-                  handleDelete(todo.id);
+                  openDeleteDialog(todo.id);
                 }}
               >
                 <Trash2 className="h-4 w-4" />
@@ -540,6 +559,16 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
           )}
         </div>
       </div>
+
+      {/* 削除確認ダイアログ */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDelete}
+        title="TODOの削除"
+        description="このTODOを削除してもよろしいですか？"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

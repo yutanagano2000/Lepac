@@ -24,6 +24,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDateJp } from "@/lib/timeline";
 import { parseTodoMessages } from "@/lib/utils";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 export type TodoWithProject = {
   id: number;
@@ -60,6 +61,11 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
 
+  // 削除確認ダイアログ用
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [todoToDelete, setTodoToDelete] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const fetchTodos = () => {
     fetch("/api/todos", { cache: "no-store" })
       .then((res) => res.json())
@@ -67,9 +73,22 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
       .catch((err) => console.error("TODO一覧の取得に失敗しました:", err));
   };
 
-  const handleDelete = async (todoId: number) => {
-    await fetch(`/api/todos/${todoId}`, { method: "DELETE" });
-    fetchTodos();
+  const openDeleteDialog = (todoId: number) => {
+    setTodoToDelete(todoId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!todoToDelete) return;
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/todos/${todoToDelete}`, { method: "DELETE" });
+      fetchTodos();
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setTodoToDelete(null);
+    }
   };
 
   const projectOptions = useMemo(() => {
@@ -194,7 +213,7 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
                 className="h-8 w-8 text-destructive hover:text-destructive"
                 onClick={(e) => {
                   e.preventDefault();
-                  handleDelete(todo.id);
+                  openDeleteDialog(todo.id);
                 }}
               >
                 <Trash2 className="h-4 w-4" />
@@ -340,6 +359,16 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
           )}
         </div>
       </div>
+
+      {/* 削除確認ダイアログ */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDelete}
+        title="TODOの削除"
+        description="このTODOを削除してもよろしいですか？"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -138,6 +138,7 @@ export const projects = sqliteTable("projects", {
   deliveryDate: text("delivery_date"), // 納品日
 
   // 工事関連
+  constructionAvailableDate: text("construction_available_date"), // 着工可能日
   constructionStartScheduled: text("construction_start_scheduled"), // 着工 予定日
   constructionStartDate: text("construction_start_date"), // 着工日
   constructionEndScheduled: text("construction_end_scheduled"), // 完工 予定日
@@ -289,3 +290,63 @@ export const feedbacks = sqliteTable("feedbacks", {
 
 export type Feedback = typeof feedbacks.$inferSelect;
 export type NewFeedback = typeof feedbacks.$inferInsert;
+
+// 工事進捗カテゴリ（工程表の代わり）
+export const CONSTRUCTION_PROGRESS_CATEGORIES = [
+  "造成",
+  "載荷試験",
+  "杭打ち",
+  "ケーブル埋設",
+  "架台組立",
+  "パネル設置",
+  "電気工事",
+  "フェンス設置",
+  "その他",
+] as const;
+
+// 工事写真カテゴリ
+export const CONSTRUCTION_PHOTO_CATEGORIES = [
+  "着工前",
+  "造成後",
+  "載荷試験",
+  "杭打ち",
+  "ケーブル埋設",
+  "架台組立",
+  "パネル",
+  "電気",
+  "フェンス",
+  "完工写真",
+] as const;
+
+// 工事進捗テーブル（工程表の代わり）
+export const constructionProgress = sqliteTable("construction_progress", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  category: text("category").notNull(), // 造成、杭打ち、etc.
+  status: text("status").notNull().default("pending"), // pending: 未着手, in_progress: 進行中, completed: 完了
+  note: text("note"), // 進捗メモ
+  completedAt: text("completed_at"), // 完了日時
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
+export type ConstructionProgress = typeof constructionProgress.$inferSelect;
+export type NewConstructionProgress = typeof constructionProgress.$inferInsert;
+
+// 工事写真テーブル
+export const constructionPhotos = sqliteTable("construction_photos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  category: text("category").notNull(), // 着工前、造成後、etc.
+  fileName: text("file_name").notNull(), // 元のファイル名
+  fileUrl: text("file_url").notNull(), // Vercel BlobのURL
+  fileType: text("file_type").notNull(), // image/jpeg など
+  fileSize: integer("file_size").notNull(), // バイト数
+  contractorName: text("contractor_name"), // 撮影した業者名
+  note: text("note"), // 写真に関するメモ
+  takenAt: text("taken_at"), // 撮影日時
+  createdAt: text("created_at").notNull(),
+});
+
+export type ConstructionPhoto = typeof constructionPhotos.$inferSelect;
+export type NewConstructionPhoto = typeof constructionPhotos.$inferInsert;

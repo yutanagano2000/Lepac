@@ -218,6 +218,7 @@ async function initDb() {
   try { await c.execute(`ALTER TABLE projects ADD COLUMN delivery_date TEXT`); } catch (e) {}
 
   // 工事関連
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_available_date TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_start_scheduled TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_start_date TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_end_scheduled TEXT`); } catch (e) {}
@@ -368,6 +369,39 @@ async function initDb() {
       replies TEXT,
       likes INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
+    )
+  `);
+
+  // 工事進捗テーブル（工程表の代わり）
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS construction_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      note TEXT,
+      completed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    )
+  `);
+
+  // 工事写真テーブル
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS construction_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      file_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      contractor_name TEXT,
+      note TEXT,
+      taken_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
     )
   `);
 
