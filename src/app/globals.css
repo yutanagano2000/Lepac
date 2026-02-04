@@ -123,3 +123,142 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* FullCalendar カスタムスタイル - シンプルモノトーン */
+.fc {
+  --fc-border-color: var(--border);
+  --fc-button-bg-color: transparent;
+  --fc-button-border-color: var(--border);
+  --fc-button-text-color: var(--foreground);
+  --fc-button-hover-bg-color: var(--muted);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--foreground);
+  --fc-button-active-border-color: var(--foreground);
+  --fc-today-bg-color: var(--muted);
+  --fc-neutral-bg-color: var(--muted);
+  --fc-page-bg-color: var(--background);
+  --fc-event-border-color: transparent;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.fc .fc-button {
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  transition: all 0.15s;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.fc .fc-button:hover {
+  background: var(--muted);
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background-color: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+}
+
+.fc .fc-col-header-cell {
+  padding: 0.5rem 0;
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.fc .fc-daygrid-day-number {
+  padding: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--foreground);
+}
+
+.fc .fc-daygrid-day.fc-day-today {
+  background-color: var(--muted);
+}
+
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  font-weight: 600;
+}
+
+.fc .fc-event {
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fc .fc-timegrid-slot {
+  height: 2.5rem;
+}
+
+.fc .fc-timegrid-slot-label {
+  font-size: 0.6875rem;
+  color: var(--muted-foreground);
+}
+
+.fc .fc-list-event {
+  cursor: pointer;
+}
+
+.fc .fc-list-event:hover td {
+  background-color: var(--muted);
+}
+
+.fc .fc-list-day-cushion {
+  background-color: var(--muted);
+}
+
+.fc .fc-scrollgrid {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.fc .fc-scrollgrid-section > * {
+  border-color: var(--border);
+}
+
+.fc-theme-standard td,
+.fc-theme-standard th {
+  border-color: var(--border);
+}
+
+.fc .fc-daygrid-day-frame {
+  min-height: 80px;
+}
+
+.fc .fc-more-link {
+  color: var(--muted-foreground);
+  font-weight: 500;
+  font-size: 0.6875rem;
+}
+
+.fc .fc-popover {
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.fc .fc-popover-header {
+  background: var(--muted);
+  padding: 0.375rem 0.5rem;
+  font-weight: 500;
+  font-size: 0.8125rem;
+}
+
+.fc .fc-highlight {
+  background-color: var(--muted);
+}

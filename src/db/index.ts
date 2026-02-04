@@ -232,6 +232,9 @@ async function initDb() {
   try { await c.execute(`ALTER TABLE projects ADD COLUMN confirmation_items TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_complete TEXT`); } catch (e) {}
 
+  // 法令チェック結果（JSON形式）
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN legal_statuses TEXT`); } catch (e) {}
+
   await c.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

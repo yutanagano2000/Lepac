@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   GitBranch,
@@ -13,6 +13,7 @@ import {
   Filter,
   X,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,13 +78,15 @@ function formatDateFull(date: Date | null): string {
   return `${y}.${m}.${d}`;
 }
 
-export default function TimelineView({ projects }: TimelineViewProps) {
+export default function TimelineView({ projects: initialProjects }: TimelineViewProps) {
+  const [projects, setProjects] = useState<ProjectWithProgress[]>(initialProjects);
   const [searchQuery, setSearchQuery] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithProgress | null>(null);
   const [editingPhase, setEditingPhase] = useState<(typeof PHASES)[number] | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // フィルター機能用のstate
   const [filterOpen, setFilterOpen] = useState(false);
@@ -186,11 +189,79 @@ export default function TimelineView({ projects }: TimelineViewProps) {
     setEditDialogOpen(true);
   };
 
-  const handleSave = () => {
-    // TODO: 実際の保存処理を実装
-    console.log("保存:", editingProject?.managementNumber, editingPhase?.title, selectedDate);
-    setEditDialogOpen(false);
-  };
+  const handleSave = useCallback(async () => {
+    if (!editingProject || !editingPhase || !selectedDate) {
+      setEditDialogOpen(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 既存のProgressアイテムを検索
+      const existingProgress = editingProject.progressItems.find(
+        (p) => p.title === editingPhase.title
+      );
+
+      const dateStr = selectedDate.toISOString();
+
+      if (existingProgress) {
+        // 既存のProgressを更新
+        await fetch(`/api/projects/${editingProject.id}/progress`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            progressId: existingProgress.id,
+            status: "completed",
+            completedAt: dateStr,
+          }),
+        });
+      } else {
+        // 新規Progressを作成
+        await fetch(`/api/projects/${editingProject.id}/progress`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: editingPhase.title,
+            status: "completed",
+            createdAt: dateStr,
+          }),
+        });
+      }
+
+      // ローカル状態を更新
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== editingProject.id) return p;
+          const updatedProgressItems = existingProgress
+            ? p.progressItems.map((item) =>
+                item.id === existingProgress.id
+                  ? { ...item, status: "completed" as const, completedAt: dateStr }
+                  : item
+              )
+            : [
+                ...p.progressItems,
+                {
+                  id: Date.now(), // 仮のID（サーバーからの応答で更新されるまで）
+                  projectId: p.id,
+                  title: editingPhase.title,
+                  description: null,
+                  status: "completed" as const,
+                  createdAt: dateStr,
+                  completedAt: dateStr,
+                },
+              ];
+          return { ...p, progressItems: updatedProgressItems };
+        })
+      );
+
+      setEditDialogOpen(false);
+    } catch (error) {
+      console.error("保存に失敗しました:", error);
+      alert("保存に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingProject, editingPhase, selectedDate]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -565,10 +636,19 @@ export default function TimelineView({ projects }: TimelineViewProps) {
                 </Popover>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSaving}>
                   キャンセル
                 </Button>
-                <Button onClick={handleSave}>保存</Button>
+                <Button onClick={handleSave} disabled={isSaving || !selectedDate}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      保存中...
+                    </>
+                  ) : (
+                    "保存"
+                  )}
+                </Button>
               </div>
             </div>
           )}

@@ -246,9 +246,6 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [editingValue, setEditingValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollableRef = useRef<HTMLDivElement>(null);
-  const [scrollMaxValue, setScrollMaxValue] = useState(0);
 
   // フィルター機能用のstate
   const [filterOpen, setFilterOpen] = useState<string | null>(null);
@@ -386,32 +383,6 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   useEffect(() => {
     setRecentSearches(getRecentSearches());
   }, []);
-
-  // スクロール可能な幅を計算
-  useEffect(() => {
-    const updateScrollMax = () => {
-      if (scrollableRef.current && scrollContainerRef.current) {
-        const scrollWidth = scrollContainerRef.current.scrollWidth;
-        const clientWidth = scrollableRef.current.clientWidth;
-        const maxScroll = scrollWidth - clientWidth;
-        setScrollMaxValue(Math.max(0, maxScroll));
-      }
-    };
-
-    updateScrollMax();
-    window.addEventListener("resize", updateScrollMax);
-
-    // ResizeObserverでコンテンツサイズの変化を監視
-    const observer = new ResizeObserver(updateScrollMax);
-    if (scrollContainerRef.current) {
-      observer.observe(scrollContainerRef.current);
-    }
-
-    return () => {
-      window.removeEventListener("resize", updateScrollMax);
-      observer.disconnect();
-    };
-  }, [filteredProjects]);
 
   const handleSearchFocus = () => setShowSuggestions(true);
   const handleSearchBlur = () => {
@@ -600,21 +571,6 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     }
     setIsEditMode(prev => !prev);
   }, [isEditMode, cancelEditCell]);
-
-  // 固定スクロールバーとテーブルのスクロール同期
-  const handleScrollbarChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (scrollableRef.current) {
-      scrollableRef.current.scrollLeft = Number(e.target.value);
-    }
-  }, []);
-
-  // テーブルスクロール時にスクロールバーも同期
-  const handleTableScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const scrollbar = document.getElementById('fixed-scrollbar') as HTMLInputElement;
-    if (scrollbar) {
-      scrollbar.value = String(e.currentTarget.scrollLeft);
-    }
-  }, []);
 
   // フィルター付きヘッダーを生成するコンポーネント
   const FilterableHeader = ({
@@ -1062,6 +1018,15 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
             </div>
           )}
 
+          {/* 横スクロールのヒント */}
+          <div className="flex items-center gap-2 text-sm p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+            <ChevronRight className="h-4 w-4 text-blue-500 animate-pulse" />
+            <span className="text-blue-700 dark:text-blue-300">
+              <span className="font-medium">横スクロール:</span>
+              {" "}右側にもデータがあります。テーブル上で <span className="font-medium">Shift + マウスホイール</span> または <span className="font-medium">横スクロール</span> で確認できます。
+            </span>
+          </div>
+
           {/* 横スクロール対応テーブル - 固定カラムとスクロール可能カラムを分離 */}
           <div className="relative">
             <div className="rounded-lg border border-border overflow-hidden">
@@ -1254,15 +1219,8 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
               </div>
 
               {/* スクロール可能カラム部分 */}
-              <div
-                ref={scrollableRef}
-                className="flex-1 overflow-x-auto scrollbar-hide"
-                onScroll={handleTableScroll}
-              >
-                <div
-                  ref={scrollContainerRef}
-                  className="min-w-max"
-                >
+              <ScrollArea className="flex-1">
+                <div className="min-w-max">
                   <Table>
                     <TableHeader>
                       <TableRow className="h-12 bg-muted/30">
@@ -1344,27 +1302,10 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                     </TableBody>
                   </Table>
                 </div>
-              </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
             </div>
             </div>
-
-            {/* 固定スクロールバー - 画面下部に常時表示 */}
-            {scrollMaxValue > 0 && (
-              <div className="sticky bottom-0 left-0 right-0 bg-background border-t border-border py-2 px-2 z-20">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground shrink-0">横スクロール:</span>
-                  <input
-                    id="fixed-scrollbar"
-                    type="range"
-                    min="0"
-                    max={scrollMaxValue}
-                    defaultValue="0"
-                    onChange={handleScrollbarChange}
-                    className="flex-1 h-2 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
-                  />
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

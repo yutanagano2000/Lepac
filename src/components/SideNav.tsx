@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FolderKanban, Scale, Wrench, LogOut, CheckSquare, ExternalLink, Calendar, CalendarDays, MessageSquare, MapPin, GitBranch, ListTodo, MessageSquarePlus } from "lucide-react";
+import { Home, FolderKanban, Scale, Wrench, LogOut, Calendar, CalendarDays, MapPin, GitBranch, ListTodo, MessageSquarePlus } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ const items = [
   { href: "/todo", label: "TODO", icon: ListTodo },
   { href: "/projects", label: "案件", icon: FolderKanban },
   { href: "/todos", label: "タイムライン", icon: GitBranch },
-  { href: "/meetings", label: "会議", icon: MessageSquare },
+  { href: "/calendar", label: "カレンダー", icon: Calendar },
   { href: "/map", label: "マップ", icon: MapPin },
   { href: "/schedule", label: "スケジュール", icon: CalendarDays },
   { href: "/legal", label: "法令確認", icon: Scale },
@@ -39,12 +39,12 @@ export function SideNav() {
             // サブパスでもアクティブにする
             const active = item.href === "/tools"
               ? pathname.startsWith("/tools")
-              : item.href === "/meetings"
-                ? pathname.startsWith("/meetings")
-                : item.href === "/todos"
-                  ? pathname.startsWith("/todos")
-                  : item.href === "/map"
-                    ? pathname.startsWith("/map")
+              : item.href === "/todos"
+                ? pathname.startsWith("/todos")
+                : item.href === "/map"
+                  ? pathname.startsWith("/map")
+                  : item.href === "/calendar"
+                    ? pathname.startsWith("/calendar")
                     : item.href === "/feedbacks"
                       ? pathname.startsWith("/feedbacks")
                       : pathname === item.href;
@@ -63,28 +63,6 @@ export function SideNav() {
               </Link>
             );
           })}
-          {/* 外部リンク: Notion ミーティング */}
-          <a
-            href="https://www.notion.so/Meeting-2f0f2fd6b7ad80de99b7f18d709b1bfa"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
-          >
-            <CheckSquare className="h-4 w-4" />
-            <span>ミーティング</span>
-            <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
-          </a>
-          {/* 外部リンク: Notion Calendar */}
-          <a
-            href="https://calendar.notion.so/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
-          >
-            <Calendar className="h-4 w-4" />
-            <span>カレンダー</span>
-            <ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
-          </a>
         </nav>
 
         <div className="mt-auto border-t border-sidebar-border pt-4 space-y-2">

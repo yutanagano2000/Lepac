@@ -138,6 +138,12 @@ interface LawSearchCardProps {
   note?: string;
   /** 地目に農地（田・畑）が含まれる場合の小さなアラート表示 */
   farmlandAlert?: boolean;
+  /** 現在のステータス */
+  currentStatus?: LegalStatus;
+  /** ステータス変更時のコールバック */
+  onStatusChange?: (status: LegalStatus) => void;
+  /** ステータス削除時のコールバック */
+  onStatusRemove?: () => void;
 }
 
 const LawSearchCard: React.FC<LawSearchCardProps> = ({
@@ -153,12 +159,33 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
   caption,
   note,
   farmlandAlert,
+  currentStatus,
+  onStatusChange,
+  onStatusRemove,
 }) => {
   return (
-    <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
+    <div className={cn(
+      "bg-card rounded-4xl border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500",
+      currentStatus === "該当" && "border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20",
+      currentStatus === "要確認" && "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20",
+      currentStatus === "非該当" && "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/20",
+      !currentStatus && "border-border"
+    )}>
+      <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <p className="font-medium text-foreground">{lawName}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-foreground">{lawName}</p>
+            {currentStatus && (
+              <span className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                currentStatus === "該当" && "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+                currentStatus === "要確認" && "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+                currentStatus === "非該当" && "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+              )}>
+                {currentStatus}
+              </span>
+            )}
+          </div>
           {farmlandAlert && (
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
               地目に農地が含まれています
@@ -198,9 +225,57 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
               ))}
             </div>
           )}
+          {/* ステータス選択ボタン */}
+          {onStatusChange && (
+            <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-border/50">
+              <span className="text-xs text-muted-foreground mr-1">判定:</span>
+              <button
+                onClick={() => onStatusChange("該当")}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                  currentStatus === "該当"
+                    ? "bg-red-500 text-white border-red-500"
+                    : "bg-transparent text-red-600 border-red-300 hover:bg-red-100 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30"
+                )}
+              >
+                該当
+              </button>
+              <button
+                onClick={() => onStatusChange("要確認")}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                  currentStatus === "要確認"
+                    ? "bg-amber-500 text-white border-amber-500"
+                    : "bg-transparent text-amber-600 border-amber-300 hover:bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/30"
+                )}
+              >
+                要確認
+              </button>
+              <button
+                onClick={() => onStatusChange("非該当")}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                  currentStatus === "非該当"
+                    ? "bg-green-500 text-white border-green-500"
+                    : "bg-transparent text-green-600 border-green-300 hover:bg-green-100 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/30"
+                )}
+              >
+                非該当
+              </button>
+              {currentStatus && onStatusRemove && (
+                <button
+                  onClick={onStatusRemove}
+                  className="ml-1 text-xs text-muted-foreground hover:text-foreground"
+                  title="判定を解除"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex flex-col gap-2 shrink-0 ml-4">
-          <Button onClick={() => onSearch(lawName, lawId)} className="w-full">
+        <div className="flex flex-col gap-2 shrink-0">
+          <Button onClick={() => onSearch(lawName, lawId)} size="sm">
             Googleで検索
           </Button>
           {additionalButtons.map((button, index) => (
@@ -209,7 +284,6 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
               variant="outline"
               size="sm"
               onClick={() => window.open(button.url, '_blank')}
-              className="w-full"
             >
               <ExternalLink className="h-3 w-3 mr-2" />
               {button.label}
@@ -253,6 +327,14 @@ const laws: Law[] = [
   { id: 23, name: "廃棄物の処理及び清掃に関する法律", fixedText: "敷地内の残置物及び工事で発生した産廃物については適正に処理します。" },
 ];
 
+// 法令ステータスの型
+type LegalStatus = "該当" | "非該当" | "要確認";
+interface LegalStatusInfo {
+  status: LegalStatus;
+  note?: string;
+}
+type LegalStatuses = Record<string, LegalStatusInfo>;
+
 // 法令検索タブコンポーネント
 interface LegalSearchTabProps {
   searchParams: { lat: string; lon: string; prefecture: string } | null;
@@ -263,9 +345,12 @@ interface LegalSearchTabProps {
     landCategory2: string | null;
     landCategory3: string | null;
   } | null;
+  projectId?: number;
+  initialLegalStatuses?: string | null;
+  onLegalStatusesChange?: (statuses: LegalStatuses) => void;
 }
 
-function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, projectLandCategories }: LegalSearchTabProps) {
+function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, projectLandCategories, projectId, initialLegalStatuses, onLegalStatusesChange }: LegalSearchTabProps) {
   const [coordinateInput, setCoordinateInput] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -274,6 +359,61 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [legalStatuses, setLegalStatuses] = useState<LegalStatuses>(() => {
+    if (initialLegalStatuses) {
+      try {
+        return JSON.parse(initialLegalStatuses) as LegalStatuses;
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // 法令ステータスを更新
+  const updateLegalStatus = (lawName: string, status: LegalStatus, note?: string) => {
+    setLegalStatuses(prev => {
+      const updated = { ...prev, [lawName]: { status, note } };
+      setHasChanges(true);
+      return updated;
+    });
+  };
+
+  // 法令ステータスを削除
+  const removeLegalStatus = (lawName: string) => {
+    setLegalStatuses(prev => {
+      const updated = { ...prev };
+      delete updated[lawName];
+      setHasChanges(true);
+      return updated;
+    });
+  };
+
+  // 法令ステータスを保存
+  const saveLegalStatuses = async () => {
+    if (!projectId) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ legalStatuses: JSON.stringify(legalStatuses) }),
+      });
+      if (response.ok) {
+        setHasChanges(false);
+        onLegalStatusesChange?.(legalStatuses);
+      } else {
+        alert("保存に失敗しました");
+      }
+    } catch (error) {
+      console.error("保存エラー:", error);
+      alert("保存に失敗しました");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // 座標入力を解析（カンマ・スラッシュ・空白区切りに対応）し、有効なら正規化表示
   const handleCoordinateInput = (value: string) => {
@@ -754,6 +894,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               caption={caption}
               note={noteForCard}
               farmlandAlert={showFarmlandAlert}
+              currentStatus={legalStatuses[law.name]?.status}
+              onStatusChange={(status) => updateLegalStatus(law.name, status)}
+              onStatusRemove={() => removeLegalStatus(law.name)}
             />
           );
         })}
@@ -1287,6 +1430,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             caption={caption}
             note={noteForCard}
             farmlandAlert={showFarmlandAlert}
+            currentStatus={legalStatuses[law.name]?.status}
+            onStatusChange={(status) => updateLegalStatus(law.name, status)}
+            onStatusRemove={() => removeLegalStatus(law.name)}
           />
         );
       })}
@@ -1468,6 +1614,32 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               判定結果がありません
             </div>
           )}
+        </div>
+      )}
+
+      {/* 法令ステータス保存ボタン */}
+      {projectId && Object.keys(legalStatuses).length > 0 && (
+        <div className="sticky bottom-4 flex justify-center">
+          <Button
+            onClick={saveLegalStatuses}
+            disabled={isSaving || !hasChanges}
+            size="lg"
+            className={cn(
+              "shadow-lg px-8",
+              hasChanges && "animate-pulse"
+            )}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                保存中...
+              </>
+            ) : hasChanges ? (
+              "法令判定を保存"
+            ) : (
+              <><Check className="h-4 w-4 mr-2" />保存済み</>
+            )}
+          </Button>
         </div>
       )}
     </div>
@@ -2814,33 +2986,110 @@ export default function ProjectDetailPage() {
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">法令</span>
                     <div className="col-span-2">
-                      {getLegalSearchUrl() ? (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-8"
-                          onClick={() => {
-                            const url = getLegalSearchUrl();
-                            if (url) {
-                              const urlObj = new URL(url, window.location.origin);
-                              const lat = urlObj.searchParams.get("lat");
-                              const lon = urlObj.searchParams.get("lon");
-                              const prefecture = urlObj.searchParams.get("prefecture");
-                              if (lat && lon && prefecture) {
-                                setLegalSearchParams({ lat, lon, prefecture });
-                                setActiveTab("legal");
+                      {(() => {
+                        // 保存された法令情報を解析
+                        const legalStatuses = project?.legalStatuses
+                          ? (() => {
+                              try {
+                                return JSON.parse(project.legalStatuses) as Record<string, { status: string; note?: string }>;
+                              } catch {
+                                return null;
                               }
-                            }
-                          }}
-                        >
-                          <Scale className="h-3 w-3 mr-2" />
-                          法令検索
-                        </Button>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          現地住所に広島県または岡山県を含め、座標を登録すると利用できます
-                        </span>
-                      )}
+                            })()
+                          : null;
+
+                        if (legalStatuses && Object.keys(legalStatuses).length > 0) {
+                          // 該当・要確認・非該当でグループ分け
+                          const applicable = Object.entries(legalStatuses).filter(([, v]) => v.status === "該当");
+                          const needsCheck = Object.entries(legalStatuses).filter(([, v]) => v.status === "要確認");
+                          const notApplicable = Object.entries(legalStatuses).filter(([, v]) => v.status === "非該当");
+
+                          return (
+                            <div className="space-y-2">
+                              {applicable.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {applicable.map(([name, info]) => (
+                                    <span
+                                      key={name}
+                                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 border border-red-200 dark:border-red-800 cursor-pointer hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors"
+                                      onClick={() => setActiveTab("legal")}
+                                      title={info.note || "該当"}
+                                    >
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {needsCheck.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {needsCheck.map(([name, info]) => (
+                                    <span
+                                      key={name}
+                                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                                      onClick={() => setActiveTab("legal")}
+                                      title={info.note || "要確認"}
+                                    >
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {notApplicable.length > 0 && (
+                                <details className="text-xs">
+                                  <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
+                                    非該当 ({notApplicable.length}件)
+                                  </summary>
+                                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                    {notApplicable.map(([name]) => (
+                                      <span
+                                        key={name}
+                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground"
+                                      >
+                                        {name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
+                              <button
+                                className="text-xs text-primary hover:underline mt-1"
+                                onClick={() => setActiveTab("legal")}
+                              >
+                                法令タブで詳細を確認・編集
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        // 法令情報がない場合
+                        return (
+                          <div className="space-y-2">
+                            <span className="text-sm text-muted-foreground">
+                              法令情報は登録されていません
+                            </span>
+                            {getLegalSearchUrl() && (
+                              <button
+                                className="block text-xs text-primary hover:underline"
+                                onClick={() => {
+                                  const url = getLegalSearchUrl();
+                                  if (url) {
+                                    const urlObj = new URL(url, window.location.origin);
+                                    const lat = urlObj.searchParams.get("lat");
+                                    const lon = urlObj.searchParams.get("lon");
+                                    const prefecture = urlObj.searchParams.get("prefecture");
+                                    if (lat && lon && prefecture) {
+                                      setLegalSearchParams({ lat, lon, prefecture });
+                                      setActiveTab("legal");
+                                    }
+                                  }
+                                }}
+                              >
+                                法令タブで確認・登録
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 items-start border-b pb-3">
@@ -3080,7 +3329,7 @@ export default function ProjectDetailPage() {
             </TabsContent>
 
             <TabsContent value="legal" className="mt-6 space-y-6">
-              <LegalSearchTab 
+              <LegalSearchTab
                 searchParams={legalSearchParams}
                 projectAddress={project?.address || null}
                 projectCoordinates={project?.coordinates || null}
@@ -3093,6 +3342,13 @@ export default function ProjectDetailPage() {
                       }
                     : null
                 }
+                projectId={project?.id}
+                initialLegalStatuses={project?.legalStatuses}
+                onLegalStatusesChange={(statuses) => {
+                  if (project) {
+                    setProject({ ...project, legalStatuses: JSON.stringify(statuses) });
+                  }
+                }}
               />
             </TabsContent>
 

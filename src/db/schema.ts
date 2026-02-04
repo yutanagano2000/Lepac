@@ -180,6 +180,10 @@ export const projects = sqliteTable("projects", {
   verticalSnowLoad: text("vertical_snow_load"), // 垂直積雪量
   windSpeed: text("wind_speed"), // 風速
   dococabiLink: text("dococabi_link"), // どこキャビ連携URL
+
+  // 法令チェック結果（JSON形式で保存）
+  // 形式: { "法令名": { "status": "該当" | "非該当" | "要確認", "note": "メモ" }, ... }
+  legalStatuses: text("legal_statuses"),
 });
 
 // 進捗テーブル
