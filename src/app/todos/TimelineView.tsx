@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import Link from "next/link";
 import {
   GitBranch,
   Search,
   ChevronRight,
+  ChevronLeft,
   Calendar as CalendarIcon,
   Check,
   Clock,
@@ -16,10 +17,13 @@ import {
   Loader2,
   AlertTriangle,
   Flame,
+  Plus,
+  ListTodo,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -27,13 +31,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { Project, Progress } from "@/db/schema";
+import type { Project, Progress, NewProject } from "@/db/schema";
+
+const MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+const MANAGER_OPTIONS = ["吉國", "刎本", "松下", "佐東", "川田", "近永", "その他"];
 
 // フェーズ定義
 const PHASES = [
@@ -86,9 +109,30 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithProgress | null>(null);
   const [editingPhase, setEditingPhase] = useState<(typeof PHASES)[number] | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [plannedDate, setPlannedDate] = useState<Date | undefined>(undefined);
+  const [completedDate, setCompletedDate] = useState<Date | undefined>(undefined);
+  const [phaseMemo, setPhaseMemo] = useState("");
+  const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
+  const [completedCalendarOpen, setCompletedCalendarOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 案件登録用のstate
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectForm, setProjectForm] = useState<NewProject>({
+    managementNumber: "",
+    manager: "",
+    client: "",
+    projectNumber: "",
+    completionMonth: "",
+  });
+  const [projectCalendarOpen, setProjectCalendarOpen] = useState(false);
+  const [projectCalendarYear, setProjectCalendarYear] = useState(new Date().getFullYear());
+  const [isProjectSubmitting, setIsProjectSubmitting] = useState(false);
+
+  // アラートダイアログ用のstate
+  const [alertDialogOpen, setAlertDialogOpen] = useState(false);
+  const [alertDialogTitle, setAlertDialogTitle] = useState("");
+  const [alertDialogMessage, setAlertDialogMessage] = useState("");
 
   // フィルター機能用のstate
   const [filterOpen, setFilterOpen] = useState(false);
@@ -190,31 +234,31 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     return 0;
   };
 
-  // アラート判定: 進行中フェーズで期日超過または期日未設定
+  // アラート判定: 未完了フェーズで期日未設定または期日超過
   const isPhaseAlert = (project: ProjectWithProgress, phaseIndex: number): boolean => {
-    const currentPhaseIndex = getCurrentPhaseIndex(project);
-    // 進行中のフェーズのみ判定
-    if (phaseIndex !== currentPhaseIndex) return false;
-
     const phase = PHASES[phaseIndex];
     const phaseStatus = getPhaseStatus(project, phase.title);
 
-    // 期日未設定
+    // 完了済みはアラートなし
+    if (phaseStatus.status === "completed") return false;
+
+    // 期日未設定は無条件でアラート
     if (!phaseStatus.date) return true;
 
-    // 期日超過
+    // 期日超過（未完了で期日を過ぎているもの）
     const dueDate = new Date(phaseStatus.date);
     dueDate.setHours(0, 0, 0, 0);
     return dueDate < today;
   };
 
-  // アラート数を計算（表示中の案件のみ）
+  // アラート数を計算（表示中の案件のすべてのアラートフェーズをカウント）
   const alertCount = useMemo(() => {
     let count = 0;
     for (const project of filteredProjects) {
-      const currentPhaseIndex = getCurrentPhaseIndex(project);
-      if (currentPhaseIndex < PHASES.length && isPhaseAlert(project, currentPhaseIndex)) {
-        count++;
+      for (let i = 0; i < PHASES.length; i++) {
+        if (isPhaseAlert(project, i)) {
+          count++;
+        }
       }
     }
     return count;
@@ -223,46 +267,66 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
   const openEditDialog = (project: ProjectWithProgress, phase: (typeof PHASES)[number]) => {
     setEditingProject(project);
     setEditingPhase(phase);
-    const status = getPhaseStatus(project, phase.title);
-    setSelectedDate(status.date || undefined);
+    const progressItem = project.progressItems.find((p) => p.title === phase.title);
+    // 予定日（createdAt）と完了日（completedAt）を個別に設定
+    setPlannedDate(progressItem?.createdAt ? new Date(progressItem.createdAt) : undefined);
+    setCompletedDate(progressItem?.completedAt ? new Date(progressItem.completedAt) : undefined);
+    setPhaseMemo(progressItem?.description || "");
     setEditDialogOpen(true);
   };
 
+  // アラートダイアログを表示するヘルパー
+  const showAlert = useCallback((title: string, message: string) => {
+    setAlertDialogTitle(title);
+    setAlertDialogMessage(message);
+    setAlertDialogOpen(true);
+  }, []);
+
+  // 保存処理（予定日・完了日・メモを保存）
   const handleSave = useCallback(async () => {
-    if (!editingProject || !editingPhase || !selectedDate) {
+    if (!editingProject || !editingPhase) {
+      setEditDialogOpen(false);
+      return;
+    }
+
+    // 予定日も完了日も未設定の場合は保存しない
+    if (!plannedDate && !completedDate) {
       setEditDialogOpen(false);
       return;
     }
 
     setIsSaving(true);
     try {
-      // 既存のProgressアイテムを検索
       const existingProgress = editingProject.progressItems.find(
         (p) => p.title === editingPhase.title
       );
 
-      const dateStr = selectedDate.toISOString();
+      const plannedDateStr = plannedDate ? plannedDate.toISOString() : null;
+      const completedDateStr = completedDate ? completedDate.toISOString() : null;
+      const newStatus = completedDate ? "completed" : "planned";
 
       if (existingProgress) {
-        // 既存のProgressを更新
         await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             progressId: existingProgress.id,
-            status: "completed",
-            completedAt: dateStr,
+            status: newStatus,
+            createdAt: plannedDateStr,
+            completedAt: completedDateStr,
+            description: phaseMemo || null,
           }),
         });
       } else {
-        // 新規Progressを作成
         await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: editingPhase.title,
-            status: "completed",
-            createdAt: dateStr,
+            status: newStatus,
+            createdAt: plannedDateStr || new Date().toISOString(),
+            completedAt: completedDateStr,
+            description: phaseMemo || null,
           }),
         });
       }
@@ -274,19 +338,25 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           const updatedProgressItems = existingProgress
             ? p.progressItems.map((item) =>
                 item.id === existingProgress.id
-                  ? { ...item, status: "completed" as const, completedAt: dateStr }
+                  ? {
+                      ...item,
+                      status: newStatus as "planned" | "completed",
+                      createdAt: plannedDateStr || item.createdAt,
+                      completedAt: completedDateStr,
+                      description: phaseMemo || null,
+                    }
                   : item
               )
             : [
                 ...p.progressItems,
                 {
-                  id: Date.now(), // 仮のID（サーバーからの応答で更新されるまで）
+                  id: Date.now(),
                   projectId: p.id,
                   title: editingPhase.title,
-                  description: null,
-                  status: "completed" as const,
-                  createdAt: dateStr,
-                  completedAt: dateStr,
+                  description: phaseMemo || null,
+                  status: newStatus as "planned" | "completed",
+                  createdAt: plannedDateStr || new Date().toISOString(),
+                  completedAt: completedDateStr,
                 },
               ];
           return { ...p, progressItems: updatedProgressItems };
@@ -296,11 +366,222 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
       setEditDialogOpen(false);
     } catch (error) {
       console.error("保存に失敗しました:", error);
-      alert("保存に失敗しました。もう一度お試しください。");
+      showAlert("エラー", "保存に失敗しました。もう一度お試しください。");
     } finally {
       setIsSaving(false);
     }
-  }, [editingProject, editingPhase, selectedDate]);
+  }, [editingProject, editingPhase, plannedDate, completedDate, phaseMemo, showAlert]);
+
+  // 完了ボタン処理（完了日を今日に設定して保存）
+  const handleMarkComplete = useCallback(async () => {
+    if (!editingProject || !editingPhase) return;
+
+    const now = new Date();
+    setCompletedDate(now);
+
+    setIsSaving(true);
+    try {
+      const existingProgress = editingProject.progressItems.find(
+        (p) => p.title === editingPhase.title
+      );
+
+      const plannedDateStr = plannedDate ? plannedDate.toISOString() : new Date().toISOString();
+      const completedDateStr = now.toISOString();
+
+      if (existingProgress) {
+        await fetch(`/api/projects/${editingProject.id}/progress`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            progressId: existingProgress.id,
+            status: "completed",
+            createdAt: plannedDateStr,
+            completedAt: completedDateStr,
+            description: phaseMemo || null,
+          }),
+        });
+      } else {
+        await fetch(`/api/projects/${editingProject.id}/progress`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: editingPhase.title,
+            status: "completed",
+            createdAt: plannedDateStr,
+            completedAt: completedDateStr,
+            description: phaseMemo || null,
+          }),
+        });
+      }
+
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== editingProject.id) return p;
+          const updatedProgressItems = existingProgress
+            ? p.progressItems.map((item) =>
+                item.id === existingProgress.id
+                  ? {
+                      ...item,
+                      status: "completed" as const,
+                      createdAt: plannedDateStr,
+                      completedAt: completedDateStr,
+                      description: phaseMemo || null,
+                    }
+                  : item
+              )
+            : [
+                ...p.progressItems,
+                {
+                  id: Date.now(),
+                  projectId: p.id,
+                  title: editingPhase.title,
+                  description: phaseMemo || null,
+                  status: "completed" as const,
+                  createdAt: plannedDateStr,
+                  completedAt: completedDateStr,
+                },
+              ];
+          return { ...p, progressItems: updatedProgressItems };
+        })
+      );
+
+      setEditDialogOpen(false);
+    } catch (error) {
+      console.error("完了処理に失敗しました:", error);
+      showAlert("エラー", "完了処理に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert]);
+
+  // 未完了に戻す処理
+  const handleMarkIncomplete = useCallback(async () => {
+    if (!editingProject || !editingPhase) return;
+
+    setCompletedDate(undefined);
+
+    setIsSaving(true);
+    try {
+      const existingProgress = editingProject.progressItems.find(
+        (p) => p.title === editingPhase.title
+      );
+
+      if (!existingProgress) {
+        setIsSaving(false);
+        return;
+      }
+
+      const plannedDateStr = plannedDate ? plannedDate.toISOString() : existingProgress.createdAt;
+
+      await fetch(`/api/projects/${editingProject.id}/progress`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          progressId: existingProgress.id,
+          status: "planned",
+          createdAt: plannedDateStr,
+          completedAt: null,
+          description: phaseMemo || null,
+        }),
+      });
+
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== editingProject.id) return p;
+          const updatedProgressItems = p.progressItems.map((item) =>
+            item.id === existingProgress.id
+              ? {
+                  ...item,
+                  status: "planned" as const,
+                  createdAt: plannedDateStr,
+                  completedAt: null,
+                  description: phaseMemo || null,
+                }
+              : item
+          );
+          return { ...p, progressItems: updatedProgressItems };
+        })
+      );
+
+      setEditDialogOpen(false);
+    } catch (error) {
+      console.error("未完了処理に失敗しました:", error);
+      showAlert("エラー", "未完了処理に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert]);
+
+  // TODOに追加処理
+  const handleAddTodo = useCallback(async () => {
+    if (!editingProject || !editingPhase || !plannedDate) {
+      showAlert("入力エラー", "予定日を設定してください");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const dueDateStr = `${plannedDate.getFullYear()}-${String(plannedDate.getMonth() + 1).padStart(2, "0")}-${String(plannedDate.getDate()).padStart(2, "0")}`;
+      const content = `【${editingPhase.title}】${phaseMemo || editingPhase.title}`;
+
+      await fetch(`/api/projects/${editingProject.id}/todos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          dueDate: dueDateStr,
+        }),
+      });
+
+      showAlert("完了", "TODOに追加しました");
+    } catch (error) {
+      console.error("TODO追加に失敗しました:", error);
+      showAlert("エラー", "TODO追加に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert]);
+
+  // 案件登録処理
+  const handleProjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectForm.manager?.trim()) {
+      showAlert("入力エラー", "担当を選択してください");
+      return;
+    }
+    setIsProjectSubmitting(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(projectForm),
+      });
+      if (res.ok) {
+        const newProject = await res.json();
+        // 新しいプロジェクトをリストに追加
+        setProjects((prev) => [...prev, { ...newProject, progressItems: [] }]);
+        setProjectForm({ managementNumber: "", manager: "", client: "", projectNumber: "", completionMonth: "" });
+        setProjectDialogOpen(false);
+      }
+    } catch (error) {
+      console.error("案件登録に失敗しました:", error);
+      showAlert("エラー", "案件登録に失敗しました。もう一度お試しください。");
+    } finally {
+      setIsProjectSubmitting(false);
+    }
+  };
+
+  const formatCompletionMonth = (value: string | null | undefined) => {
+    if (!value) return "";
+    const [year, month] = value.split("-");
+    return `${year}年${parseInt(month, 10)}月`;
+  };
+
+  const selectProjectMonth = (monthIndex: number) => {
+    const monthStr = `${projectCalendarYear}-${String(monthIndex + 1).padStart(2, "0")}`;
+    setProjectForm({ ...projectForm, completionMonth: monthStr });
+    setProjectCalendarOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -313,15 +594,22 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                 <GitBranch className="h-5 w-5 text-muted-foreground" />
                 <h1 className="text-xl font-semibold">タイムライン</h1>
               </div>
-              {/* アラートサマリー */}
-              {alertCount > 0 && (
-                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
-                  <Flame className="h-5 w-5 text-red-500 animate-pulse" />
-                  <span className="text-sm font-bold text-red-600 dark:text-red-400">
-                    {alertCount}件のアラート
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                {/* アラートサマリー */}
+                {alertCount > 0 && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <Flame className="h-5 w-5 text-red-500 animate-pulse" />
+                    <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                      {alertCount}件のアラート
+                    </span>
+                  </div>
+                )}
+                {/* 新規登録ボタン */}
+                <Button size="sm" onClick={() => setProjectDialogOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  新規登録
+                </Button>
+              </div>
             </div>
 
             {/* テーマメッセージ */}
@@ -534,7 +822,8 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                     ) : (
                       filteredProjects.map((project) => {
                         const currentPhaseIndex = getCurrentPhaseIndex(project);
-                        const hasAlert = currentPhaseIndex < PHASES.length && isPhaseAlert(project, currentPhaseIndex);
+                        // 行にアラートがあるかどうか（全フェーズをチェック）
+                        const hasAlert = PHASES.some((_, i) => isPhaseAlert(project, i));
                         return (
                           <tr
                             key={project.id}
@@ -702,65 +991,277 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>フェーズ日付を編集</DialogTitle>
+            <DialogTitle>フェーズを編集</DialogTitle>
           </DialogHeader>
           {editingProject && editingPhase && (
             <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">案件</p>
-                <p className="font-medium">{editingProject.managementNumber}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">フェーズ</p>
-                <p className="font-medium">{editingPhase.title}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">案件</p>
+                  <p className="font-medium">{editingProject.managementNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">フェーズ</p>
+                  <p className="font-medium">{editingPhase.title}</p>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>完了日 / 予定日</Label>
-                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <Label>予定日</Label>
+                <Popover open={plannedCalendarOpen} onOpenChange={setPlannedCalendarOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
+                        !plannedDate && "text-muted-foreground"
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedDate ? formatDateFull(selectedDate) : "日付を選択"}
+                      {plannedDate ? formatDateFull(plannedDate) : "予定日を選択"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={selectedDate}
+                      selected={plannedDate}
                       onSelect={(date) => {
-                        setSelectedDate(date);
-                        setCalendarOpen(false);
+                        setPlannedDate(date);
+                        setPlannedCalendarOpen(false);
                       }}
                       initialFocus
                     />
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSaving}>
-                  キャンセル
-                </Button>
-                <Button onClick={handleSave} disabled={isSaving || !selectedDate}>
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      保存中...
-                    </>
+              <div className="space-y-2">
+                <Label>完了日</Label>
+                <Popover open={completedCalendarOpen} onOpenChange={setCompletedCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !completedDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {completedDate ? formatDateFull(completedDate) : "完了日を選択"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={completedDate}
+                      onSelect={(date) => {
+                        setCompletedDate(date);
+                        setCompletedCalendarOpen(false);
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>メモ</Label>
+                <Textarea
+                  value={phaseMemo}
+                  onChange={(e) => setPhaseMemo(e.target.value)}
+                  placeholder="メモを入力..."
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-between pt-4">
+                <div className="flex gap-2">
+                  {completedDate ? (
+                    <Button
+                      variant="outline"
+                      className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950"
+                      onClick={handleMarkIncomplete}
+                      disabled={isSaving}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      未完了に戻す
+                    </Button>
                   ) : (
-                    "保存"
+                    <Button
+                      variant="default"
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={handleMarkComplete}
+                      disabled={isSaving}
+                    >
+                      <Check className="h-4 w-4 mr-2" />
+                      完了にする
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    variant="outline"
+                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
+                    onClick={handleAddTodo}
+                    disabled={isSaving}
+                  >
+                    <ListTodo className="h-4 w-4 mr-2" />
+                    TODOに追加
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSaving}>
+                    キャンセル
+                  </Button>
+                  <Button onClick={handleSave} disabled={isSaving || (!plannedDate && !completedDate)}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        保存中...
+                      </>
+                    ) : (
+                      "保存"
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* 案件登録ダイアログ */}
+      <Dialog open={projectDialogOpen} onOpenChange={setProjectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>案件を新規登録</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleProjectSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="managementNumber">管理番号</Label>
+              <Input
+                id="managementNumber"
+                value={projectForm.managementNumber}
+                onChange={(e) => setProjectForm({ ...projectForm, managementNumber: e.target.value })}
+                placeholder="例: P-001"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manager">担当</Label>
+              <Select
+                value={projectForm.manager || undefined}
+                onValueChange={(value) => setProjectForm({ ...projectForm, manager: value })}
+              >
+                <SelectTrigger id="manager" className="w-full">
+                  <SelectValue placeholder="選択してください" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MANAGER_OPTIONS.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client">販売先</Label>
+              <Input
+                id="client"
+                value={projectForm.client}
+                onChange={(e) => setProjectForm({ ...projectForm, client: e.target.value })}
+                placeholder="例: 〇〇不動産"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="projectNumber">案件番号</Label>
+              <Input
+                id="projectNumber"
+                value={projectForm.projectNumber}
+                onChange={(e) => setProjectForm({ ...projectForm, projectNumber: e.target.value })}
+                placeholder="例: 2026-0001"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>完成月</Label>
+              <Popover open={projectCalendarOpen} onOpenChange={setProjectCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {projectForm.completionMonth ? formatCompletionMonth(projectForm.completionMonth) : "選択してください"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setProjectCalendarYear(projectCalendarYear - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="font-medium">{projectCalendarYear}年</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setProjectCalendarYear(projectCalendarYear + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {MONTHS.map((month, index) => (
+                      <Button
+                        key={month}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-9"
+                        onClick={() => selectProjectMonth(index)}
+                      >
+                        {month}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setProjectDialogOpen(false)} disabled={isProjectSubmitting}>
+                キャンセル
+              </Button>
+              <Button type="submit" disabled={isProjectSubmitting}>
+                {isProjectSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    登録中...
+                  </>
+                ) : (
+                  "登録"
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* アラートダイアログ */}
+      <AlertDialog open={alertDialogOpen} onOpenChange={setAlertDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{alertDialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{alertDialogMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setAlertDialogOpen(false)}>
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

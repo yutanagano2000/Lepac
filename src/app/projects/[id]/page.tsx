@@ -1692,6 +1692,13 @@ export default function ProjectDetailPage() {
   const [photoUploadCategory, setPhotoUploadCategory] = useState<string>("");
   const [photoContractorName, setPhotoContractorName] = useState("");
   const [photoNote, setPhotoNote] = useState("");
+  // 工事タブ用 datepicker state
+  const [constructionAvailableDateOpen, setConstructionAvailableDateOpen] = useState(false);
+  const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
+  const [constructionStartScheduledOpen, setConstructionStartScheduledOpen] = useState(false);
+  const [constructionStartDateOpen, setConstructionStartDateOpen] = useState(false);
+  const [constructionEndScheduledOpen, setConstructionEndScheduledOpen] = useState(false);
+  const [constructionEndDateOpen, setConstructionEndDateOpen] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [newComment, setNewComment] = useState("");
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
@@ -3469,99 +3476,171 @@ export default function ProjectDetailPage() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>着工可能日</Label>
-                        <Input
-                          type="date"
-                          value={project?.constructionAvailableDate || ""}
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            await fetch(`/api/projects/${id}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ constructionAvailableDate: value || null }),
-                            });
-                            fetchProject();
-                          }}
-                        />
+                        <Popover open={constructionAvailableDateOpen} onOpenChange={setConstructionAvailableDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionAvailableDate && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {project?.constructionAvailableDate ? formatYyyyMd(new Date(project.constructionAvailableDate + "T00:00:00")) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={project?.constructionAvailableDate ? new Date(project.constructionAvailableDate + "T00:00:00") : undefined}
+                              onSelect={async (d) => {
+                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+                                await fetch(`/api/projects/${id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ constructionAvailableDate: value }),
+                                });
+                                fetchProject();
+                                setConstructionAvailableDateOpen(false);
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label>納品日</Label>
-                        <Input
-                          type="date"
-                          value={project?.deliveryDate || ""}
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            await fetch(`/api/projects/${id}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ deliveryDate: value || null }),
-                            });
-                            fetchProject();
-                          }}
-                        />
+                        <Popover open={deliveryDateOpen} onOpenChange={setDeliveryDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.deliveryDate && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {project?.deliveryDate ? formatYyyyMd(new Date(project.deliveryDate + "T00:00:00")) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={project?.deliveryDate ? new Date(project.deliveryDate + "T00:00:00") : undefined}
+                              onSelect={async (d) => {
+                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+                                await fetch(`/api/projects/${id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ deliveryDate: value }),
+                                });
+                                fetchProject();
+                                setDeliveryDateOpen(false);
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label>着工予定日</Label>
-                        <Input
-                          type="date"
-                          value={project?.constructionStartScheduled || ""}
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            await fetch(`/api/projects/${id}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ constructionStartScheduled: value || null }),
-                            });
-                            fetchProject();
-                          }}
-                        />
+                        <Popover open={constructionStartScheduledOpen} onOpenChange={setConstructionStartScheduledOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionStartScheduled && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {project?.constructionStartScheduled ? formatYyyyMd(new Date(project.constructionStartScheduled + "T00:00:00")) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={project?.constructionStartScheduled ? new Date(project.constructionStartScheduled + "T00:00:00") : undefined}
+                              onSelect={async (d) => {
+                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+                                await fetch(`/api/projects/${id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ constructionStartScheduled: value }),
+                                });
+                                fetchProject();
+                                setConstructionStartScheduledOpen(false);
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label>着工日</Label>
-                        <Input
-                          type="date"
-                          value={project?.constructionStartDate || ""}
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            await fetch(`/api/projects/${id}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ constructionStartDate: value || null }),
-                            });
-                            fetchProject();
-                          }}
-                        />
+                        <Popover open={constructionStartDateOpen} onOpenChange={setConstructionStartDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionStartDate && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {project?.constructionStartDate ? formatYyyyMd(new Date(project.constructionStartDate + "T00:00:00")) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={project?.constructionStartDate ? new Date(project.constructionStartDate + "T00:00:00") : undefined}
+                              onSelect={async (d) => {
+                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+                                await fetch(`/api/projects/${id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ constructionStartDate: value }),
+                                });
+                                fetchProject();
+                                setConstructionStartDateOpen(false);
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label>完工予定日</Label>
-                        <Input
-                          type="date"
-                          value={project?.constructionEndScheduled || ""}
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            await fetch(`/api/projects/${id}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ constructionEndScheduled: value || null }),
-                            });
-                            fetchProject();
-                          }}
-                        />
+                        <Popover open={constructionEndScheduledOpen} onOpenChange={setConstructionEndScheduledOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionEndScheduled && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {project?.constructionEndScheduled ? formatYyyyMd(new Date(project.constructionEndScheduled + "T00:00:00")) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={project?.constructionEndScheduled ? new Date(project.constructionEndScheduled + "T00:00:00") : undefined}
+                              onSelect={async (d) => {
+                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+                                await fetch(`/api/projects/${id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ constructionEndScheduled: value }),
+                                });
+                                fetchProject();
+                                setConstructionEndScheduledOpen(false);
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label>完工日</Label>
-                        <Input
-                          type="date"
-                          value={project?.constructionEndDate || ""}
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            await fetch(`/api/projects/${id}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ constructionEndDate: value || null }),
-                            });
-                            fetchProject();
-                          }}
-                        />
+                        <Popover open={constructionEndDateOpen} onOpenChange={setConstructionEndDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionEndDate && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {project?.constructionEndDate ? formatYyyyMd(new Date(project.constructionEndDate + "T00:00:00")) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={project?.constructionEndDate ? new Date(project.constructionEndDate + "T00:00:00") : undefined}
+                              onSelect={async (d) => {
+                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+                                await fetch(`/api/projects/${id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ constructionEndDate: value }),
+                                });
+                                fetchProject();
+                                setConstructionEndDateOpen(false);
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </div>
                   </div>
