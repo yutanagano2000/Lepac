@@ -245,6 +245,11 @@ async function initDb() {
     )
   `);
 
+  // OAuth連携用カラム追加
+  try { await c.execute(`ALTER TABLE users ADD COLUMN line_id TEXT UNIQUE`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE users ADD COLUMN email TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE users ADD COLUMN image TEXT`); } catch (e) {}
+
   await c.execute(`
     CREATE TABLE IF NOT EXISTS progress (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

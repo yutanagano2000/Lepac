@@ -246,6 +246,10 @@ export const users = sqliteTable("users", {
   name: text("name"), // 表示名
   password: text("password").notNull(), // ハッシュ化したパスワード
   role: text("role").notNull().default("user"), // user, admin
+  // OAuth連携用
+  lineId: text("line_id").unique(), // LINE User ID
+  email: text("email"), // メールアドレス（OAuth取得用）
+  image: text("image"), // プロフィール画像URL
 });
 
 export type User = typeof users.$inferSelect;
