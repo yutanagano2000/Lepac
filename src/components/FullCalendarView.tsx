@@ -19,7 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Trash2, ExternalLink } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Clock, Trash2, ExternalLink, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -35,13 +42,22 @@ interface CalendarEvent {
   borderColor?: string;
   textColor?: string;
   extendedProps?: {
-    type: "todo" | "progress" | "meeting" | "custom";
+    type: "todo" | "progress" | "meeting" | "custom" | "other";
     projectId?: number;
     projectName?: string;
     description?: string;
     status?: string;
+    userName?: string | null;
+    category?: string; // 会議の種別
   };
 }
+
+// イベントタイプのオプション
+const EVENT_TYPE_OPTIONS = [
+  { value: "todo", label: "TODO", color: "bg-amber-500" },
+  { value: "meeting", label: "会議", color: "bg-purple-500" },
+  { value: "other", label: "その他", color: "bg-zinc-500" },
+];
 
 // イベントカラー（バッジ用のみカラフル、それ以外はモノトーン）
 const getEventColor = (type: string, status?: string) => {
@@ -54,8 +70,8 @@ const getEventColor = (type: string, status?: string) => {
       return { bg: "#3b82f6", border: "#2563eb", text: "#ffffff" };
     case "meeting":
       return { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" };
+    case "other":
     case "custom":
-      return { bg: "#71717a", border: "#52525b", text: "#ffffff" };
     default:
       return { bg: "#71717a", border: "#52525b", text: "#ffffff" };
   }
@@ -70,13 +86,14 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
     start: "",
     end: "",
     allDay: true,
     description: "",
-    type: "custom" as const,
+    type: "other" as "todo" | "meeting" | "other",
   });
 
   // 削除確認ダイアログ用
@@ -97,7 +114,7 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
       end: info.endStr,
       allDay: info.allDay,
       description: "",
-      type: "custom",
+      type: "other",
     });
     setIsCreateDialogOpen(true);
   };
@@ -119,32 +136,55 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
   const handleCreateEvent = async () => {
     if (!newEvent.title.trim()) return;
 
-    const colors = getEventColor(newEvent.type);
-    const event: CalendarEvent = {
-      id: `custom-${Date.now()}`,
-      title: newEvent.title,
-      start: newEvent.start,
-      end: newEvent.end || undefined,
-      allDay: newEvent.allDay,
-      backgroundColor: colors.bg,
-      borderColor: colors.border,
-      textColor: colors.text,
-      extendedProps: {
-        type: newEvent.type,
-        description: newEvent.description,
-      },
-    };
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/calendar/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newEvent.title,
+          eventType: newEvent.type,
+          eventDate: newEvent.start,
+          endDate: newEvent.end || null,
+          description: newEvent.description,
+        }),
+      });
 
-    setEvents([...events, event]);
-    setIsCreateDialogOpen(false);
-    setNewEvent({
-      title: "",
-      start: "",
-      end: "",
-      allDay: true,
-      description: "",
-      type: "custom",
-    });
+      if (!res.ok) throw new Error("Failed to create event");
+
+      const data = await res.json();
+      const colors = getEventColor(data.type);
+      const event: CalendarEvent = {
+        id: data.id,
+        title: data.title,
+        start: data.start,
+        end: data.end || undefined,
+        allDay: true,
+        backgroundColor: colors.bg,
+        borderColor: colors.border,
+        textColor: colors.text,
+        extendedProps: {
+          type: data.type,
+          description: data.description,
+          userName: data.userName,
+        },
+      };
+
+      setEvents([...events, event]);
+      setIsCreateDialogOpen(false);
+      setNewEvent({
+        title: "",
+        start: "",
+        end: "",
+        allDay: true,
+        description: "",
+        type: "other",
+      });
+    } catch (error) {
+      console.error("イベントの作成に失敗しました:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openDeleteDialog = () => {
@@ -153,6 +193,20 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
 
   const handleDeleteEvent = async () => {
     if (!selectedEvent) return;
+
+    // カスタムイベントの場合はAPIで削除
+    if (selectedEvent.id.startsWith("custom-")) {
+      try {
+        const res = await fetch(`/api/calendar/events/${selectedEvent.id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete event");
+      } catch (error) {
+        console.error("イベントの削除に失敗しました:", error);
+        return;
+      }
+    }
+
     setEvents(events.filter((e) => e.id !== selectedEvent.id));
     setDeleteDialogOpen(false);
     setIsEventDialogOpen(false);
@@ -178,6 +232,10 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-purple-500" />
           会議
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm bg-zinc-500" />
+          その他
         </span>
       </div>
 
@@ -255,7 +313,7 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
                 </p>
               )}
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge
                   variant="secondary"
                   className={cn(
@@ -263,14 +321,22 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
                     selectedEvent.extendedProps?.type === "todo" && "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
                     selectedEvent.extendedProps?.type === "progress" && "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200",
                     selectedEvent.extendedProps?.type === "meeting" && "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200",
+                    selectedEvent.extendedProps?.type === "other" && "bg-zinc-100 text-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-200",
                     selectedEvent.extendedProps?.status === "completed" && "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
                   )}
                 >
                   {selectedEvent.extendedProps?.status === "completed" ? "完了" :
                    selectedEvent.extendedProps?.type === "todo" ? "TODO" :
                    selectedEvent.extendedProps?.type === "progress" ? "進捗" :
-                   selectedEvent.extendedProps?.type === "meeting" ? "会議" : "予定"}
+                   selectedEvent.extendedProps?.type === "meeting" ? "会議" :
+                   selectedEvent.extendedProps?.type === "other" ? "その他" : "予定"}
                 </Badge>
+                {selectedEvent.extendedProps?.userName && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <User className="h-3 w-3" />
+                    {selectedEvent.extendedProps.userName}
+                  </span>
+                )}
               </div>
 
               <div className="flex justify-between pt-3 border-t">
@@ -315,6 +381,28 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
               />
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-sm">種別</Label>
+              <Select
+                value={newEvent.type}
+                onValueChange={(value: "todo" | "meeting" | "other") => setNewEvent({ ...newEvent, type: value })}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="種別を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <span className="flex items-center gap-2">
+                        <span className={cn("w-2.5 h-2.5 rounded-sm", option.color)} />
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="event-start" className="text-sm">開始</Label>
@@ -351,11 +439,18 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={() => setIsCreateDialogOpen(false)}>
+              <Button variant="ghost" size="sm" onClick={() => setIsCreateDialogOpen(false)} disabled={isSubmitting}>
                 キャンセル
               </Button>
-              <Button size="sm" onClick={handleCreateEvent} disabled={!newEvent.title.trim()}>
-                追加
+              <Button size="sm" onClick={handleCreateEvent} disabled={!newEvent.title.trim() || isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    追加中...
+                  </>
+                ) : (
+                  "追加"
+                )}
               </Button>
             </div>
           </div>

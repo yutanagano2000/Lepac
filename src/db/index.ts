@@ -409,6 +409,21 @@ async function initDb() {
     )
   `);
 
+  // カレンダーイベントテーブル（カスタムイベント用）
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      event_type TEXT NOT NULL DEFAULT 'other',
+      event_date TEXT NOT NULL,
+      end_date TEXT,
+      description TEXT,
+      user_id INTEGER,
+      user_name TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
+
   // 古い名前を新しい名前に統一（重複データのクリーンアップ）
   // 「現地調査」→「現調」、「農転・地目申請」→「法令申請」、「連系（発電開始）」→「連系」
   const legacyTitleMigrations = [

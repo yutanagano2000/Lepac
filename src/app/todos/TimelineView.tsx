@@ -598,7 +598,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                 {/* アラートサマリー */}
                 {alertCount > 0 && (
                   <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
-                    <Flame className="h-5 w-5 text-red-500 animate-pulse" />
+                    <Flame className="h-5 w-5 text-red-500" />
                     <span className="text-sm font-bold text-red-600 dark:text-red-400">
                       {alertCount}件のアラート
                     </span>
@@ -882,7 +882,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                                       className={cn(
                                         "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
                                         isCompleted && "bg-green-500 text-white",
-                                        isAlert && "bg-red-500 text-white animate-pulse",
+                                        isAlert && "bg-red-500 text-white",
                                         isCurrent && !isCompleted && !isAlert && "bg-blue-500 text-white",
                                         !isCompleted && !isCurrent && !isAlert && "bg-zinc-200 dark:bg-zinc-700"
                                       )}

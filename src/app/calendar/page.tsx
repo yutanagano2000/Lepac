@@ -26,11 +26,13 @@ interface CalendarEvent {
   borderColor?: string;
   textColor?: string;
   extendedProps?: {
-    type: "todo" | "progress" | "meeting" | "custom";
+    type: "todo" | "progress" | "meeting" | "custom" | "other";
     projectId?: number;
     projectName?: string;
     description?: string;
     status?: string;
+    userName?: string | null;
+    category?: string;
   };
 }
 
@@ -44,6 +46,8 @@ const getEventColor = (type: string, status?: string) => {
       return { bg: "#3b82f6", border: "#2563eb", text: "#ffffff" };
     case "meeting":
       return { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" };
+    case "other":
+    case "custom":
     default:
       return { bg: "#71717a", border: "#52525b", text: "#ffffff" };
   }
@@ -67,6 +71,7 @@ export default function CalendarPage() {
             id: event.id,
             title: event.title,
             start: event.start,
+            end: event.end,
             allDay: true,
             backgroundColor: colors.bg,
             borderColor: colors.border,
@@ -77,6 +82,8 @@ export default function CalendarPage() {
               projectName: event.projectName,
               description: event.description,
               status: event.status,
+              userName: event.userName,
+              category: event.category,
             },
           };
         });

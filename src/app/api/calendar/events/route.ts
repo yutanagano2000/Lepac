@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { todos, projects, progress, meetings } from "@/db/schema";
+import { todos, projects, progress, meetings, calendarEvents } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { auth } from "@/auth";
 
 // カレンダー用のイベントを一括取得
 export async function GET() {
   try {
     // 並列でデータを取得
-    const [allTodos, allProjects, allProgress, allMeetings] = await Promise.all([
+    const [allTodos, allProjects, allProgress, allMeetings, allCalendarEvents] = await Promise.all([
       db.select().from(todos),
       db.select().from(projects),
       db.select().from(progress),
       db.select().from(meetings),
+      db.select().from(calendarEvents),
     ]);
 
     // プロジェクトIDをキーにしたマップを作成
@@ -32,6 +34,7 @@ export async function GET() {
         projectName: project?.managementNumber || null,
         status: todo.completedAt ? "completed" : "pending",
         description: null,
+        userName: todo.userName || null,
       });
     }
 
@@ -50,10 +53,11 @@ export async function GET() {
         projectName: project?.managementNumber || null,
         status: prog.status,
         description: prog.description,
+        userName: null,
       });
     }
 
-    // 会議イベント
+    // 会議イベント（タイトルのみ、議事録は含めない）
     for (const meeting of allMeetings) {
       events.push({
         id: `meeting-${meeting.id}`,
@@ -63,7 +67,25 @@ export async function GET() {
         projectId: null,
         projectName: null,
         status: null,
-        description: meeting.content,
+        description: null, // 議事録は含めない
+        userName: null,
+        category: meeting.category, // 種別（社内/社外）
+      });
+    }
+
+    // カスタムイベント
+    for (const event of allCalendarEvents) {
+      events.push({
+        id: `custom-${event.id}`,
+        type: event.eventType as "todo" | "meeting" | "other",
+        title: event.title,
+        start: event.eventDate,
+        end: event.endDate,
+        projectId: null,
+        projectName: null,
+        status: null,
+        description: event.description,
+        userName: event.userName || null,
       });
     }
 
@@ -71,5 +93,52 @@ export async function GET() {
   } catch (error) {
     console.error("カレンダーイベントの取得に失敗:", error);
     return NextResponse.json({ error: "データの取得に失敗しました" }, { status: 500 });
+  }
+}
+
+// カスタムイベントを作成
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    const body = await request.json();
+    const { title, eventType, eventDate, endDate, description } = body;
+
+    if (!title || !eventDate) {
+      return NextResponse.json(
+        { error: "タイトルと日付は必須です" },
+        { status: 400 }
+      );
+    }
+
+    // セッションからユーザー情報を取得
+    const userId = session?.user?.id ? parseInt(session.user.id) : null;
+    const userName = session?.user?.name || (session?.user as any)?.username || null;
+
+    const [result] = await db
+      .insert(calendarEvents)
+      .values({
+        title,
+        eventType: eventType || "other",
+        eventDate,
+        endDate: endDate || null,
+        description: description || null,
+        userId,
+        userName,
+        createdAt: new Date().toISOString(),
+      })
+      .returning();
+
+    return NextResponse.json({
+      id: `custom-${result.id}`,
+      type: result.eventType,
+      title: result.title,
+      start: result.eventDate,
+      end: result.endDate,
+      description: result.description,
+      userName: result.userName,
+    });
+  } catch (error) {
+    console.error("イベントの作成に失敗:", error);
+    return NextResponse.json({ error: "イベントの作成に失敗しました" }, { status: 500 });
   }
 }

@@ -352,3 +352,19 @@ export const constructionPhotos = sqliteTable("construction_photos", {
 
 export type ConstructionPhoto = typeof constructionPhotos.$inferSelect;
 export type NewConstructionPhoto = typeof constructionPhotos.$inferInsert;
+
+// カレンダーイベントテーブル（カスタムイベント用）
+export const calendarEvents = sqliteTable("calendar_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(), // イベント名
+  eventType: text("event_type").notNull().default("other"), // todo, meeting, other, etc.
+  eventDate: text("event_date").notNull(), // 日付（YYYY-MM-DD）
+  endDate: text("end_date"), // 終了日（任意）
+  description: text("description"), // 説明・メモ
+  userId: integer("user_id"), // 作成者ID
+  userName: text("user_name"), // 作成者名（キャッシュ用）
+  createdAt: text("created_at").notNull(),
+});
+
+export type CalendarEvent = typeof calendarEvents.$inferSelect;
+export type NewCalendarEvent = typeof calendarEvents.$inferInsert;
