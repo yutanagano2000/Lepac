@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { User } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Line from "next-auth/providers/line";
 import { authConfig } from "./auth.config";
@@ -18,7 +18,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
     // 従来のユーザー名/パスワード認証
     Credentials({
-      async authorize(credentials) {
+      async authorize(credentials): Promise<User | null> {
         const parsedCredentials = z
           .object({ username: z.string(), password: z.string().min(6) })
           .safeParse(credentials);
@@ -36,11 +36,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const passwordsMatch = await bcrypt.compare(password, user.password);
           if (passwordsMatch) {
             return {
-              ...user,
               id: String(user.id),
+              name: user.name,
+              email: user.email,
+              image: user.image,
+              username: user.username,
               organizationId: user.organizationId,
               role: user.role,
-            } as any;
+            };
           }
         }
 
@@ -71,7 +74,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const [existingUser] = await db
             .select()
             .from(users)
-            .where(eq(users.lineId as any, lineId));
+            .where(eq(users.lineId, lineId));
 
           if (existingUser) {
             console.log("[LINE Auth] Existing user found:", existingUser.id);
@@ -79,13 +82,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             await db
               .update(users)
               .set({ name, image })
-              .where(eq(users.lineId as any, lineId));
+              .where(eq(users.lineId, lineId));
 
             // user.idを既存のDBのIDに設定
             user.id = String(existingUser.id);
-            (user as any).username = existingUser.username;
-            (user as any).organizationId = existingUser.organizationId;
-            (user as any).role = existingUser.role;
+            user.username = existingUser.username;
+            user.organizationId = existingUser.organizationId;
+            user.role = existingUser.role;
           } else {
             console.log("[LINE Auth] Creating new user");
             // 新規ユーザーを作成
@@ -106,9 +109,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
             console.log("[LINE Auth] New user created:", newUser.id);
             user.id = String(newUser.id);
-            (user as any).username = newUser.username;
-            (user as any).organizationId = newUser.organizationId;
-            (user as any).role = newUser.role;
+            user.username = newUser.username;
+            user.organizationId = newUser.organizationId;
+            user.role = newUser.role;
           }
         } catch (error) {
           console.error("[LINE Auth] Error in signIn callback:", error);
@@ -119,10 +122,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async jwt({ token, user, account, trigger }) {
       if (user) {
-        token.username = (user as any).username;
+        token.username = user.username;
         token.sub = user.id;
-        token.organizationId = (user as any).organizationId ?? null;
-        token.role = (user as any).role ?? "user";
+        token.organizationId = user.organizationId ?? null;
+        token.role = user.role ?? "user";
       }
       if (account?.provider === "line") {
         token.provider = "line";
@@ -150,14 +153,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.sub;
       }
       if (token.username && session.user) {
-        (session.user as any).username = token.username;
+        session.user.username = token.username;
       }
       if (token.provider && session.user) {
-        (session.user as any).provider = token.provider;
+        session.user.provider = token.provider;
       }
       if (session.user) {
-        (session.user as any).organizationId = token.organizationId ?? null;
-        (session.user as any).role = token.role ?? "user";
+        session.user.organizationId = token.organizationId ?? null;
+        session.user.role = token.role ?? "user";
       }
       return session;
     },

@@ -1,5 +1,4 @@
 import type { NextAuthConfig } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
 
 export const authConfig = {
   pages: {
@@ -12,7 +11,7 @@ export const authConfig = {
       const isOnboardingPage = nextUrl.pathname.startsWith("/onboarding");
       const isPublicApi = nextUrl.pathname.startsWith("/api/auth") ||
                          nextUrl.pathname.startsWith("/api/register-initial-user");
-      const isAdmin = (auth?.user as any)?.role === "admin";
+      const isAdmin = auth?.user?.role === "admin";
 
       if (isLoginPage) {
         if (isLoggedIn) return Response.redirect(new URL("/", nextUrl));
@@ -25,7 +24,7 @@ export const authConfig = {
 
       // ログイン済みユーザーの組織選択チェック
       if (isLoggedIn && !isOnboardingPage && !isPublicApi) {
-        const organizationId = (auth?.user as any)?.organizationId;
+        const organizationId = auth?.user?.organizationId;
         // organizationIdがnull/undefinedの場合は組織選択画面へリダイレクト
         if (organizationId === null || organizationId === undefined) {
           return Response.redirect(new URL("/onboarding/select-organization", nextUrl));
@@ -35,7 +34,7 @@ export const authConfig = {
       // 組織選択済みユーザーがonboardingページにアクセスした場合はホームへリダイレクト
       // ただしadminユーザーは常に組織選択画面にアクセス可能（組織切り替え用）
       if (isLoggedIn && isOnboardingPage && !isAdmin) {
-        const organizationId = (auth?.user as any)?.organizationId;
+        const organizationId = auth?.user?.organizationId;
         if (organizationId !== null && organizationId !== undefined) {
           return Response.redirect(new URL("/", nextUrl));
         }
@@ -48,19 +47,19 @@ export const authConfig = {
         session.user.id = token.sub;
       }
       if (token.username && session.user) {
-        (session.user as any).username = token.username;
+        session.user.username = token.username;
       }
       if (session.user) {
-        (session.user as any).organizationId = token.organizationId ?? null;
-        (session.user as any).role = token.role ?? "user";
+        session.user.organizationId = token.organizationId ?? null;
+        session.user.role = token.role ?? "user";
       }
       return session;
     },
     async jwt({ token, user }) {
       if (user) {
-        token.username = (user as any).username;
-        token.organizationId = (user as any).organizationId ?? null;
-        token.role = (user as any).role ?? "user";
+        token.username = user.username;
+        token.organizationId = user.organizationId ?? null;
+        token.role = user.role ?? "user";
       }
       return token;
     },

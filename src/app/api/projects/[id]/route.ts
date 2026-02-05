@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress, comments } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { updateProjectSchema, validateBody } from "@/lib/validations";
+import { ApiError, createErrorResponse } from "@/lib/api-error";
 
 export async function GET(
   request: Request,
@@ -19,31 +21,26 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const body = await request.json();
-  const [result] = await db
-    .update(projects)
-    .set({
-      managementNumber: body.managementNumber,
-      manager: body.manager,
-      client: body.client,
-      projectNumber: body.projectNumber,
-      completionMonth: body.completionMonth || null,
-      address: body.address || null,
-      coordinates: body.coordinates || null,
-      landowner1: body.landowner1 || null,
-      landowner2: body.landowner2 || null,
-      landowner3: body.landowner3 || null,
-      landCategory1: body.landCategory1 || null,
-      landCategory2: body.landCategory2 || null,
-      landCategory3: body.landCategory3 || null,
-      landArea1: body.landArea1 || null,
-      landArea2: body.landArea2 || null,
-      landArea3: body.landArea3 || null,
-    })
-    .where(eq(projects.id, Number(id)))
-    .returning();
-  return NextResponse.json(result);
+  try {
+    const { id } = await params;
+    const validation = await validateBody(request, updateProjectSchema);
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 });
+    }
+
+    const [result] = await db
+      .update(projects)
+      .set(validation.data)
+      .where(eq(projects.id, Number(id)))
+      .returning();
+
+    if (!result) {
+      throw ApiError.notFound("プロジェクトが見つかりません");
+    }
+    return NextResponse.json(result);
+  } catch (error) {
+    return createErrorResponse(error, "プロジェクトの更新に失敗しました");
+  }
 }
 
 export async function DELETE(

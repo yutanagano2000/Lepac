@@ -43,7 +43,7 @@ export async function POST(
 
   // セッションからユーザー情報を取得
   const userId = session?.user?.id ? parseInt(session.user.id) : null;
-  const userName = session?.user?.name || (session?.user as any)?.username || null;
+  const userName = session?.user?.name || session?.user?.username || null;
 
   const [result] = await db
     .insert(todos)

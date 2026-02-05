@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { todos } from "@/db/schema";
+import { updateTodoSchema, validateBody } from "@/lib/validations";
 
 export const dynamic = "force-dynamic";
 
@@ -14,30 +15,39 @@ export async function PATCH(
   if (isNaN(todoId)) {
     return NextResponse.json({ error: "Invalid todo ID" }, { status: 400 });
   }
-  const body = await request.json();
-  const updates: { content?: string; dueDate?: string; completedAt?: string | null; completedMemo?: string | null } = {};
-  if (body.content !== undefined) updates.content = body.content?.trim() ?? "";
-  if (body.dueDate !== undefined) updates.dueDate = body.dueDate;
-  if (body.completedAt !== undefined) updates.completedAt = body.completedAt ?? null;
-  if (body.completedMemo !== undefined) updates.completedMemo = body.completedMemo ?? null;
+
+  const validation = await validateBody(request, updateTodoSchema);
+  if (!validation.success) {
+    return NextResponse.json(validation.error, { status: 400 });
+  }
+
+  const { content, dueDate, completedAt, completedMemo } = validation.data;
+  const updates: Record<string, string | null | undefined> = {};
+
+  if (content !== undefined) updates.content = content.trim();
+  if (dueDate !== undefined) updates.dueDate = dueDate;
+  if (completedAt !== undefined) updates.completedAt = completedAt;
+  if (completedMemo !== undefined) updates.completedMemo = completedMemo;
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
-  if (updates.content !== undefined && !updates.content) {
-    return NextResponse.json({ error: "content cannot be empty" }, { status: 400 });
+
+  try {
+    const [result] = await db
+      .update(todos)
+      .set(updates)
+      .where(eq(todos.id, todoId))
+      .returning();
+
+    if (!result) {
+      return NextResponse.json({ error: "TODOが見つかりません" }, { status: 404 });
+    }
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Failed to update todo:", error);
+    return NextResponse.json({ error: "TODOの更新に失敗しました" }, { status: 500 });
   }
-  if (updates.dueDate !== undefined && !updates.dueDate) {
-    return NextResponse.json({ error: "dueDate is required when updating" }, { status: 400 });
-  }
-  const [result] = await db
-    .update(todos)
-    .set(updates)
-    .where(eq(todos.id, todoId))
-    .returning();
-  if (!result) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  return NextResponse.json(result);
 }
 
 export async function DELETE(

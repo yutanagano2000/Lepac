@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress, todos } from "@/db/schema";
+import { eq, lt, and, isNull, lte, gt, desc, sql } from "drizzle-orm";
+import { createErrorResponse } from "@/lib/api-error";
 
 export const dynamic = "force-dynamic";
 
@@ -14,273 +16,332 @@ const PHASES = [
 // 完工月から月初の日付を取得するヘルパー
 function parseCompletionMonth(completionMonth: string | null): Date | null {
   if (!completionMonth) return null;
-  // "YYYY-MM" または "YYYY/MM" または "YYYY年MM月" などの形式に対応
   const match = completionMonth.match(/(\d{4})[年\/\-]?(\d{1,2})/);
   if (match) {
     const year = parseInt(match[1]);
-    const month = parseInt(match[2]) - 1; // 0-indexed
+    const month = parseInt(match[2]) - 1;
     return new Date(year, month, 1);
   }
   return null;
 }
 
 export async function GET() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const today = now.toISOString().split("T")[0];
-  const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  try {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const today = now.toISOString().split("T")[0];
+    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-  // 全データ取得
-  const allProjects = await db.select().from(projects);
-  const allProgress = await db.select().from(progress);
-  const allTodos = await db.select().from(todos);
+    // 最適化: 並列でクエリを実行し、必要なデータのみ取得
+    const [
+      // 期限切れTODO（未完了で期日が今日より前）
+      overdueTodosRaw,
+      // 今日期日のTODO
+      todayTodosRaw,
+      // 今週期日のTODO
+      thisWeekTodosRaw,
+      // 全プロジェクト（必要なカラムのみ）
+      allProjects,
+      // 全進捗
+      allProgress,
+      // 最近のプロジェクト
+      recentProjects,
+    ] = await Promise.all([
+      // 期限切れTODO
+      db.select({
+        id: todos.id,
+        content: todos.content,
+        dueDate: todos.dueDate,
+        projectId: todos.projectId,
+      })
+        .from(todos)
+        .where(and(isNull(todos.completedAt), lt(todos.dueDate, today)))
+        .limit(10),
 
-  // 1. 期日超過TODO（未完了で期日が今日より前）
-  const overdueTodos = allTodos.filter((t) => {
-    if (t.completedAt) return false;
-    return t.dueDate < today;
-  });
+      // 今日期日のTODO
+      db.select({
+        id: todos.id,
+        content: todos.content,
+        dueDate: todos.dueDate,
+        projectId: todos.projectId,
+      })
+        .from(todos)
+        .where(and(isNull(todos.completedAt), eq(todos.dueDate, today)))
+        .limit(10),
 
-  // 2. 今日期日のTODO
-  const todayTodos = allTodos.filter((t) => {
-    if (t.completedAt) return false;
-    return t.dueDate === today;
-  });
+      // 今週期日のTODO
+      db.select({
+        id: todos.id,
+        content: todos.content,
+        dueDate: todos.dueDate,
+        projectId: todos.projectId,
+      })
+        .from(todos)
+        .where(and(
+          isNull(todos.completedAt),
+          gt(todos.dueDate, today),
+          lte(todos.dueDate, weekFromNow)
+        ))
+        .limit(10),
 
-  // 3. 今週期日のTODO（今日より後、1週間以内）
-  const thisWeekTodos = allTodos.filter((t) => {
-    if (t.completedAt) return false;
-    return t.dueDate > today && t.dueDate <= weekFromNow;
-  });
+      // プロジェクト（必要なカラムのみ）
+      db.select({
+        id: projects.id,
+        managementNumber: projects.managementNumber,
+        client: projects.client,
+        completionMonth: projects.completionMonth,
+        siteInvestigation: projects.siteInvestigation,
+      }).from(projects),
 
-  // 4. 案件アラート（タイムラインと同じロジック）
-  // 各フェーズで、完了していない場合:
-  // - 期日未設定（progressがない、またはcreatedAtがない） → アラート
-  // - 期日超過（未完了でcreatedAt < 今日） → アラート
-  const projectsWithAlerts: { id: number; managementNumber: string; alertCount: number }[] = [];
-  let totalAlertCount = 0;
+      // 進捗
+      db.select().from(progress),
 
-  for (const project of allProjects) {
-    const projectProgress = allProgress.filter((p) => p.projectId === project.id);
-    let alertCount = 0;
+      // 最近のプロジェクト
+      db.select({
+        id: projects.id,
+        managementNumber: projects.managementNumber,
+        client: projects.client,
+      })
+        .from(projects)
+        .orderBy(desc(projects.id))
+        .limit(5),
+    ]);
 
-    for (const phaseTitle of PHASES) {
-      const phaseProgress = projectProgress.find((p) => p.title === phaseTitle);
+    // TODOのカウントを並列で取得
+    const [overdueTodosCount, todayTodosCount, thisWeekTodosCount] = await Promise.all([
+      db.select({ count: sql<number>`count(*)` })
+        .from(todos)
+        .where(and(isNull(todos.completedAt), lt(todos.dueDate, today))),
+      db.select({ count: sql<number>`count(*)` })
+        .from(todos)
+        .where(and(isNull(todos.completedAt), eq(todos.dueDate, today))),
+      db.select({ count: sql<number>`count(*)` })
+        .from(todos)
+        .where(and(
+          isNull(todos.completedAt),
+          gt(todos.dueDate, today),
+          lte(todos.dueDate, weekFromNow)
+        )),
+    ]);
 
-      // 完了済みはスキップ（status === "completed" かつ completedAt がある場合のみ）
-      if (phaseProgress?.status === "completed" && phaseProgress?.completedAt) continue;
+    // プロジェクトIDをキーにしたMapを作成（O(n)でルックアップ可能に）
+    const projectMap = new Map(allProjects.map((p) => [p.id, p]));
 
-      // 期日を取得（タイムラインと同じロジック）
-      let phaseDate: Date | null = null;
-      if (phaseProgress?.createdAt) {
-        phaseDate = new Date(phaseProgress.createdAt);
+    // 進捗をプロジェクトIDでグループ化（O(n)でルックアップ可能に）
+    const progressByProject = new Map<number, typeof allProgress>();
+    for (const prog of allProgress) {
+      const existing = progressByProject.get(prog.projectId) || [];
+      existing.push(prog);
+      progressByProject.set(prog.projectId, existing);
+    }
+
+    // 4. 案件アラート（最適化版 - Mapを使用）
+    const projectsWithAlerts: { id: number; managementNumber: string; alertCount: number }[] = [];
+    let totalAlertCount = 0;
+
+    for (const project of allProjects) {
+      const projectProgress = progressByProject.get(project.id) || [];
+      let alertCount = 0;
+
+      // 進捗をタイトルでインデックス化
+      const progressByTitle = new Map(projectProgress.map((p) => [p.title, p]));
+
+      for (const phaseTitle of PHASES) {
+        const phaseProgress = progressByTitle.get(phaseTitle);
+
+        if (phaseProgress?.status === "completed" && phaseProgress?.completedAt) continue;
+
+        let phaseDate: Date | null = null;
+        if (phaseProgress?.createdAt) {
+          phaseDate = new Date(phaseProgress.createdAt);
+        }
+
+        if (!phaseDate) {
+          alertCount++;
+          continue;
+        }
+
+        phaseDate.setHours(0, 0, 0, 0);
+        if (phaseDate < now) {
+          alertCount++;
+        }
       }
 
-      // 期日未設定 → アラート
-      if (!phaseDate) {
-        alertCount++;
-        continue;
-      }
-
-      // 期日超過（未完了でcreatedAt < 今日） → アラート
-      phaseDate.setHours(0, 0, 0, 0);
-      if (phaseDate < now) {
-        alertCount++;
+      if (alertCount > 0) {
+        projectsWithAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          alertCount,
+        });
+        totalAlertCount += alertCount;
       }
     }
 
-    if (alertCount > 0) {
-      projectsWithAlerts.push({
-        id: project.id,
-        managementNumber: project.managementNumber,
-        alertCount,
-      });
-      totalAlertCount += alertCount;
-    }
-  }
-
-  // 5. 進行中案件（完工済みでない案件）
-  const activeProjects = allProjects.filter((p) => {
-    const projectProgress = allProgress.filter((prog) => prog.projectId === p.id);
-    const completionProgress = projectProgress.find((prog) => prog.title === "完工");
-    return !completionProgress || completionProgress.status !== "completed";
-  });
-
-  // 6. 最近追加された案件（idでソート、上位5件）
-  const recentProjects = [...allProjects]
-    .sort((a, b) => b.id - a.id)
-    .slice(0, 5);
-
-  // 7. 完工アラート（完工2ヶ月前:赤、3ヶ月前:黄）
-  const twoMonthsFromNow = new Date(now);
-  twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
-  const threeMonthsFromNow = new Date(now);
-  threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-
-  const completionAlerts: {
-    id: number;
-    managementNumber: string;
-    client: string;
-    completionMonth: string;
-    level: "red" | "yellow";
-    monthsRemaining: number;
-  }[] = [];
-
-  for (const project of allProjects) {
-    const completionDate = parseCompletionMonth(project.completionMonth);
-    if (!completionDate) continue;
-
-    // 既に完工済みの場合はスキップ
-    const projectProgress = allProgress.filter((p) => p.projectId === project.id);
-    const completionProgress = projectProgress.find((p) => p.title === "完工");
-    if (completionProgress?.status === "completed") continue;
-
-    // 月の差分を計算
-    const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
-                       (completionDate.getMonth() - now.getMonth());
-
-    if (monthsDiff <= 2) {
-      completionAlerts.push({
-        id: project.id,
-        managementNumber: project.managementNumber,
-        client: project.client || "",
-        completionMonth: project.completionMonth || "",
-        level: "red",
-        monthsRemaining: monthsDiff,
-      });
-    } else if (monthsDiff <= 3) {
-      completionAlerts.push({
-        id: project.id,
-        managementNumber: project.managementNumber,
-        client: project.client || "",
-        completionMonth: project.completionMonth || "",
-        level: "yellow",
-        monthsRemaining: monthsDiff,
-      });
-    }
-  }
-
-  // 緊急度でソート（赤が先、残り月数が少ない順）
-  completionAlerts.sort((a, b) => {
-    if (a.level !== b.level) return a.level === "red" ? -1 : 1;
-    return a.monthsRemaining - b.monthsRemaining;
-  });
-
-  // 8. 現調未実施アラート（完工が近いのに現調が終わっていない）
-  const siteInvestigationAlerts: {
-    id: number;
-    managementNumber: string;
-    client: string;
-    completionMonth: string;
-    level: "red" | "yellow";
-  }[] = [];
-
-  for (const project of allProjects) {
-    // 現調が実施済みかチェック
-    const hasSiteInvestigation = project.siteInvestigation &&
-      project.siteInvestigation.trim() !== "" &&
-      project.siteInvestigation !== "未実施" &&
-      project.siteInvestigation !== "未";
-
-    if (hasSiteInvestigation) continue;
-
-    // 既に完工済みの場合はスキップ
-    const projectProgress = allProgress.filter((p) => p.projectId === project.id);
-    const completionProgress = projectProgress.find((p) => p.title === "完工");
-    if (completionProgress?.status === "completed") continue;
-
-    // 完工月を取得
-    const completionDate = parseCompletionMonth(project.completionMonth);
-    if (!completionDate) continue;
-
-    // 月の差分を計算
-    const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
-                       (completionDate.getMonth() - now.getMonth());
-
-    // 3ヶ月以内に完工予定で現調未実施
-    if (monthsDiff <= 2) {
-      siteInvestigationAlerts.push({
-        id: project.id,
-        managementNumber: project.managementNumber,
-        client: project.client || "",
-        completionMonth: project.completionMonth || "",
-        level: "red",
-      });
-    } else if (monthsDiff <= 3) {
-      siteInvestigationAlerts.push({
-        id: project.id,
-        managementNumber: project.managementNumber,
-        client: project.client || "",
-        completionMonth: project.completionMonth || "",
-        level: "yellow",
-      });
-    }
-  }
-
-  // 緊急度でソート
-  siteInvestigationAlerts.sort((a, b) => {
-    if (a.level !== b.level) return a.level === "red" ? -1 : 1;
-    return 0;
-  });
-
-  // TODO詳細を案件情報付きで取得
-  const enrichTodos = (todoList: typeof allTodos) => {
-    return todoList.slice(0, 5).map((t) => {
-      const project = allProjects.find((p) => p.id === t.projectId);
-      return {
-        id: t.id,
-        content: t.content,
-        dueDate: t.dueDate,
-        projectId: t.projectId,
-        managementNumber: project?.managementNumber || "不明",
-      };
+    // 5. 進行中案件（最適化版）
+    const activeProjects = allProjects.filter((p) => {
+      const projectProgress = progressByProject.get(p.id) || [];
+      const completionProgress = projectProgress.find((prog) => prog.title === "完工");
+      return !completionProgress || completionProgress.status !== "completed";
     });
-  };
 
-  return NextResponse.json({
-    overdueTodos: {
-      count: overdueTodos.length,
-      items: enrichTodos(overdueTodos),
-    },
-    todayTodos: {
-      count: todayTodos.length,
-      items: enrichTodos(todayTodos),
-    },
-    thisWeekTodos: {
-      count: thisWeekTodos.length,
-      items: enrichTodos(thisWeekTodos),
-    },
-    projectAlerts: {
-      count: projectsWithAlerts.length,
-      totalAlerts: totalAlertCount,
-      items: projectsWithAlerts.slice(0, 5),
-    },
-    activeProjects: {
-      count: activeProjects.length,
-      items: activeProjects.slice(0, 5).map((p) => ({
-        id: p.id,
-        managementNumber: p.managementNumber,
-        client: p.client,
-      })),
-    },
-    recentProjects: {
-      items: recentProjects.map((p) => ({
-        id: p.id,
-        managementNumber: p.managementNumber,
-        client: p.client,
-      })),
-    },
-    // 完工アラート（2ヶ月前:赤、3ヶ月前:黄）
-    completionAlerts: {
-      redCount: completionAlerts.filter((a) => a.level === "red").length,
-      yellowCount: completionAlerts.filter((a) => a.level === "yellow").length,
-      items: completionAlerts.slice(0, 5),
-    },
-    // 現調未実施アラート
-    siteInvestigationAlerts: {
-      redCount: siteInvestigationAlerts.filter((a) => a.level === "red").length,
-      yellowCount: siteInvestigationAlerts.filter((a) => a.level === "yellow").length,
-      items: siteInvestigationAlerts.slice(0, 5),
-    },
-  });
+    // 7. 完工アラート（最適化版 - progressByProjectを使用）
+    const completionAlerts: {
+      id: number;
+      managementNumber: string;
+      client: string;
+      completionMonth: string;
+      level: "red" | "yellow";
+      monthsRemaining: number;
+    }[] = [];
+
+    for (const project of allProjects) {
+      const completionDate = parseCompletionMonth(project.completionMonth);
+      if (!completionDate) continue;
+
+      // 既に完工済みの場合はスキップ
+      const projectProgress = progressByProject.get(project.id) || [];
+      const completionProgress = projectProgress.find((p) => p.title === "完工");
+      if (completionProgress?.status === "completed") continue;
+
+      const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
+                         (completionDate.getMonth() - now.getMonth());
+
+      if (monthsDiff <= 2) {
+        completionAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          client: project.client || "",
+          completionMonth: project.completionMonth || "",
+          level: "red",
+          monthsRemaining: monthsDiff,
+        });
+      } else if (monthsDiff <= 3) {
+        completionAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          client: project.client || "",
+          completionMonth: project.completionMonth || "",
+          level: "yellow",
+          monthsRemaining: monthsDiff,
+        });
+      }
+    }
+
+    completionAlerts.sort((a, b) => {
+      if (a.level !== b.level) return a.level === "red" ? -1 : 1;
+      return a.monthsRemaining - b.monthsRemaining;
+    });
+
+    // 8. 現調未実施アラート（最適化版）
+    const siteInvestigationAlerts: {
+      id: number;
+      managementNumber: string;
+      client: string;
+      completionMonth: string;
+      level: "red" | "yellow";
+    }[] = [];
+
+    for (const project of allProjects) {
+      const hasSiteInvestigation = project.siteInvestigation &&
+        project.siteInvestigation.trim() !== "" &&
+        project.siteInvestigation !== "未実施" &&
+        project.siteInvestigation !== "未";
+
+      if (hasSiteInvestigation) continue;
+
+      const projectProgress = progressByProject.get(project.id) || [];
+      const completionProgress = projectProgress.find((p) => p.title === "完工");
+      if (completionProgress?.status === "completed") continue;
+
+      const completionDate = parseCompletionMonth(project.completionMonth);
+      if (!completionDate) continue;
+
+      const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
+                         (completionDate.getMonth() - now.getMonth());
+
+      if (monthsDiff <= 2) {
+        siteInvestigationAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          client: project.client || "",
+          completionMonth: project.completionMonth || "",
+          level: "red",
+        });
+      } else if (monthsDiff <= 3) {
+        siteInvestigationAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          client: project.client || "",
+          completionMonth: project.completionMonth || "",
+          level: "yellow",
+        });
+      }
+    }
+
+    siteInvestigationAlerts.sort((a, b) => {
+      if (a.level !== b.level) return a.level === "red" ? -1 : 1;
+      return 0;
+    });
+
+    // TODO詳細を案件情報付きで取得（最適化版 - projectMapを使用）
+    const enrichTodos = (todoList: typeof overdueTodosRaw) => {
+      return todoList.slice(0, 5).map((t) => {
+        const project = t.projectId ? projectMap.get(t.projectId) : null;
+        return {
+          id: t.id,
+          content: t.content,
+          dueDate: t.dueDate,
+          projectId: t.projectId,
+          managementNumber: project?.managementNumber || "なし",
+        };
+      });
+    };
+
+    return NextResponse.json({
+      overdueTodos: {
+        count: Number(overdueTodosCount[0]?.count ?? 0),
+        items: enrichTodos(overdueTodosRaw),
+      },
+      todayTodos: {
+        count: Number(todayTodosCount[0]?.count ?? 0),
+        items: enrichTodos(todayTodosRaw),
+      },
+      thisWeekTodos: {
+        count: Number(thisWeekTodosCount[0]?.count ?? 0),
+        items: enrichTodos(thisWeekTodosRaw),
+      },
+      projectAlerts: {
+        count: projectsWithAlerts.length,
+        totalAlerts: totalAlertCount,
+        items: projectsWithAlerts.slice(0, 5),
+      },
+      activeProjects: {
+        count: activeProjects.length,
+        items: activeProjects.slice(0, 5).map((p) => ({
+          id: p.id,
+          managementNumber: p.managementNumber,
+          client: p.client,
+        })),
+      },
+      recentProjects: {
+        items: recentProjects.map((p) => ({
+          id: p.id,
+          managementNumber: p.managementNumber,
+          client: p.client,
+        })),
+      },
+      completionAlerts: {
+        redCount: completionAlerts.filter((a) => a.level === "red").length,
+        yellowCount: completionAlerts.filter((a) => a.level === "yellow").length,
+        items: completionAlerts.slice(0, 5),
+      },
+      siteInvestigationAlerts: {
+        redCount: siteInvestigationAlerts.filter((a) => a.level === "red").length,
+        yellowCount: siteInvestigationAlerts.filter((a) => a.level === "yellow").length,
+        items: siteInvestigationAlerts.slice(0, 5),
+      },
+    });
+  } catch (error) {
+    return createErrorResponse(error, "ダッシュボードデータの取得に失敗しました");
+  }
 }

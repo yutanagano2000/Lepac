@@ -3,6 +3,7 @@ import { eq, asc } from "drizzle-orm";
 import { db } from "@/db";
 import { todos, projects } from "@/db/schema";
 import { auth } from "@/auth";
+import { createTodoSchema, validateBody } from "@/lib/validations";
 
 export const dynamic = "force-dynamic";
 
@@ -28,33 +29,35 @@ export async function GET() {
 
 // プレーンなTODOを作成（案件に紐づかない）
 export async function POST(request: Request) {
-  const session = await auth();
-  const body = await request.json();
-  const content = body.content?.trim() ?? "";
-  const dueDate = body.dueDate ?? "";
-
-  if (!content || !dueDate) {
-    return NextResponse.json(
-      { error: "content and dueDate are required" },
-      { status: 400 }
-    );
+  const validation = await validateBody(request, createTodoSchema);
+  if (!validation.success) {
+    return NextResponse.json(validation.error, { status: 400 });
   }
+
+  const session = await auth();
+  const { content, dueDate, projectId } = validation.data;
 
   // セッションからユーザー情報を取得
   const userId = session?.user?.id ? parseInt(session.user.id) : null;
-  const userName = session?.user?.name || (session?.user as any)?.username || null;
+  const user = session?.user as { name?: string; username?: string } | undefined;
+  const userName = user?.name || user?.username || null;
 
-  const [result] = await db
-    .insert(todos)
-    .values({
-      projectId: null, // 案件に紐づかない
-      content,
-      dueDate,
-      createdAt: new Date().toISOString(),
-      userId,
-      userName,
-    })
-    .returning();
+  try {
+    const [result] = await db
+      .insert(todos)
+      .values({
+        projectId: projectId ?? null,
+        content: content.trim(),
+        dueDate,
+        createdAt: new Date().toISOString(),
+        userId,
+        userName,
+      })
+      .returning();
 
-  return NextResponse.json(result);
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create todo:", error);
+    return NextResponse.json({ error: "TODOの作成に失敗しました" }, { status: 500 });
+  }
 }

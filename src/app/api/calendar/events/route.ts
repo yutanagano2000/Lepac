@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos, projects, progress, meetings, calendarEvents } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { auth } from "@/auth";
+import { createCalendarEventSchema, validateBody } from "@/lib/validations";
 
 // カレンダー用のイベントを一括取得
 export async function GET() {
@@ -98,22 +98,20 @@ export async function GET() {
 
 // カスタムイベントを作成
 export async function POST(request: Request) {
+  const validation = await validateBody(request, createCalendarEventSchema);
+  if (!validation.success) {
+    return NextResponse.json(validation.error, { status: 400 });
+  }
+
+  const session = await auth();
+  const { title, eventType, eventDate, endDate, description } = validation.data;
+
+  // セッションからユーザー情報を取得
+  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const user = session?.user as { name?: string; username?: string } | undefined;
+  const userName = user?.name || user?.username || null;
+
   try {
-    const session = await auth();
-    const body = await request.json();
-    const { title, eventType, eventDate, endDate, description } = body;
-
-    if (!title || !eventDate) {
-      return NextResponse.json(
-        { error: "タイトルと日付は必須です" },
-        { status: 400 }
-      );
-    }
-
-    // セッションからユーザー情報を取得
-    const userId = session?.user?.id ? parseInt(session.user.id) : null;
-    const userName = session?.user?.name || (session?.user as any)?.username || null;
-
     const [result] = await db
       .insert(calendarEvents)
       .values({
@@ -136,7 +134,7 @@ export async function POST(request: Request) {
       end: result.endDate,
       description: result.description,
       userName: result.userName,
-    });
+    }, { status: 201 });
   } catch (error) {
     console.error("イベントの作成に失敗:", error);
     return NextResponse.json({ error: "イベントの作成に失敗しました" }, { status: 500 });

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress, comments, todos } from "@/db/schema";
 import { calculateTimeline } from "@/lib/timeline";
+import { createProjectSchema, validateBody } from "@/lib/validations";
+import { createErrorResponse } from "@/lib/api-error";
 
 // 一覧は常に最新を返すためキャッシュしない
 export const dynamic = "force-dynamic";
@@ -55,7 +57,15 @@ export async function GET() {
 
 // 新規追加
 export async function POST(request: Request) {
-  const body = await request.json();
-  const [result] = await db.insert(projects).values(body).returning();
-  return NextResponse.json(result);
+  const validation = await validateBody(request, createProjectSchema);
+  if (!validation.success) {
+    return NextResponse.json(validation.error, { status: 400 });
+  }
+
+  try {
+    const [result] = await db.insert(projects).values(validation.data).returning();
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    return createErrorResponse(error, "プロジェクトの作成に失敗しました");
+  }
 }

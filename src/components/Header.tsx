@@ -22,7 +22,7 @@ export function Header() {
   if (pathname === "/login") return null;
 
   const user = session?.user;
-  const userName = user?.name || (user as any)?.username || "ユーザー";
+  const userName = user?.name || user?.username || "ユーザー";
   const userImage = user?.image;
   const initials = userName.slice(0, 2).toUpperCase();
 

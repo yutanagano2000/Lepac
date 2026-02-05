@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
+import { createMeetingSchema, validateBody } from "@/lib/validations";
 
 export const dynamic = "force-dynamic";
 
@@ -11,16 +12,28 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const [result] = await db
-    .insert(meetings)
-    .values({
-      title: body.title ?? "",
-      meetingDate: body.meetingDate ?? "",
-      category: body.category ?? "社内",
-      content: body.content ?? null,
-      agenda: body.agenda ?? null,
-    })
-    .returning();
-  return NextResponse.json(result);
+  const validation = await validateBody(request, createMeetingSchema);
+  if (!validation.success) {
+    return NextResponse.json(validation.error, { status: 400 });
+  }
+
+  const { title, meetingDate, category, content, agenda } = validation.data;
+
+  try {
+    const [result] = await db
+      .insert(meetings)
+      .values({
+        title,
+        meetingDate,
+        category,
+        content: content ?? null,
+        agenda: agenda ?? null,
+      })
+      .returning();
+
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create meeting:", error);
+    return NextResponse.json({ error: "会議の作成に失敗しました" }, { status: 500 });
+  }
 }

@@ -16,7 +16,7 @@ export default function SelectOrganizationPage() {
   const { data: session, update } = useSession();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
-  const isAdmin = (session?.user as any)?.role === "admin";
+  const isAdmin = session?.user?.role === "admin";
   const [isOther, setIsOther] = useState(false);
   const [customOrgName, setCustomOrgName] = useState("");
   const [loading, setLoading] = useState(false);

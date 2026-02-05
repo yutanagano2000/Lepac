@@ -3,30 +3,45 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users, organizations } from "@/db/schema";
 import { auth } from "@/auth";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const updateOrganizationSchema = z.object({
+  organizationId: z.number().int().positive(),
+});
+
 // ログインユーザーの所属組織を更新
 export async function PUT(request: Request) {
+  const session = await auth();
+  console.log("[Organization API] Session:", session?.user?.id);
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: unknown;
   try {
-    const session = await auth();
-    console.log("[Organization API] Session:", session?.user?.id);
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const validation = updateOrganizationSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json({
+      error: "Validation failed",
+      details: validation.error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    }, { status: 400 });
+  }
 
-    const body = await request.json();
-    const organizationId = body.organizationId;
-    console.log("[Organization API] organizationId:", organizationId);
+  const { organizationId } = validation.data;
+  console.log("[Organization API] organizationId:", organizationId);
 
-    if (typeof organizationId !== "number") {
-      return NextResponse.json(
-        { error: "organizationId must be a number" },
-        { status: 400 }
-      );
-    }
-
+  try {
     // 組織の存在確認
     const [org] = await db
       .select()
@@ -36,10 +51,7 @@ export async function PUT(request: Request) {
     console.log("[Organization API] Found org:", org);
 
     if (!org) {
-      return NextResponse.json(
-        { error: "Organization not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
     // ユーザーの組織IDを更新
@@ -55,9 +67,6 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: true, organizationId });
   } catch (error) {
     console.error("[Organization API] Error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "組織の更新に失敗しました" }, { status: 500 });
   }
 }

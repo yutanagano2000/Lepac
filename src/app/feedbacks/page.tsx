@@ -140,7 +140,7 @@ export default function FeedbacksPage() {
 
     // セッションからユーザー情報を取得
     const userId = session?.user?.id ? parseInt(session.user.id) : null;
-    const userName = session?.user?.name || (session?.user as any)?.username || null;
+    const userName = session?.user?.name || session?.user?.username || null;
 
     const currentReplies = parseReplies(feedback.replies);
     const newReplies = [
@@ -274,10 +274,10 @@ export default function FeedbacksPage() {
 
                         {/* メタ情報 */}
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                          {(feedback as any).userName && (
+                          {feedback.userName && (
                             <span className="flex items-center gap-1">
                               <User className="h-3.5 w-3.5" />
-                              {(feedback as any).userName}
+                              {feedback.userName}
                             </span>
                           )}
                           <span>{formatDate(feedback.createdAt)}</span>
