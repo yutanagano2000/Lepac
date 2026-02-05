@@ -233,6 +233,19 @@ async function initDb() {
   try { await c.execute(`ALTER TABLE projects ADD COLUMN confirmation_items TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_complete TEXT`); } catch (e) {}
 
+  // 工事部向け追加フィールド
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN delivery_location TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN mount_order_vendor TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN mount_order_date TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN mount_delivery_scheduled TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN mount_delivery_status TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN panel_order_vendor TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN panel_order_date TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN panel_delivery_scheduled TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN panel_delivery_status TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_remarks TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN construction_note TEXT`); } catch (e) {}
+
   // 法令チェック結果（JSON形式）
   try { await c.execute(`ALTER TABLE projects ADD COLUMN legal_statuses TEXT`); } catch (e) {}
 

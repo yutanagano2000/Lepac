@@ -1,10 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Mail } from "lucide-react";
+import { FileText, Mail, Users, MapPin, CalendarDays, Scale } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const tools = [
+  {
+    href: "/meetings",
+    label: "会議",
+    description: "議事録の作成・閲覧",
+    icon: Users,
+  },
+  {
+    href: "/map",
+    label: "マップ",
+    description: "座標変換・各種マップへのリンク",
+    icon: MapPin,
+  },
+  {
+    href: "/schedule",
+    label: "スケジュール",
+    description: "案件のスケジュール管理",
+    icon: CalendarDays,
+  },
+  {
+    href: "/legal",
+    label: "法令確認",
+    description: "法令に関する確認・検索",
+    icon: Scale,
+  },
   {
     href: "/tools/filename",
     label: "ファイル名生成",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FolderKanban, Scale, Wrench, LogOut, Calendar, CalendarDays, MapPin, GitBranch, ListTodo, MessageSquarePlus, Users } from "lucide-react";
+import { Home, FolderKanban, Wrench, LogOut, Calendar, GitBranch, ListTodo, MessageSquarePlus, HardHat } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
@@ -10,14 +10,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 const items = [
   { href: "/", label: "ホーム", icon: Home },
-  { href: "/todo", label: "TODO", icon: ListTodo },
   { href: "/projects", label: "案件", icon: FolderKanban },
+  { href: "/construction", label: "工事", icon: HardHat },
+  { href: "/todo", label: "TODO", icon: ListTodo },
   { href: "/todos", label: "タイムライン", icon: GitBranch },
   { href: "/calendar", label: "カレンダー", icon: Calendar },
-  { href: "/meetings", label: "会議", icon: Users },
-  { href: "/map", label: "マップ", icon: MapPin },
-  { href: "/schedule", label: "スケジュール", icon: CalendarDays },
-  { href: "/legal", label: "法令確認", icon: Scale },
   { href: "/tools", label: "ツール", icon: Wrench },
   { href: "/feedbacks", label: "要望", icon: MessageSquarePlus },
 ] as const;
@@ -38,19 +35,9 @@ export function SideNav() {
         <nav className="space-y-1">
           {items.map((item) => {
             // サブパスでもアクティブにする
-            const active = item.href === "/tools"
-              ? pathname.startsWith("/tools")
-              : item.href === "/todos"
-                ? pathname.startsWith("/todos")
-                : item.href === "/map"
-                  ? pathname.startsWith("/map")
-                  : item.href === "/calendar"
-                    ? pathname.startsWith("/calendar")
-                    : item.href === "/meetings"
-                      ? pathname.startsWith("/meetings")
-                      : item.href === "/feedbacks"
-                        ? pathname.startsWith("/feedbacks")
-                        : pathname === item.href;
+            const active = item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <Link

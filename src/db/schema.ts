@@ -159,6 +159,19 @@ export const projects = sqliteTable("projects", {
   interconnectionScheduled: text("interconnection_scheduled"), // 連系 予定日
   interconnectionDate: text("interconnection_date"), // 連系日
 
+  // 工事部向け追加フィールド
+  deliveryLocation: text("delivery_location"), // 納品場所
+  mountOrderVendor: text("mount_order_vendor"), // 架台発注先
+  mountOrderDate: text("mount_order_date"), // 架台発注日
+  mountDeliveryScheduled: text("mount_delivery_scheduled"), // 架台納品予定日
+  mountDeliveryStatus: text("mount_delivery_status"), // 架台納品状況
+  panelOrderVendor: text("panel_order_vendor"), // パネル発注先
+  panelOrderDate: text("panel_order_date"), // パネル発注日
+  panelDeliveryScheduled: text("panel_delivery_scheduled"), // パネル納品予定日
+  panelDeliveryStatus: text("panel_delivery_status"), // パネル納品状況
+  constructionRemarks: text("construction_remarks"), // 着工備考
+  constructionNote: text("construction_note"), // 工事備考
+
   // その他
   burdenLandOther: text("burden_land_other"), // 負担金土地 その他
   confirmationItems: text("confirmation_items"), // 確認事項
