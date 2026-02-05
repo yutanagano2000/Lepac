@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FolderKanban, Wrench, LogOut, Calendar, GitBranch, ListTodo, MessageSquarePlus, HardHat, X } from "lucide-react";
+import { Home, FolderKanban, Wrench, LogOut, Calendar, GitBranch, ListTodo, MessageSquarePlus, HardHat, X, FileText } from "lucide-react";
 import { signOut } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ const items = [
   { href: "/todo", label: "TODO", icon: ListTodo },
   { href: "/todos", label: "タイムライン", icon: GitBranch },
   { href: "/calendar", label: "カレンダー", icon: Calendar },
+  { href: "/touhon", label: "謄本検索", icon: FileText },
   { href: "/tools", label: "ツール", icon: Wrench },
   { href: "/feedbacks", label: "要望", icon: MessageSquarePlus },
 ] as const;

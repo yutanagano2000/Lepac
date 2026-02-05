@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Mail, Users, MapPin, CalendarDays, Scale } from "lucide-react";
+import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const tools = [
@@ -40,6 +40,18 @@ const tools = [
     label: "メール文面生成",
     description: "質問に答えてメール文面を自動生成",
     icon: Mail,
+  },
+  {
+    href: "/import",
+    label: "案件一括インポート",
+    description: "どこでもキャビネットから案件を一括登録",
+    icon: Upload,
+  },
+  {
+    href: "/touhon",
+    label: "謄本検索",
+    description: "登記簿謄本を住所で検索",
+    icon: Folder,
   },
 ] as const;
 

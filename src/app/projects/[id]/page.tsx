@@ -48,6 +48,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LawAlertCard } from "@/components/LawAlertCard";
+import { ProjectFolderLink } from "@/components/ProjectFolderLink";
+import { ProjectPhotoGallery } from "@/components/ProjectPhotoGallery";
 
 const PROGRESS_TITLES = [
   "合意書",
@@ -3671,6 +3673,16 @@ export default function ProjectDetailPage() {
                   <ProjectFiles projectId={Number(id)} initialFiles={files} />
                 </CardContent>
               </Card>
+
+              {/* フォルダ連携 */}
+              <div className="mt-6">
+                <ProjectFolderLink projectNumber={project?.projectNumber || null} />
+              </div>
+
+              {/* 現場写真 */}
+              <div className="mt-6">
+                <ProjectPhotoGallery projectNumber={project?.projectNumber || null} />
+              </div>
             </TabsContent>
 
             <TabsContent value="legal" className="mt-6 space-y-6">
