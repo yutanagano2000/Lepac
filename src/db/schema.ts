@@ -13,6 +13,8 @@ export type NewOrganization = typeof organizations.$inferInsert;
 
 export const projects = sqliteTable("projects", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  // マルチテナント
+  organizationId: integer("organization_id"), // 所属組織ID
   // 基本情報
   managementNumber: text("management_number").notNull(), // 管理番号
   manager: text("manager").notNull(), // 担当
@@ -254,6 +256,7 @@ export const comments = sqliteTable("comments", {
 // projectIdがnullの場合は案件に紐づかないプレーンなTODO
 export const todos = sqliteTable("todos", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id"), // 所属組織ID
   projectId: integer("project_id"), // nullの場合は案件に紐づかない
   content: text("content").notNull(),
   dueDate: text("due_date").notNull(), // この日までに行う（YYYY-MM-DD）
@@ -276,6 +279,7 @@ export type NewTodo = typeof todos.$inferInsert;
 // 会議（議事録）テーブル
 export const meetings = sqliteTable("meetings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id"), // 所属組織ID
   title: text("title").notNull(), // タイトル（どんな会議だったか）
   meetingDate: text("meeting_date").notNull(), // 日付（YYYY-MM-DD）
   category: text("category").notNull(), // 種別（社内 / 社外）
@@ -323,6 +327,7 @@ export type NewProjectFile = typeof projectFiles.$inferInsert;
 // 要望（フィードバック）テーブル
 export const feedbacks = sqliteTable("feedbacks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id"), // 所属組織ID
   content: text("content").notNull(), // 要望内容
   pagePath: text("page_path").notNull(), // どの画面から投稿されたか
   pageTitle: text("page_title"), // 画面のタイトル（表示用）
@@ -400,6 +405,7 @@ export type NewConstructionPhoto = typeof constructionPhotos.$inferInsert;
 // カレンダーイベントテーブル（カスタムイベント用）
 export const calendarEvents = sqliteTable("calendar_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id"), // 所属組織ID
   title: text("title").notNull(), // イベント名
   eventType: text("event_type").notNull().default("other"), // todo, meeting, other, etc.
   eventDate: text("event_date").notNull(), // 日付（YYYY-MM-DD）
@@ -412,3 +418,35 @@ export const calendarEvents = sqliteTable("calendar_events", {
 
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type NewCalendarEvent = typeof calendarEvents.$inferInsert;
+
+// 監査ログテーブル（セキュリティインシデント追跡用）
+export const auditLogs = sqliteTable("audit_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id"), // 所属組織ID
+  userId: integer("user_id"), // 操作したユーザーID
+  userName: text("user_name"), // ユーザー名（キャッシュ用）
+  action: text("action").notNull(), // 操作種別: create, read, update, delete, login, logout
+  resourceType: text("resource_type").notNull(), // 対象リソース種別: project, todo, meeting, feedback, user
+  resourceId: integer("resource_id"), // 対象リソースID
+  resourceName: text("resource_name"), // リソース名（表示用）
+  details: text("details"), // 詳細情報（JSON形式）
+  ipAddress: text("ip_address"), // IPアドレス
+  userAgent: text("user_agent"), // ユーザーエージェント
+  createdAt: text("created_at").notNull(), // タイムスタンプ
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+// レート制限テーブル（ブルートフォース・DDoS対策）
+export const rateLimits = sqliteTable("rate_limits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  identifier: text("identifier").notNull(), // IP アドレスまたはユーザーID
+  endpoint: text("endpoint").notNull(), // エンドポイント（login, api等）
+  requestCount: integer("request_count").notNull().default(1),
+  windowStart: text("window_start").notNull(), // ウィンドウ開始時刻
+  createdAt: text("created_at").notNull(),
+});
+
+export type RateLimit = typeof rateLimits.$inferSelect;
+export type NewRateLimit = typeof rateLimits.$inferInsert;

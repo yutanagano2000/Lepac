@@ -2,15 +2,24 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { requireOrganization } from "@/lib/auth-guard";
 
 /**
  * iCal形式で未完了の予定をエクスポート
  * Notion CalendarやGoogleカレンダーで購読可能
  */
 export async function GET() {
-  // 全案件を取得
-  const allProjects = await db.select().from(projects);
-  
+  // 認証・組織チェック
+  const authResult = await requireOrganization();
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
+
+  // 組織に属する案件を取得
+  const allProjects = await db.select().from(projects).where(eq(projects.organizationId, organizationId));
+  const projectIds = new Set(allProjects.map((p) => p.id));
+
   // 全進捗を取得（未完了のみ）
   const allProgress = await db
     .select()
@@ -33,8 +42,10 @@ export async function GET() {
     "METHOD:PUBLISH",
   ];
 
-  // 各進捗をイベントとして追加
+  // 各進捗をイベントとして追加（組織に属するプロジェクトのもののみ）
   for (const prog of allProgress) {
+    if (!projectIds.has(prog.projectId)) continue;
+
     const managementNumber = projectMap.get(prog.projectId) || "不明";
     const title = `${managementNumber} ${prog.title}`;
     

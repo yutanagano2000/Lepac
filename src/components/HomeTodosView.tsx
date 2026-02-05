@@ -29,7 +29,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDateJp } from "@/lib/timeline";
 import { parseTodoMessages, cn } from "@/lib/utils";
-import { HomeProjectSearch } from "@/components/HomeProjectSearch";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 export type TodoWithProject = {
@@ -334,27 +333,22 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
   );
 
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-6xl py-8 md:py-12">
-        <div className="flex flex-col gap-8">
-          {/* 案件検索バー */}
-          <div className="w-full">
-            <HomeProjectSearch />
-          </div>
-
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-6xl py-6 sm:py-8 md:py-12">
+        <div className="flex flex-col gap-6 sm:gap-8">
           {/* Header Section */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-foreground">
-                <LayoutDashboard className="h-5 w-5" />
-                <span className="text-sm font-semibold uppercase tracking-wider">ダッシュボード</span>
+                <LayoutDashboard className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="text-xs sm:text-sm font-semibold uppercase tracking-wider">ダッシュボード</span>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight">TODO</h1>
-              <p className="text-muted-foreground text-sm">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">TODO</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm">
                 {nowJst.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Tokyo' })}
               </p>
             </div>
-            <Button asChild variant="default">
+            <Button asChild variant="default" className="w-fit">
               <Link href="/projects">
                 案件一覧を確認
                 <ArrowRight className="ml-2 h-4 w-4" />

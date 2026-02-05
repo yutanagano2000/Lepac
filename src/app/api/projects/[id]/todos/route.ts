@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { auth } from "@/auth";
+import { requireProjectAccess, getUserId } from "@/lib/auth-guard";
 
 export async function GET(
   _request: Request,
@@ -13,6 +13,14 @@ export async function GET(
   if (isNaN(projectId)) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
+
   const list = await db
     .select()
     .from(todos)
@@ -25,12 +33,19 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
   const { id } = await params;
   const projectId = Number(id);
   if (isNaN(projectId)) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { user, organizationId } = authResult;
+
   const body = await request.json();
   const content = body.content?.trim() ?? "";
   const dueDate = body.dueDate ?? "";
@@ -42,12 +57,13 @@ export async function POST(
   }
 
   // セッションからユーザー情報を取得
-  const userId = session?.user?.id ? parseInt(session.user.id) : null;
-  const userName = session?.user?.name || session?.user?.username || null;
+  const userId = getUserId(user);
+  const userName = user.name || user.username || null;
 
   const [result] = await db
     .insert(todos)
     .values({
+      organizationId, // 組織IDを設定
       projectId,
       content,
       dueDate,
@@ -63,6 +79,15 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const projectId = Number(id);
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const todoId = searchParams.get("todoId");
   if (!todoId) {

@@ -13,6 +13,9 @@ const ALLOWED_IPS = [
   "210.155.18.80",
 ];
 
+// IP制限を有効にするかどうか（環境変数で制御）
+const IP_RESTRICTION_ENABLED = process.env.IP_RESTRICTION_ENABLED === "true";
+
 function getClientIp(request: NextRequest): string | null {
   // Vercel/Cloudflareなどのプロキシ経由の場合
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -37,11 +40,11 @@ export default async function middleware(request: NextRequest) {
   // ローカル開発時はIP制限をスキップ
   const isLocalDev = process.env.NODE_ENV === "development";
 
-  // IP制限チェック（一時的に無効化）
-  // if (!isLocalDev && clientIp && !ALLOWED_IPS.includes(clientIp)) {
-  //   console.log(`Access denied for IP: ${clientIp}`);
-  //   return new NextResponse("Access Denied", { status: 403 });
-  // }
+  // IP制限チェック（環境変数で有効化を制御）
+  if (IP_RESTRICTION_ENABLED && !isLocalDev && clientIp && !ALLOWED_IPS.includes(clientIp)) {
+    console.log(`[Security] Access denied for IP: ${clientIp}`);
+    return new NextResponse("Access Denied", { status: 403 });
+  }
 
   // 既存のNextAuth認証処理
   // @ts-expect-error NextAuth middleware type compatibility

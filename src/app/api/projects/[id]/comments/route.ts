@@ -2,18 +2,26 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { comments } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { auth } from "@/auth";
 import { createCommentSchema, validateBody } from "@/lib/validations";
+import { requireProjectAccess, getUserId } from "@/lib/auth-guard";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const projectId = Number(id);
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+
   const allComments = await db
     .select()
     .from(comments)
-    .where(eq(comments.projectId, Number(id)))
+    .where(eq(comments.projectId, projectId))
     .orderBy(desc(comments.createdAt));
   return NextResponse.json(allComments);
 }
@@ -22,25 +30,32 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const projectId = Number(id);
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { user } = authResult;
+
   const validation = await validateBody(request, createCommentSchema);
   if (!validation.success) {
     return NextResponse.json(validation.error, { status: 400 });
   }
 
-  const session = await auth();
-  const { id } = await params;
   const { content } = validation.data;
 
   // セッションからユーザー情報を取得
-  const userId = session?.user?.id ? parseInt(session.user.id) : null;
-  const user = session?.user as { name?: string; username?: string } | undefined;
-  const userName = user?.name || user?.username || null;
+  const userId = getUserId(user);
+  const userName = user.name || user.username || null;
 
   try {
     const [result] = await db
       .insert(comments)
       .values({
-        projectId: Number(id),
+        projectId,
         content,
         createdAt: new Date().toISOString(),
         userId,
@@ -59,12 +74,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const validation = await validateBody(request, createCommentSchema.extend({
-    commentId: createCommentSchema.shape.content.transform((_, ctx) => {
-      // This is a workaround - we need to parse commentId separately
-      return undefined;
-    }),
-  }).partial());
+  const { id } = await params;
+  const projectId = Number(id);
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
 
   // Parse body manually for this endpoint as it has a different structure
   let body: { commentId?: number; content?: string };
@@ -99,6 +116,15 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const projectId = Number(id);
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const commentId = searchParams.get("commentId");
   if (!commentId) {

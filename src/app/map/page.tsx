@@ -60,8 +60,8 @@ export default function MapPage() {
   const coordsOnlyEnabled = hasValidCoords;
 
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-2xl py-10">
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-2xl py-6 sm:py-10">
         <div className="space-y-6">
           <div className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-muted-foreground" />

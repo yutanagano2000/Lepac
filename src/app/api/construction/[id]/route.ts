@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { updateConstructionSchema, validateBody } from "@/lib/validations";
+import { requireProjectAccess } from "@/lib/auth-guard";
 
 export async function PATCH(
   request: NextRequest,
@@ -14,6 +15,13 @@ export async function PATCH(
   if (isNaN(projectId)) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
 
   const validation = await validateBody(request, updateConstructionSchema);
   if (!validation.success) {
@@ -28,10 +36,10 @@ export async function PATCH(
   }
 
   try {
-    // プロジェクトを更新
+    // プロジェクトを更新（組織フィルタリング）
     await db.update(projects)
       .set(updateData)
-      .where(eq(projects.id, projectId));
+      .where(and(eq(projects.id, projectId), eq(projects.organizationId, organizationId)));
 
     // 更新後のデータを取得して返す
     const [updated] = await db.select().from(projects).where(eq(projects.id, projectId));

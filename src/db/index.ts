@@ -267,6 +267,11 @@ async function initDb() {
   // 法令チェック結果（JSON形式）
   try { await c.execute(`ALTER TABLE projects ADD COLUMN legal_statuses TEXT`); } catch (e) {}
 
+  // マルチテナント用カラム追加
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN organization_id INTEGER`); } catch (e) {}
+  // 既存データにデフォルト組織ID（Person Energy = 1）を設定
+  try { await c.execute(`UPDATE projects SET organization_id = 1 WHERE organization_id IS NULL`); } catch (e) {}
+
   await c.execute(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -387,6 +392,10 @@ async function initDb() {
   // アカウント機能用カラム追加
   try { await c.execute(`ALTER TABLE todos ADD COLUMN user_id INTEGER`); } catch (e) {}
   try { await c.execute(`ALTER TABLE todos ADD COLUMN user_name TEXT`); } catch (e) {}
+  // マルチテナント用カラム追加
+  try { await c.execute(`ALTER TABLE todos ADD COLUMN organization_id INTEGER`); } catch (e) {}
+  // 既存データにデフォルト組織ID（Person Energy = 1）を設定
+  try { await c.execute(`UPDATE todos SET organization_id = 1 WHERE organization_id IS NULL`); } catch (e) {}
   try { await c.execute(`ALTER TABLE comments ADD COLUMN user_id INTEGER`); } catch (e) {}
   try { await c.execute(`ALTER TABLE comments ADD COLUMN user_name TEXT`); } catch (e) {}
 
@@ -400,6 +409,10 @@ async function initDb() {
       agenda TEXT
     )
   `);
+  // meetingsテーブルにマルチテナント用カラム追加
+  try { await c.execute(`ALTER TABLE meetings ADD COLUMN organization_id INTEGER`); } catch (e) {}
+  // 既存データにデフォルト組織ID（Person Energy = 1）を設定
+  try { await c.execute(`UPDATE meetings SET organization_id = 1 WHERE organization_id IS NULL`); } catch (e) {}
 
   // 案件ファイルテーブル（Vercel Blob Storage）
   await c.execute(`
@@ -433,6 +446,10 @@ async function initDb() {
   // フィードバック投稿者情報カラム追加
   try { await c.execute(`ALTER TABLE feedbacks ADD COLUMN user_id INTEGER`); } catch (e) {}
   try { await c.execute(`ALTER TABLE feedbacks ADD COLUMN user_name TEXT`); } catch (e) {}
+  // マルチテナント用カラム追加
+  try { await c.execute(`ALTER TABLE feedbacks ADD COLUMN organization_id INTEGER`); } catch (e) {}
+  // 既存データにデフォルト組織ID（Person Energy = 1）を設定
+  try { await c.execute(`UPDATE feedbacks SET organization_id = 1 WHERE organization_id IS NULL`); } catch (e) {}
 
 
   // 工事進捗テーブル（工程表の代わり）
@@ -482,6 +499,10 @@ async function initDb() {
       created_at TEXT NOT NULL
     )
   `);
+  // マルチテナント用カラム追加
+  try { await c.execute(`ALTER TABLE calendar_events ADD COLUMN organization_id INTEGER`); } catch (e) {}
+  // 既存データにデフォルト組織ID（Person Energy = 1）を設定
+  try { await c.execute(`UPDATE calendar_events SET organization_id = 1 WHERE organization_id IS NULL`); } catch (e) {}
 
   // 古い名前を新しい名前に統一（重複データのクリーンアップ）
   // 「現地調査」→「現調」、「農転・地目申請」→「法令申請」、「連系（発電開始）」→「連系」
@@ -495,8 +516,8 @@ async function initDb() {
     // 新しい名前が既に存在するプロジェクトから古い名前のレコードを削除
     try {
       await c.execute(`
-        DELETE FROM progress 
-        WHERE title = ? 
+        DELETE FROM progress
+        WHERE title = ?
         AND project_id IN (
           SELECT DISTINCT project_id FROM progress WHERE title = ?
         )
@@ -508,7 +529,44 @@ async function initDb() {
       await c.execute(`UPDATE progress SET title = ? WHERE title = ?`, [newTitle, oldTitle]);
     } catch (e) {}
   }
-  
+
+  // 監査ログテーブル（セキュリティインシデント追跡用）
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER,
+      user_id INTEGER,
+      user_name TEXT,
+      action TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id INTEGER,
+      resource_name TEXT,
+      details TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
+  // 監査ログのインデックス作成（検索パフォーマンス向上）
+  try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_audit_logs_org_created ON audit_logs (organization_id, created_at)`); } catch (e) {}
+  try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id)`); } catch (e) {}
+  try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs (action)`); } catch (e) {}
+
+  // レート制限テーブル（ブルートフォース・DDoS対策）
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      identifier TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      request_count INTEGER NOT NULL DEFAULT 1,
+      window_start TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `);
+  // レート制限のインデックス作成
+  try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_rate_limits_identifier_endpoint ON rate_limits (identifier, endpoint)`); } catch (e) {}
+  try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_rate_limits_window ON rate_limits (window_start)`); } catch (e) {}
+
   initialized = true;
 }
 

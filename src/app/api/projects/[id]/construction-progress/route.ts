@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { constructionProgress, CONSTRUCTION_PROGRESS_CATEGORIES } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { requireProjectAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,12 @@ export async function GET(
 
   if (isNaN(projectId)) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
   }
 
   const progressList = await db
@@ -36,6 +43,12 @@ export async function POST(
 
   if (isNaN(projectId)) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
   }
 
   try {

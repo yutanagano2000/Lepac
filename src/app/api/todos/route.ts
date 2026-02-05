@@ -1,13 +1,21 @@
-import { NextResponse } from "next/server";
-import { eq, asc } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+import { eq, asc, and } from "drizzle-orm";
 import { db } from "@/db";
 import { todos, projects } from "@/db/schema";
-import { auth } from "@/auth";
 import { createTodoSchema, validateBody } from "@/lib/validations";
+import { requireOrganization, requireOrganizationWithCsrf, getUserId } from "@/lib/auth-guard";
+import { logTodoCreate } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // 認証・組織チェック
+  const authResult = await requireOrganization();
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
+
   const rows = await db
     .select({
       id: todos.id,
@@ -23,29 +31,36 @@ export async function GET() {
     })
     .from(todos)
     .leftJoin(projects, eq(todos.projectId, projects.id))
+    .where(eq(todos.organizationId, organizationId))
     .orderBy(asc(todos.dueDate));
   return NextResponse.json(rows);
 }
 
 // プレーンなTODOを作成（案件に紐づかない）
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // 認証・組織チェック（CSRF保護付き）
+  const authResult = await requireOrganizationWithCsrf(request);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { user, organizationId } = authResult;
+
   const validation = await validateBody(request, createTodoSchema);
   if (!validation.success) {
     return NextResponse.json(validation.error, { status: 400 });
   }
 
-  const session = await auth();
   const { content, dueDate, projectId } = validation.data;
 
   // セッションからユーザー情報を取得
-  const userId = session?.user?.id ? parseInt(session.user.id) : null;
-  const user = session?.user as { name?: string; username?: string } | undefined;
-  const userName = user?.name || user?.username || null;
+  const userId = getUserId(user);
+  const userName = user.name || user.username || null;
 
   try {
     const [result] = await db
       .insert(todos)
       .values({
+        organizationId, // 組織IDを自動設定
         projectId: projectId ?? null,
         content: content.trim(),
         dueDate,
@@ -54,6 +69,9 @@ export async function POST(request: Request) {
         userName,
       })
       .returning();
+
+    // 監査ログ記録
+    await logTodoCreate(user, result.id, content, request);
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

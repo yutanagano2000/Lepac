@@ -45,17 +45,17 @@ const tools = [
 
 export default function ToolsPage() {
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-5xl py-10">
-        <div className="space-y-6">
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-5xl py-6 sm:py-10">
+        <div className="space-y-4 sm:space-y-6">
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold">ツール</h1>
+            <h1 className="text-lg sm:text-xl font-semibold">ツール</h1>
             <p className="text-sm text-muted-foreground">
               業務で使う便利機能を集約しています
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2">
             {tools.map((tool) => {
               const Icon = tool.icon;
               return (

@@ -3,6 +3,7 @@ import { del } from "@vercel/blob";
 import { db } from "@/db";
 import { constructionPhotos } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import { requireProjectAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,12 @@ export async function DELETE(
 
   if (isNaN(projectId) || isNaN(photoIdNum)) {
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+  }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
   }
 
   try {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -87,6 +87,7 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
     start: "",
@@ -98,6 +99,14 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
 
   // 削除確認ダイアログ用
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // モバイル判定
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleEventClick = (info: EventClickArg) => {
     const event = events.find((e) => e.id === info.event.id);
@@ -242,9 +251,13 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
       {/* カレンダー */}
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-        initialView="dayGridMonth"
+        initialView={isMobile ? "listWeek" : "dayGridMonth"}
         locale={jaLocale}
-        headerToolbar={{
+        headerToolbar={isMobile ? {
+          left: "prev,next",
+          center: "title",
+          right: "listWeek,dayGridMonth",
+        } : {
           left: "prev,today,next",
           center: "title",
           right: "dayGridMonth,timeGridWeek,listWeek",
@@ -259,13 +272,13 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
         editable={true}
         selectable={true}
         selectMirror={true}
-        dayMaxEvents={3}
+        dayMaxEvents={isMobile ? 2 : 3}
         weekends={true}
         eventClick={handleEventClick}
         select={handleDateSelect}
         eventDrop={handleEventDrop}
         height="auto"
-        contentHeight={650}
+        contentHeight={isMobile ? 500 : 650}
         eventDisplay="block"
         eventTimeFormat={{
           hour: "2-digit",

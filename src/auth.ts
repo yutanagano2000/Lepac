@@ -7,6 +7,7 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { validatePassword, PASSWORD_REQUIREMENTS } from "@/lib/password-policy";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,

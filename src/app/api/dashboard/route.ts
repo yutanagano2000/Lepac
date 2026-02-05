@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress, todos } from "@/db/schema";
-import { eq, lt, and, isNull, lte, gt, desc, sql } from "drizzle-orm";
+import { eq, lt, and, isNull, lte, gt, desc, sql, inArray } from "drizzle-orm";
 import { createErrorResponse } from "@/lib/api-error";
+import { requireOrganization } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,13 @@ function parseCompletionMonth(completionMonth: string | null): Date | null {
 }
 
 export async function GET() {
+  // 認証・組織チェック
+  const authResult = await requireOrganization();
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
+
   try {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -47,29 +55,7 @@ export async function GET() {
       // 最近のプロジェクト
       recentProjects,
     ] = await Promise.all([
-      // 期限切れTODO
-      db.select({
-        id: todos.id,
-        content: todos.content,
-        dueDate: todos.dueDate,
-        projectId: todos.projectId,
-      })
-        .from(todos)
-        .where(and(isNull(todos.completedAt), lt(todos.dueDate, today)))
-        .limit(10),
-
-      // 今日期日のTODO
-      db.select({
-        id: todos.id,
-        content: todos.content,
-        dueDate: todos.dueDate,
-        projectId: todos.projectId,
-      })
-        .from(todos)
-        .where(and(isNull(todos.completedAt), eq(todos.dueDate, today)))
-        .limit(10),
-
-      // 今週期日のTODO
+      // 期限切れTODO（組織フィルタリング）
       db.select({
         id: todos.id,
         content: todos.content,
@@ -78,46 +64,87 @@ export async function GET() {
       })
         .from(todos)
         .where(and(
+          eq(todos.organizationId, organizationId),
+          isNull(todos.completedAt),
+          lt(todos.dueDate, today)
+        ))
+        .limit(10),
+
+      // 今日期日のTODO（組織フィルタリング）
+      db.select({
+        id: todos.id,
+        content: todos.content,
+        dueDate: todos.dueDate,
+        projectId: todos.projectId,
+      })
+        .from(todos)
+        .where(and(
+          eq(todos.organizationId, organizationId),
+          isNull(todos.completedAt),
+          eq(todos.dueDate, today)
+        ))
+        .limit(10),
+
+      // 今週期日のTODO（組織フィルタリング）
+      db.select({
+        id: todos.id,
+        content: todos.content,
+        dueDate: todos.dueDate,
+        projectId: todos.projectId,
+      })
+        .from(todos)
+        .where(and(
+          eq(todos.organizationId, organizationId),
           isNull(todos.completedAt),
           gt(todos.dueDate, today),
           lte(todos.dueDate, weekFromNow)
         ))
         .limit(10),
 
-      // プロジェクト（必要なカラムのみ）
+      // プロジェクト（組織フィルタリング）
       db.select({
         id: projects.id,
         managementNumber: projects.managementNumber,
         client: projects.client,
         completionMonth: projects.completionMonth,
         siteInvestigation: projects.siteInvestigation,
-      }).from(projects),
+      }).from(projects).where(eq(projects.organizationId, organizationId)),
 
       // 進捗
       db.select().from(progress),
 
-      // 最近のプロジェクト
+      // 最近のプロジェクト（組織フィルタリング）
       db.select({
         id: projects.id,
         managementNumber: projects.managementNumber,
         client: projects.client,
       })
         .from(projects)
+        .where(eq(projects.organizationId, organizationId))
         .orderBy(desc(projects.id))
         .limit(5),
     ]);
 
-    // TODOのカウントを並列で取得
+    // TODOのカウントを並列で取得（組織フィルタリング）
     const [overdueTodosCount, todayTodosCount, thisWeekTodosCount] = await Promise.all([
       db.select({ count: sql<number>`count(*)` })
         .from(todos)
-        .where(and(isNull(todos.completedAt), lt(todos.dueDate, today))),
-      db.select({ count: sql<number>`count(*)` })
-        .from(todos)
-        .where(and(isNull(todos.completedAt), eq(todos.dueDate, today))),
+        .where(and(
+          eq(todos.organizationId, organizationId),
+          isNull(todos.completedAt),
+          lt(todos.dueDate, today)
+        )),
       db.select({ count: sql<number>`count(*)` })
         .from(todos)
         .where(and(
+          eq(todos.organizationId, organizationId),
+          isNull(todos.completedAt),
+          eq(todos.dueDate, today)
+        )),
+      db.select({ count: sql<number>`count(*)` })
+        .from(todos)
+        .where(and(
+          eq(todos.organizationId, organizationId),
           isNull(todos.completedAt),
           gt(todos.dueDate, today),
           lte(todos.dueDate, weekFromNow)
@@ -126,10 +153,12 @@ export async function GET() {
 
     // プロジェクトIDをキーにしたMapを作成（O(n)でルックアップ可能に）
     const projectMap = new Map(allProjects.map((p) => [p.id, p]));
+    const projectIds = new Set(allProjects.map((p) => p.id));
 
-    // 進捗をプロジェクトIDでグループ化（O(n)でルックアップ可能に）
+    // 進捗をプロジェクトIDでグループ化（組織に属するプロジェクトのもののみ）
     const progressByProject = new Map<number, typeof allProgress>();
     for (const prog of allProgress) {
+      if (!projectIds.has(prog.projectId)) continue; // 組織外のプロジェクトはスキップ
       const existing = progressByProject.get(prog.projectId) || [];
       existing.push(prog);
       progressByProject.set(prog.projectId, existing);

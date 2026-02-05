@@ -234,21 +234,38 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     return 0;
   };
 
-  // アラート判定: 未完了フェーズで期日未設定または期日超過
-  const isPhaseAlert = (project: ProjectWithProgress, phaseIndex: number): boolean => {
+  // アラート種別判定: 未完了フェーズのアラートレベルを返す
+  // "critical" = 赤（期日超過・期日未設定）, "warning" = 黄（1週間以内）, null = アラートなし
+  type AlertLevel = "critical" | "warning" | null;
+
+  const getPhaseAlertLevel = (project: ProjectWithProgress, phaseIndex: number): AlertLevel => {
     const phase = PHASES[phaseIndex];
     const phaseStatus = getPhaseStatus(project, phase.title);
 
     // 完了済みはアラートなし
-    if (phaseStatus.status === "completed") return false;
+    if (phaseStatus.status === "completed") return null;
 
-    // 期日未設定は無条件でアラート
-    if (!phaseStatus.date) return true;
+    // 期日未設定は赤色アラート
+    if (!phaseStatus.date) return "critical";
 
-    // 期日超過（未完了で期日を過ぎているもの）
+    // 期日との比較
     const dueDate = new Date(phaseStatus.date);
     dueDate.setHours(0, 0, 0, 0);
-    return dueDate < today;
+
+    // 期日超過は赤色アラート
+    if (dueDate < today) return "critical";
+
+    // 1週間以内は黄色アラート
+    const oneWeekLater = new Date(today);
+    oneWeekLater.setDate(oneWeekLater.getDate() + 7);
+    if (dueDate <= oneWeekLater) return "warning";
+
+    return null;
+  };
+
+  // 後方互換のためのヘルパー（赤アラートかどうか）
+  const isPhaseAlert = (project: ProjectWithProgress, phaseIndex: number): boolean => {
+    return getPhaseAlertLevel(project, phaseIndex) === "critical";
   };
 
   // アラート数を計算（表示中の案件のすべてのアラートフェーズをカウント）
@@ -585,29 +602,29 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="px-6 py-8">
-        <div className="space-y-6">
+      <div className="px-4 sm:px-6 py-6 sm:py-8">
+        <div className="space-y-4 sm:space-y-6">
           {/* Header */}
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <GitBranch className="h-5 w-5 text-muted-foreground" />
-                <h1 className="text-xl font-semibold">タイムライン</h1>
+                <h1 className="text-lg sm:text-xl font-semibold">タイムライン</h1>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {/* アラートサマリー */}
                 {alertCount > 0 && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
-                    <Flame className="h-5 w-5 text-red-500" />
-                    <span className="text-sm font-bold text-red-600 dark:text-red-400">
-                      {alertCount}件のアラート
+                  <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                    <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
+                    <span className="text-xs sm:text-sm font-bold text-red-600 dark:text-red-400">
+                      {alertCount}件
                     </span>
                   </div>
                 )}
                 {/* 新規登録ボタン */}
                 <Button size="sm" onClick={() => setProjectDialogOpen(true)}>
                   <Plus className="h-4 w-4" />
-                  新規登録
+                  <span className="hidden sm:inline ml-1">新規登録</span>
                 </Button>
               </div>
             </div>
@@ -663,7 +680,11 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="font-medium text-red-600 dark:text-red-400">アラート</span>
+              <span className="font-medium text-red-600 dark:text-red-400">期日超過・未設定</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <span className="font-medium text-yellow-600 dark:text-yellow-400">1週間以内</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
@@ -861,14 +882,17 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                               const phaseStatus = getPhaseStatus(project, phase.title);
                               const isCompleted = phaseStatus.status === "completed";
                               const isCurrent = index === currentPhaseIndex;
-                              const isAlert = isPhaseAlert(project, index);
+                              const alertLevel = getPhaseAlertLevel(project, index);
+                              const isCritical = alertLevel === "critical";
+                              const isWarning = alertLevel === "warning";
 
                               return (
                                 <td
                                   key={phase.key}
                                   className={cn(
                                     "px-0 py-2 text-center",
-                                    isAlert && "bg-red-500/10"
+                                    isCritical && "bg-red-500/10",
+                                    isWarning && "bg-yellow-500/10"
                                   )}
                                 >
                                   <button
@@ -882,15 +906,18 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                                       className={cn(
                                         "w-7 h-7 rounded-full flex items-center justify-center transition-colors",
                                         isCompleted && "bg-green-500 text-white",
-                                        isAlert && "bg-red-500 text-white",
-                                        isCurrent && !isCompleted && !isAlert && "bg-blue-500 text-white",
-                                        !isCompleted && !isCurrent && !isAlert && "bg-zinc-200 dark:bg-zinc-700"
+                                        isCritical && "bg-red-500 text-white",
+                                        isWarning && "bg-yellow-500 text-white",
+                                        isCurrent && !isCompleted && !isCritical && !isWarning && "bg-blue-500 text-white",
+                                        !isCompleted && !isCurrent && !isCritical && !isWarning && "bg-zinc-200 dark:bg-zinc-700"
                                       )}
                                     >
                                       {isCompleted ? (
                                         <Check className="h-4 w-4" />
-                                      ) : isAlert ? (
+                                      ) : isCritical ? (
                                         <AlertTriangle className="h-4 w-4" />
+                                      ) : isWarning ? (
+                                        <Clock className="h-4 w-4" />
                                       ) : isCurrent ? (
                                         <Clock className="h-4 w-4" />
                                       ) : (
@@ -905,8 +932,10 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                                         "text-xs font-semibold truncate w-full",
                                         isCompleted
                                           ? "text-green-600 dark:text-green-400"
-                                          : isAlert
+                                          : isCritical
                                           ? "text-red-600 dark:text-red-400"
+                                          : isWarning
+                                          ? "text-yellow-600 dark:text-yellow-400"
                                           : "text-muted-foreground"
                                       )}
                                     >
@@ -928,62 +957,6 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
             </CardContent>
           </Card>
 
-          {/* Progress Bar View (Alternative) */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-medium text-muted-foreground">進捗バー表示</h2>
-            {filteredProjects.slice(0, 5).map((project) => {
-              const currentPhaseIndex = getCurrentPhaseIndex(project);
-              const progressPercent = Math.round((currentPhaseIndex / PHASES.length) * 100);
-
-              return (
-                <Card key={project.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <Link
-                        href={`/projects/${project.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {project.managementNumber}
-                      </Link>
-                      <Badge variant="outline" className="text-xs">
-                        {progressPercent}%
-                      </Badge>
-                    </div>
-                    <div className="relative">
-                      {/* Progress bar background */}
-                      <div className="h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                      {/* Phase markers */}
-                      <div className="flex justify-between mt-1">
-                        {PHASES.filter((_, i) => i % 4 === 0 || i === PHASES.length - 1).map(
-                          (phase, i) => (
-                            <span
-                              key={phase.key}
-                              className="text-[10px] text-muted-foreground"
-                            >
-                              {phase.title}
-                            </span>
-                          )
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      現在のフェーズ:{" "}
-                      <span className="font-medium text-foreground">
-                        {currentPhaseIndex < PHASES.length
-                          ? PHASES[currentPhaseIndex].title
-                          : "完了"}
-                      </span>
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
         </div>
       </div>
 

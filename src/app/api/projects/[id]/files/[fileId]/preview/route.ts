@@ -4,6 +4,7 @@ import { projectFiles } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { ApiError, createErrorResponse } from "@/lib/api-error";
+import { requireProjectAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,12 @@ export async function GET(
 
     if (isNaN(projectId) || isNaN(fileIdNum)) {
       throw ApiError.badRequest("無効なIDです");
+    }
+
+    // 認証・組織・プロジェクト所有権チェック
+    const authResult = await requireProjectAccess(projectId);
+    if (!authResult.success) {
+      return authResult.response;
     }
 
     // DBからファイル情報を取得

@@ -1,36 +1,84 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
+import { eq, and, notInArray } from "drizzle-orm";
+import { requireOrganization } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  // 全案件を取得
-  const allProjects = await db.select().from(projects);
-  const allProgress = await db.select().from(progress);
+export async function GET(request: Request) {
+  // 認証・組織チェック
+  const authResult = await requireOrganization();
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
 
-  // デバッグ: 日付フィールドの確認
-  if (allProjects.length > 0) {
-    const sample = allProjects[0];
-    console.log("[Construction GET] Sample project date fields:", {
-      id: sample.id,
-      mountOrderDate: sample.mountOrderDate,
-      mountDeliveryScheduled: sample.mountDeliveryScheduled,
-      panelOrderDate: sample.panelOrderDate,
-      panelDeliveryScheduled: sample.panelDeliveryScheduled,
-      constructionAvailableDate: sample.constructionAvailableDate,
+  const { searchParams } = new URL(request.url);
+  const year = searchParams.get("year");
+  const month = searchParams.get("month");
+
+  // 組織に属するプロジェクトのIDを取得
+  const orgProjects = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.organizationId, organizationId));
+
+  const orgProjectIds = orgProjects.map(p => p.id);
+
+  if (orgProjectIds.length === 0) {
+    return NextResponse.json({ projects: [], count: 0 });
+  }
+
+  // 完工済みの案件IDを取得（サブクエリで効率化）
+  const completedProjectIds = await db
+    .select({ projectId: progress.projectId })
+    .from(progress)
+    .where(and(
+      eq(progress.title, "完工"),
+      eq(progress.status, "completed")
+    ));
+
+  const completedIds = completedProjectIds.map(p => p.projectId);
+
+  // 完工済みでない案件を取得（組織に属するもののみ）
+  let allProjects;
+  if (completedIds.length > 0) {
+    allProjects = await db
+      .select()
+      .from(projects)
+      .where(and(
+        eq(projects.organizationId, organizationId),
+        notInArray(projects.id, completedIds)
+      ));
+  } else {
+    allProjects = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.organizationId, organizationId));
+  }
+
+  // 月でフィルタリング（サーバーサイド）
+  let filteredProjects = allProjects;
+  if (year && month) {
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+
+    filteredProjects = allProjects.filter((p) => {
+      if (!p.completionMonth) return false;
+      // 完成月のフォーマット: "2025年1月" or "2025/01" or "2025-01" など
+      const monthMatch = p.completionMonth.match(/(\d{4})[-/年]?(\d{1,2})/);
+      if (monthMatch) {
+        const pYear = parseInt(monthMatch[1]);
+        const pMonth = parseInt(monthMatch[2]);
+        return pYear === yearNum && pMonth === monthNum;
+      }
+      return false;
     });
   }
 
-  // 完工済みでない案件のみ抽出
-  const activeProjects = allProjects.filter((p) => {
-    const projectProgress = allProgress.filter((prog) => prog.projectId === p.id);
-    const completionProgress = projectProgress.find((prog) => prog.title === "完工");
-    return !completionProgress || completionProgress.status !== "completed";
-  });
-
   // 工事部向けに必要なフィールドのみ抽出
-  const constructionProjects = activeProjects.map((p) => ({
+  const constructionProjects = filteredProjects.map((p) => ({
     id: p.id,
     managementNumber: p.managementNumber,
     client: p.client,

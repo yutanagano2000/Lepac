@@ -652,28 +652,29 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   );
 
   return (
-    <div className="min-h-screen bg-background px-4">
-      <div className="py-6">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="py-6 sm:py-10">
+        <div className="space-y-4 sm:space-y-6">
+          {/* ヘッダー: モバイルで縦積み */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="space-y-1 shrink-0">
-              <h1 className="text-2xl font-semibold">案件一覧</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-lg sm:text-2xl font-semibold">案件一覧</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 担当する案件を確認できます
               </p>
             </div>
 
             {/* 検索欄（直近3件のサジェスト付き） */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative flex-1 sm:max-w-md">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none" />
               <Input
-                placeholder="管理番号・案件番号・地権者・現地住所で検索"
+                placeholder="管理番号・案件番号・地権者・住所で検索"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={handleSearchFocus}
                 onBlur={handleSearchBlur}
                 onKeyDown={handleSearchKeyDown}
-                className="w-full pl-10 h-10 text-sm bg-muted/50 border-0 focus-visible:ring-2 rounded-lg"
+                className="w-full pl-10 h-9 sm:h-10 text-sm bg-muted/50 border-0 focus-visible:ring-2 rounded-lg"
               />
               {showSuggestions && recentSearches.length > 0 && (
                 <div

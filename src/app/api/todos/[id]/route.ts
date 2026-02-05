@@ -1,15 +1,24 @@
-import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
 import { todos } from "@/db/schema";
 import { updateTodoSchema, validateBody } from "@/lib/validations";
+import { requireOrganization, requireOrganizationWithCsrf } from "@/lib/auth-guard";
+import { logTodoUpdate, logTodoDelete } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 認証・組織チェック（CSRF保護付き）
+  const authResult = await requireOrganizationWithCsrf(request);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { user, organizationId } = authResult;
+
   const { id } = await params;
   const todoId = parseInt(id, 10);
   if (isNaN(todoId)) {
@@ -34,15 +43,20 @@ export async function PATCH(
   }
 
   try {
+    // 組織に属するTODOのみ更新可能
     const [result] = await db
       .update(todos)
       .set(updates)
-      .where(eq(todos.id, todoId))
+      .where(and(eq(todos.id, todoId), eq(todos.organizationId, organizationId)))
       .returning();
 
     if (!result) {
       return NextResponse.json({ error: "TODOが見つかりません" }, { status: 404 });
     }
+
+    // 監査ログ記録
+    await logTodoUpdate(user, todoId, result.content, updates, request);
+
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to update todo:", error);
@@ -51,14 +65,39 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 認証・組織チェック（CSRF保護付き）
+  const authResult = await requireOrganizationWithCsrf(request);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { user, organizationId } = authResult;
+
   const { id } = await params;
   const todoId = parseInt(id, 10);
   if (isNaN(todoId)) {
     return NextResponse.json({ error: "Invalid todo ID" }, { status: 400 });
   }
-  await db.delete(todos).where(eq(todos.id, todoId));
+
+  // 削除前にTODOを取得（監査ログ用）
+  const [existingTodo] = await db
+    .select()
+    .from(todos)
+    .where(and(eq(todos.id, todoId), eq(todos.organizationId, organizationId)));
+
+  if (!existingTodo) {
+    return NextResponse.json({ error: "TODOが見つかりません" }, { status: 404 });
+  }
+
+  // 組織に属するTODOのみ削除可能
+  await db.delete(todos).where(
+    and(eq(todos.id, todoId), eq(todos.organizationId, organizationId))
+  );
+
+  // 監査ログ記録
+  await logTodoDelete(user, todoId, existingTodo.content, request);
+
   return NextResponse.json({ success: true });
 }

@@ -28,17 +28,17 @@ export default async function MeetingDetailPage({ params }: MeetingDetailPagePro
     : "-";
 
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-4xl py-10">
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild>
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-4xl py-6 sm:py-10">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
               <Link href="/meetings">
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
-            <div className="flex-1">
-              <h1 className="text-xl font-semibold">{meeting.title}</h1>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold truncate">{meeting.title}</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 {displayDate} ／ {meeting.category}
               </p>

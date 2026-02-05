@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { DatePicker } from "@/components/ui/date-picker";
 import { StatusSelect } from "@/components/ui/status-select";
+import { ProjectCreateDialog } from "@/components/ProjectCreateDialog";
 
 type Project = {
   id: number;
@@ -80,15 +81,14 @@ export default function ConstructionPage() {
 
   useEffect(() => {
     async function fetchProjects() {
+      setLoading(true);
       try {
-        const res = await fetch("/api/construction", { cache: "no-store" });
+        const res = await fetch(
+          `/api/construction?year=${currentMonth.year}&month=${currentMonth.month}`,
+          { cache: "no-store" }
+        );
         if (res.ok) {
           const data = await res.json();
-          console.log("[Construction] Fetched projects:", data.projects.slice(0, 3).map((p: Project) => ({
-            id: p.id,
-            mountOrderDate: p.mountOrderDate,
-            completionMonth: p.completionMonth,
-          })));
           setProjects(data.projects);
         }
       } catch (error) {
@@ -98,7 +98,7 @@ export default function ConstructionPage() {
       }
     }
     fetchProjects();
-  }, []);
+  }, [currentMonth.year, currentMonth.month]);
 
   const goToPreviousMonth = () => {
     setCurrentMonth((prev) => {
@@ -118,11 +118,8 @@ export default function ConstructionPage() {
     });
   };
 
-  const filteredProjects = projects.filter((project) => {
-    const parsed = parseCompletionMonth(project.completionMonth);
-    if (!parsed) return false;
-    return parsed.year === currentMonth.year && parsed.month === currentMonth.month;
-  });
+  // サーバーサイドでフィルタリング済みのため、そのまま使用
+  const filteredProjects = projects;
 
   const updateProjectField = useCallback(async (projectId: number, field: string, value: string | null) => {
     console.log("[Construction] Updating:", { projectId, field, value });
@@ -170,11 +167,11 @@ export default function ConstructionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background px-6">
-        <div className="mx-auto max-w-full py-10">
-          <div className="space-y-6">
+      <div className="min-h-screen bg-background px-4 sm:px-6">
+        <div className="mx-auto max-w-full py-6 sm:py-10">
+          <div className="space-y-4 sm:space-y-6">
             <div className="space-y-1">
-              <h1 className="text-xl font-semibold">工事</h1>
+              <h1 className="text-lg sm:text-xl font-semibold">工事</h1>
               <p className="text-sm text-muted-foreground">読み込み中...</p>
             </div>
           </div>
@@ -184,33 +181,53 @@ export default function ConstructionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-full py-10">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-full py-6 sm:py-10">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="space-y-1">
-              <h1 className="text-xl font-semibold">工事</h1>
+              <h1 className="text-lg sm:text-xl font-semibold">工事</h1>
               <p className="text-sm text-muted-foreground">
                 工事現場担当者（工務）向けの案件一覧
               </p>
             </div>
+            <ProjectCreateDialog
+              onProjectCreated={(newProject) => {
+                // 新規案件が登録されたら、完成月が現在表示中の月と一致する場合のみリストに追加
+                const completionMonth = newProject.completionMonth;
+                if (completionMonth) {
+                  const match = completionMonth.match(/(\d{4})[-/年]?(\d{1,2})/);
+                  if (match) {
+                    const year = parseInt(match[1]);
+                    const month = parseInt(match[2]);
+                    if (year === currentMonth.year && month === currentMonth.month) {
+                      // APIから最新データを再取得
+                      fetch(`/api/construction?year=${currentMonth.year}&month=${currentMonth.month}`, { cache: "no-store" })
+                        .then(res => res.json())
+                        .then(data => setProjects(data.projects))
+                        .catch(console.error);
+                    }
+                  }
+                }
+              }}
+            />
           </div>
 
           <Tabs defaultValue="orders" className="w-full">
-            <div className="flex items-center justify-between mb-4">
-              <TabsList>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <TabsList className="w-fit">
                 <TabsTrigger value="orders">発注</TabsTrigger>
                 <TabsTrigger value="process">工程</TabsTrigger>
               </TabsList>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToPreviousMonth}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm font-medium min-w-[100px] text-center">
                   {monthDisplay}
                 </span>
-                <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToNextMonth}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>

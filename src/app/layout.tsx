@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { SessionProvider } from "@/components/SessionProvider";
 import { FeedbackInput } from "@/components/FeedbackInput";
 import { Header } from "@/components/Header";
+import { MainContentWrapper } from "@/components/MainContentWrapper";
+import { MobileMenuProvider } from "@/components/MobileMenuContext";
 import { initDb } from "@/db";
 
 const geistSans = Geist({
@@ -41,18 +43,22 @@ export default async function RootLayout({
             enableSystem={false}
             disableTransitionOnChange
           >
-            <div className="min-h-screen bg-background">
-              <div className="flex">
-                <SideNav />
-                <div className="min-w-0 flex-1 flex flex-col">
-                  <Header />
-                  <main className="flex-1">
-                    {children}
-                    <FeedbackInput />
-                  </main>
+            <MobileMenuProvider>
+              <div className="min-h-screen bg-background">
+                <div className="flex">
+                  <SideNav />
+                  <div className="min-w-0 flex-1 flex flex-col">
+                    <Header />
+                    <main className="flex-1">
+                      <MainContentWrapper>
+                        {children}
+                      </MainContentWrapper>
+                      <FeedbackInput />
+                    </main>
+                  </div>
                 </div>
               </div>
-            </div>
+            </MobileMenuProvider>
           </ThemeProvider>
         </SessionProvider>
       </body>

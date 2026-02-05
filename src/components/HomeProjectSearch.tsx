@@ -57,7 +57,11 @@ type MeetingForSearch = {
   agenda: string | null;
 };
 
-export function HomeProjectSearch() {
+interface HomeProjectSearchProps {
+  size?: "default" | "large";
+}
+
+export function HomeProjectSearch({ size = "default" }: HomeProjectSearchProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectForSearch[]>([]);
   const [meetings, setMeetings] = useState<MeetingForSearch[]>([]);
@@ -66,6 +70,8 @@ export function HomeProjectSearch() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const isLarge = size === "large";
 
   useEffect(() => {
     setRecentSearches(getRecentSearches());
@@ -175,7 +181,7 @@ export function HomeProjectSearch() {
   return (
     <div ref={containerRef} className="relative w-full">
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 z-10 pointer-events-none" />
+        <Search className={`absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 z-10 pointer-events-none ${isLarge ? "h-6 w-6" : "h-5 w-5"}`} />
         <Input
           type="search"
           placeholder="管理番号・案件番号・地権者・現地住所・コメント・TODO・会議で検索"
@@ -190,7 +196,11 @@ export function HomeProjectSearch() {
             handleSearchKeyDown(e);
             handleKeyDown(e);
           }}
-          className="w-full pl-12 h-12 text-base bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-visible:ring-2 rounded-xl"
+          className={`w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-visible:ring-2 rounded-xl ${
+            isLarge
+              ? "pl-14 h-14 text-lg"
+              : "pl-12 h-12 text-base"
+          }`}
         />
       </div>
 

@@ -124,34 +124,42 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-5xl py-10">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1 shrink-0">
-              <h1 className="text-xl font-semibold">会議</h1>
-              <p className="text-sm text-muted-foreground">
-                議事録を保存・確認できます
-              </p>
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-5xl py-6 sm:py-10">
+        <div className="space-y-4 sm:space-y-6">
+          {/* ヘッダー: モバイルで縦積み */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex items-center justify-between sm:block">
+              <div className="space-y-1 shrink-0">
+                <h1 className="text-lg sm:text-xl font-semibold">会議</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  議事録を保存・確認できます
+                </p>
+              </div>
+              {/* モバイル用新規登録ボタン */}
+              <Button size="sm" className="sm:hidden" onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4" />
+                新規
+              </Button>
             </div>
 
-            <div className="relative flex-1 max-w-xl">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative flex-1 sm:max-w-xl order-last sm:order-none">
+              <Search className="absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="タイトル・内容・議題・種別で検索"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 h-12 text-base bg-muted/50 border-0 focus-visible:ring-2 rounded-xl"
+                className="w-full pl-10 sm:pl-12 h-10 sm:h-12 text-sm sm:text-base bg-muted/50 border-0 focus-visible:ring-2 rounded-xl"
               />
             </div>
 
+            {/* デスクトップ用新規登録ボタン */}
+            <Button className="hidden sm:flex" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" />
+              新規登録
+            </Button>
+
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4" />
-                  新規登録
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
                 <DialogHeader>
                   <DialogTitle>議事録を新規登録</DialogTitle>
@@ -258,8 +266,8 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
             </Dialog>
           </div>
 
-          <div className="rounded-xl border border-border">
-            <Table>
+          <div className="rounded-xl border border-border overflow-x-auto">
+            <Table className="min-w-[500px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>タイトル</TableHead>

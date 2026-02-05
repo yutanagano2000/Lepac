@@ -195,17 +195,17 @@ export default function FeedbacksPage() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4 sm:space-y-6">
       {/* ヘッダー */}
       <div>
-        <h1 className="text-2xl font-bold">要望</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">要望</h1>
         <p className="text-sm text-muted-foreground">
           ユーザーからのフィードバック
         </p>
       </div>
 
       {/* ステータスフィルター */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2">
         {[
           { key: "all", label: "すべて", icon: null, color: "" },
           { key: "pending", label: "未対応", icon: Clock, color: "text-yellow-600" },
@@ -218,10 +218,12 @@ export default function FeedbacksPage() {
             variant={statusFilter === key ? "default" : "outline"}
             size="sm"
             onClick={() => setStatusFilter(key)}
-            className={cn("h-9 text-sm px-3", statusFilter !== key && color)}
+            className={cn("h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3", statusFilter !== key && color)}
           >
-            {Icon && <Icon className="h-4 w-4 mr-1.5" />}
-            {label} ({statusCounts[key as keyof typeof statusCounts]})
+            {Icon && <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-1.5" />}
+            <span className="hidden xs:inline">{label}</span>
+            <span className="xs:hidden">{label.slice(0, 2)}</span>
+            <span className="ml-1">({statusCounts[key as keyof typeof statusCounts]})</span>
           </Button>
         ))}
       </div>
@@ -245,13 +247,13 @@ export default function FeedbacksPage() {
               <Card key={feedback.id} className="overflow-hidden">
                 <CardContent className="p-0">
                   {/* メインコンテンツ */}
-                  <div className="p-4">
-                    <div className="flex items-start gap-3">
+                  <div className="p-3 sm:p-4">
+                    <div className="flex items-start gap-2 sm:gap-3">
                       {/* 展開ボタン */}
                       <button
                         onClick={() => toggleExpand(feedback.id)}
                         className={cn(
-                          "mt-1 p-1 rounded hover:bg-muted transition-colors",
+                          "mt-1 p-1 rounded hover:bg-muted transition-colors shrink-0",
                           replies.length === 0 && "invisible"
                         )}
                       >
@@ -264,16 +266,16 @@ export default function FeedbacksPage() {
 
                       {/* コンテンツ */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-base leading-relaxed">{feedback.content}</p>
-                          <Badge className={cn("shrink-0 text-xs px-2 py-0.5", statusConfig.color)}>
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+                          <p className="text-sm sm:text-base leading-relaxed">{feedback.content}</p>
+                          <Badge className={cn("shrink-0 text-xs px-2 py-0.5 w-fit", statusConfig.color)}>
                             <StatusIcon className={cn("h-3.5 w-3.5 mr-1", feedback.status === "in_progress" && "animate-spin")} />
                             {statusConfig.label}
                           </Badge>
                         </div>
 
                         {/* メタ情報 */}
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs text-muted-foreground">
                           {feedback.userName && (
                             <span className="flex items-center gap-1">
                               <User className="h-3.5 w-3.5" />
@@ -281,7 +283,7 @@ export default function FeedbacksPage() {
                             </span>
                           )}
                           <span>{formatDate(feedback.createdAt)}</span>
-                          <span className="px-2 py-1 rounded bg-muted text-xs">
+                          <span className="px-2 py-1 rounded bg-muted text-xs hidden sm:inline">
                             {feedback.pageTitle || feedback.pagePath}
                           </span>
                           {replies.length > 0 && (
@@ -291,10 +293,45 @@ export default function FeedbacksPage() {
                             </span>
                           )}
                         </div>
+
+                        {/* モバイル用アクション */}
+                        <div className="flex items-center gap-1 mt-3 sm:hidden">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 px-3"
+                            onClick={() => handleLike(feedback.id)}
+                          >
+                            <ThumbsUp className="h-4 w-4 mr-1" />
+                            <span className="text-sm">{feedback.likes}</span>
+                          </Button>
+                          <Select
+                            value={feedback.status}
+                            onValueChange={(value) => handleStatusChange(feedback.id, value)}
+                          >
+                            <SelectTrigger className="h-9 w-24 text-xs px-2">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending" className="text-sm">未対応</SelectItem>
+                              <SelectItem value="in_progress" className="text-sm">対応中</SelectItem>
+                              <SelectItem value="completed" className="text-sm">完了</SelectItem>
+                              <SelectItem value="rejected" className="text-sm">見送り</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteId(feedback.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
-                      {/* アクション */}
-                      <div className="flex items-center gap-1 shrink-0">
+                      {/* デスクトップ用アクション */}
+                      <div className="hidden sm:flex items-center gap-1 shrink-0">
                         <Button
                           variant="ghost"
                           size="sm"

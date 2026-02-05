@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
@@ -47,7 +48,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LawAlertCard } from "@/components/LawAlertCard";
-import { ContactDeptAlertCard } from "@/components/ContactDeptAlertCard";
 
 const PROGRESS_TITLES = [
   "合意書",
@@ -141,10 +141,20 @@ interface LawSearchCardProps {
   farmlandAlert?: boolean;
   /** 現在のステータス */
   currentStatus?: LegalStatus;
+  /** 現在のユーザーメモ */
+  currentNote?: string;
+  /** 編集者名 */
+  updatedBy?: string;
+  /** 編集日時 */
+  updatedAt?: string;
   /** ステータス変更時のコールバック */
   onStatusChange?: (status: LegalStatus) => void;
   /** ステータス削除時のコールバック */
   onStatusRemove?: () => void;
+  /** メモ変更時のコールバック */
+  onNoteChange?: (note: string) => void;
+  /** 「対象地区ではありません」ボタンを非表示にする */
+  hideNotApplicableButton?: boolean;
 }
 
 const LawSearchCard: React.FC<LawSearchCardProps> = ({
@@ -161,17 +171,49 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
   note,
   farmlandAlert,
   currentStatus,
+  currentNote,
+  updatedBy,
+  updatedAt,
   onStatusChange,
   onStatusRemove,
+  onNoteChange,
+  hideNotApplicableButton,
 }) => {
+  const [localNote, setLocalNote] = useState(currentNote || "");
+
+  // currentNoteが変わったら同期
+  useEffect(() => {
+    setLocalNote(currentNote || "");
+  }, [currentNote]);
+
+  // メモの保存（debounce的に入力完了後に呼び出し）
+  const handleNoteBlur = () => {
+    if (onNoteChange && localNote !== currentNote) {
+      onNoteChange(localNote);
+    }
+  };
+
+  // 編集日時のフォーマット
+  const formatUpdatedAt = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const h = date.getHours();
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${m}/${d} ${h}:${min}`;
+  };
+
   return (
-    <div className={cn(
-      "bg-card rounded-4xl border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500",
-      currentStatus === "該当" && "border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20",
-      currentStatus === "要確認" && "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20",
-      currentStatus === "非該当" && "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/20",
-      !currentStatus && "border-border"
-    )}>
+    <div
+      id={`law-section-${lawId}`}
+      className={cn(
+        "bg-card rounded-4xl border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 scroll-mt-20",
+        currentStatus === "該当" && "border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-950/20",
+        currentStatus === "要確認" && "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20",
+        currentStatus === "非該当" && "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-950/20",
+        !currentStatus && "border-border"
+      )}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -195,20 +237,32 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
           {caption && (
             <p className="text-sm text-muted-foreground mt-2">{caption}</p>
           )}
-          {fixedText && (
-            <div className="flex items-start gap-2 mt-3 p-3 rounded-xl bg-muted/50 border border-border">
-              <p className="flex-1 text-sm text-foreground leading-relaxed">{fixedText}</p>
-              <button
-                onClick={() => onCopy(fixedText)}
-                className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
-                title="コピー"
-              >
-                {copiedText === fixedText ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                )}
-              </button>
+          {/* クイック入力ボタン */}
+          {onNoteChange && (!hideNotApplicableButton || fixedText) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {!hideNotApplicableButton && (
+                <button
+                  onClick={() => {
+                    onNoteChange("対象地区ではありません。");
+                    if (onStatusChange) onStatusChange("非該当");
+                  }}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/30 transition-colors"
+                >
+                  対象地区ではありません
+                </button>
+              )}
+              {fixedText && (
+                <button
+                  onClick={() => {
+                    onNoteChange(fixedText);
+                    if (onStatusChange) onStatusChange("非該当");
+                  }}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors max-w-xs truncate"
+                  title={fixedText}
+                >
+                  {fixedText.length > 30 ? fixedText.slice(0, 30) + "..." : fixedText}
+                </button>
+              )}
             </div>
           )}
           {note && (
@@ -226,52 +280,79 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
               ))}
             </div>
           )}
-          {/* ステータス選択ボタン */}
+          {/* ステータス選択・メモ入力エリア */}
           {onStatusChange && (
-            <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-border/50">
-              <span className="text-xs text-muted-foreground mr-1">判定:</span>
-              <button
-                onClick={() => onStatusChange("該当")}
-                className={cn(
-                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                  currentStatus === "該当"
-                    ? "bg-red-500 text-white border-red-500"
-                    : "bg-transparent text-red-600 border-red-300 hover:bg-red-100 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30"
-                )}
-              >
-                該当
-              </button>
-              <button
-                onClick={() => onStatusChange("要確認")}
-                className={cn(
-                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                  currentStatus === "要確認"
-                    ? "bg-amber-500 text-white border-amber-500"
-                    : "bg-transparent text-amber-600 border-amber-300 hover:bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/30"
-                )}
-              >
-                要確認
-              </button>
-              <button
-                onClick={() => onStatusChange("非該当")}
-                className={cn(
-                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                  currentStatus === "非該当"
-                    ? "bg-green-500 text-white border-green-500"
-                    : "bg-transparent text-green-600 border-green-300 hover:bg-green-100 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/30"
-                )}
-              >
-                非該当
-              </button>
-              {currentStatus && onStatusRemove && (
+            <div className="mt-4 pt-4 border-t border-border/50 space-y-4">
+              {/* 判定ボタン */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground mr-1">判定:</span>
                 <button
-                  onClick={onStatusRemove}
-                  className="ml-1 text-xs text-muted-foreground hover:text-foreground"
-                  title="判定を解除"
+                  onClick={() => onStatusChange("該当")}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                    currentStatus === "該当"
+                      ? "bg-red-500 text-white border-red-500"
+                      : "bg-transparent text-red-600 border-red-300 hover:bg-red-100 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30"
+                  )}
                 >
-                  ×
+                  該当
                 </button>
-              )}
+                <button
+                  onClick={() => onStatusChange("要確認")}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                    currentStatus === "要確認"
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-transparent text-amber-600 border-amber-300 hover:bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-900/30"
+                  )}
+                >
+                  要確認
+                </button>
+                <button
+                  onClick={() => onStatusChange("非該当")}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                    currentStatus === "非該当"
+                      ? "bg-green-500 text-white border-green-500"
+                      : "bg-transparent text-green-600 border-green-300 hover:bg-green-100 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/30"
+                  )}
+                >
+                  非該当
+                </button>
+                {currentStatus && onStatusRemove && (
+                  <button
+                    onClick={onStatusRemove}
+                    className="ml-1 text-xs text-muted-foreground hover:text-foreground"
+                    title="判定を解除"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* 検索結果入力欄 - 常に表示 */}
+              <div className="space-y-2 bg-muted/30 rounded-lg p-3 border border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Pencil className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">検索結果</span>
+                  </div>
+                  {/* 編集者情報 */}
+                  {updatedBy && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="px-1.5 py-0.5 rounded bg-muted">{updatedBy}</span>
+                      {updatedAt && <span>{formatUpdatedAt(updatedAt)}</span>}
+                    </div>
+                  )}
+                </div>
+                <Textarea
+                  placeholder="調査結果を入力してください"
+                  value={localNote}
+                  onChange={(e) => setLocalNote(e.target.value)}
+                  onBlur={handleNoteBlur}
+                  className="text-sm min-h-[80px] resize-none bg-background"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -333,6 +414,8 @@ type LegalStatus = "該当" | "非該当" | "要確認";
 interface LegalStatusInfo {
   status: LegalStatus;
   note?: string;
+  updatedBy?: string;
+  updatedAt?: string;
 }
 type LegalStatuses = Record<string, LegalStatusInfo>;
 
@@ -351,7 +434,12 @@ interface LegalSearchTabProps {
   onLegalStatusesChange?: (statuses: LegalStatuses) => void;
 }
 
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, projectLandCategories, projectId, initialLegalStatuses, onLegalStatusesChange }: LegalSearchTabProps) {
+  const { data: session } = useSession();
+  const currentUserName = session?.user?.name || session?.user?.username || "不明";
+
   const [coordinateInput, setCoordinateInput] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -370,50 +458,118 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
     }
     return {};
   });
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const savedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingStatusesRef = useRef<LegalStatuses | null>(null);
 
-  // 法令ステータスを更新
-  const updateLegalStatus = (lawName: string, status: LegalStatus, note?: string) => {
-    setLegalStatuses(prev => {
-      const updated = { ...prev, [lawName]: { status, note } };
-      setHasChanges(true);
-      return updated;
-    });
-  };
-
-  // 法令ステータスを削除
-  const removeLegalStatus = (lawName: string) => {
-    setLegalStatuses(prev => {
-      const updated = { ...prev };
-      delete updated[lawName];
-      setHasChanges(true);
-      return updated;
-    });
-  };
-
-  // 法令ステータスを保存
-  const saveLegalStatuses = async () => {
+  // 法令ステータスを保存（内部関数）
+  const saveLegalStatusesInternal = async (statusesToSave: LegalStatuses) => {
     if (!projectId) return;
-    setIsSaving(true);
+    setSaveStatus("saving");
     try {
       const response = await fetch(`/api/projects/${projectId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ legalStatuses: JSON.stringify(legalStatuses) }),
+        body: JSON.stringify({ legalStatuses: JSON.stringify(statusesToSave) }),
       });
       if (response.ok) {
-        setHasChanges(false);
-        onLegalStatusesChange?.(legalStatuses);
+        setSaveStatus("saved");
+        onLegalStatusesChange?.(statusesToSave);
+        // 2秒後に「保存済み」表示を消す
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
       } else {
-        alert("保存に失敗しました");
+        setSaveStatus("error");
       }
     } catch (error) {
       console.error("保存エラー:", error);
-      alert("保存に失敗しました");
-    } finally {
-      setIsSaving(false);
+      setSaveStatus("error");
     }
+  };
+
+  // デバウンス付き保存（メモ入力用: 1秒後に保存）
+  const debouncedSave = (newStatuses: LegalStatuses) => {
+    pendingStatusesRef.current = newStatuses;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (pendingStatusesRef.current) {
+        saveLegalStatusesInternal(pendingStatusesRef.current);
+        pendingStatusesRef.current = null;
+      }
+    }, 1000);
+  };
+
+  // 即時保存（ステータスボタン用）
+  const immediateSave = (newStatuses: LegalStatuses) => {
+    // 保留中のデバウンスをキャンセル
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    pendingStatusesRef.current = null;
+    saveLegalStatusesInternal(newStatuses);
+  };
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  // 法令ステータスを更新（即時保存）
+  const updateLegalStatus = (lawName: string, status: LegalStatus, note?: string) => {
+    setLegalStatuses(prev => {
+      const existing = prev[lawName];
+      const updatedNote = note !== undefined ? note : existing?.note;
+      const updated = {
+        ...prev,
+        [lawName]: {
+          status,
+          note: updatedNote,
+          updatedBy: currentUserName,
+          updatedAt: new Date().toISOString(),
+        }
+      };
+      // ステータス変更は即時保存
+      immediateSave(updated);
+      return updated;
+    });
+  };
+
+  // 法令メモを更新（デバウンス保存）
+  const updateLegalNote = (lawName: string, note: string) => {
+    setLegalStatuses(prev => {
+      const existing = prev[lawName];
+      const status = existing?.status || "要確認";
+      const updated = {
+        ...prev,
+        [lawName]: {
+          status,
+          note,
+          updatedBy: currentUserName,
+          updatedAt: new Date().toISOString(),
+        }
+      };
+      // メモ変更はデバウンス保存
+      debouncedSave(updated);
+      return updated;
+    });
+  };
+
+  // 法令ステータスを削除（即時保存）
+  const removeLegalStatus = (lawName: string) => {
+    setLegalStatuses(prev => {
+      const updated = { ...prev };
+      delete updated[lawName];
+      // 削除は即時保存
+      immediateSave(updated);
+      return updated;
+    });
+  };
+
+  // 手動再試行用
+  const retrySave = () => {
+    saveLegalStatusesInternal(legalStatuses);
   };
 
   // 座標入力を解析（カンマ・スラッシュ・空白区切りに対応）し、有効なら正規化表示
@@ -683,14 +839,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
 
           if (law.id === 4) {
             fixedTextWithCopy = "対象地区ではありません。";
-          }
-
-          if (law.id === 5) {
-            fixedTextWithCopy = "対象地区ではありません。";
-          }
-          if (law.id === 4) {
             noteForCard = "港湾区域に関する法規制です。港湾区域の開発でない場合は該当しません。";
           }
+
           if (law.id === 5) {
             noteForCard = "海岸保全区域に関する法規制です。海岸保全区域の開発でない場合は該当しません。";
           }
@@ -744,7 +895,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             });
           }
           if (law.id === 15) {
-            fixedTextWithCopy = "対象地区ではありません。";
             noteForCard = "自然公園区域に関する法規制です。自然公園内の開発でない場合は該当しません。";
           }
 
@@ -759,7 +909,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               label: "広島県の保全地域一覧",
               url: "https://www.pref.hiroshima.lg.jp/site/hiroshima-shizenkankyouhozen/"
             });
-            fixedTextWithCopy = "対象地区ではありません。";
           }
 
           if (law.id === 17) {
@@ -774,8 +923,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
                 label: "参照リンク",
                 url: "https://chushikoku.env.go.jp/procure/page_00068.html"
               });
-            } else {
-              fixedTextWithCopy = "対象地区ではありません。";
             }
             additionalButtons.push({
               label: "生息地等保護区",
@@ -807,7 +954,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             });
           }
           if (law.id === 18) {
-            fixedTextWithCopy = "対象地区ではありません。";
             noteForCard = "鳥獣保護区に関する法規制です。";
           }
 
@@ -840,17 +986,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               />
             );
           }
+          // 担当部署にお問い合わせが必要な法令（河川法など）も通常カードで表示
           if (CONTACT_DEPT_LAW_IDS.includes(law.id as (typeof CONTACT_DEPT_LAW_IDS)[number])) {
-            return (
-              <ContactDeptAlertCard
-                key={law.id}
-                title={law.name}
-                message={CONTACT_DEPT_MESSAGE}
-                onSearch={handleGoogleSearch}
-                lawName={law.name}
-                lawId={law.id}
-              />
-            );
+            caption = CONTACT_DEPT_MESSAGE;
           }
           if (law.id === 14) {
             fixedTextWithCopy = "対象地区ではありません。";
@@ -880,6 +1018,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             }
           }
 
+          // 消防法・振動規制法・道路法・廃棄物法は「対象地区ではありません」ボタンを非表示
+          const hideNotApplicable = [20, 21, 22, 23].includes(law.id);
+
           return (
             <LawSearchCard
               key={law.id}
@@ -896,8 +1037,13 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               note={noteForCard}
               farmlandAlert={showFarmlandAlert}
               currentStatus={legalStatuses[law.name]?.status}
+              currentNote={legalStatuses[law.name]?.note}
+              updatedBy={legalStatuses[law.name]?.updatedBy}
+              updatedAt={legalStatuses[law.name]?.updatedAt}
               onStatusChange={(status) => updateLegalStatus(law.name, status)}
               onStatusRemove={() => removeLegalStatus(law.name)}
+              onNoteChange={(note) => updateLegalNote(law.name, note)}
+              hideNotApplicableButton={hideNotApplicable}
             />
           );
         })}
@@ -1079,6 +1225,43 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             )}
           </div>
         )}
+
+        {/* 自動保存ステータスインジケーター */}
+        {projectId && saveStatus !== "idle" && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <div className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-sm font-medium transition-all",
+              saveStatus === "saving" && "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+              saveStatus === "saved" && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+              saveStatus === "error" && "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
+            )}>
+              {saveStatus === "saving" && (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  保存中...
+                </>
+              )}
+              {saveStatus === "saved" && (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  保存しました
+                </>
+              )}
+              {saveStatus === "error" && (
+                <>
+                  <XCircle className="h-4 w-4" />
+                  保存失敗
+                  <button
+                    onClick={retrySave}
+                    className="ml-2 px-2 py-0.5 rounded bg-red-200 hover:bg-red-300 dark:bg-red-800 dark:hover:bg-red-700 text-xs"
+                  >
+                    再試行
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1219,14 +1402,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
 
         if (law.id === 4) {
           fixedTextWithCopy = "対象地区ではありません。";
-        }
-
-        if (law.id === 5) {
-          fixedTextWithCopy = "対象地区ではありません。";
-        }
-        if (law.id === 4) {
           noteForCard = "港湾区域に関する法規制です。港湾区域の開発でない場合は該当しません。";
         }
+
         if (law.id === 5) {
           noteForCard = "海岸保全区域に関する法規制です。海岸保全区域の開発でない場合は該当しません。";
         }
@@ -1280,7 +1458,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           });
         }
         if (law.id === 15) {
-          fixedTextWithCopy = "対象地区ではありません。";
           noteForCard = "自然公園区域に関する法規制です。自然公園内の開発でない場合は該当しません。";
         }
 
@@ -1295,7 +1472,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             label: "広島県の保全地域一覧",
             url: "https://www.pref.hiroshima.lg.jp/site/hiroshima-shizenkankyouhozen/"
           });
-          fixedTextWithCopy = "対象地区ではありません。";
         }
 
         if (law.id === 17) {
@@ -1310,8 +1486,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               label: "参照リンク",
               url: "https://chushikoku.env.go.jp/procure/page_00068.html"
             });
-          } else {
-            fixedTextWithCopy = "対象地区ではありません。";
           }
           additionalButtons.push({
             label: "生息地等保護区",
@@ -1343,7 +1517,6 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           });
         }
         if (law.id === 18) {
-          fixedTextWithCopy = "対象地区ではありません。";
           noteForCard = "鳥獣保護区に関する法規制です。";
         }
 
@@ -1376,17 +1549,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             />
           );
         }
+        // 担当部署にお問い合わせが必要な法令（河川法など）も通常カードで表示
         if (CONTACT_DEPT_LAW_IDS.includes(law.id as (typeof CONTACT_DEPT_LAW_IDS)[number])) {
-          return (
-            <ContactDeptAlertCard
-              key={law.id}
-              title={law.name}
-              message={CONTACT_DEPT_MESSAGE}
-              onSearch={handleGoogleSearch}
-              lawName={law.name}
-              lawId={law.id}
-            />
-          );
+          caption = CONTACT_DEPT_MESSAGE;
         }
         if (law.id === 14) {
           fixedTextWithCopy = "対象地区ではありません。";
@@ -1416,6 +1581,9 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           }
         }
 
+        // 消防法・振動規制法・道路法・廃棄物法は「対象地区ではありません」ボタンを非表示
+        const hideNotApplicable = [20, 21, 22, 23].includes(law.id);
+
         return (
           <LawSearchCard
             key={law.id}
@@ -1432,8 +1600,13 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             note={noteForCard}
             farmlandAlert={showFarmlandAlert}
             currentStatus={legalStatuses[law.name]?.status}
+            currentNote={legalStatuses[law.name]?.note}
+            updatedBy={legalStatuses[law.name]?.updatedBy}
+            updatedAt={legalStatuses[law.name]?.updatedAt}
             onStatusChange={(status) => updateLegalStatus(law.name, status)}
             onStatusRemove={() => removeLegalStatus(law.name)}
+            onNoteChange={(note) => updateLegalNote(law.name, note)}
+            hideNotApplicableButton={hideNotApplicable}
           />
         );
       })}
@@ -1618,29 +1791,40 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
         </div>
       )}
 
-      {/* 法令ステータス保存ボタン */}
-      {projectId && Object.keys(legalStatuses).length > 0 && (
-        <div className="sticky bottom-4 flex justify-center">
-          <Button
-            onClick={saveLegalStatuses}
-            disabled={isSaving || !hasChanges}
-            size="lg"
-            className={cn(
-              "shadow-lg px-8",
-              hasChanges && "animate-pulse"
-            )}
-          >
-            {isSaving ? (
+      {/* 自動保存ステータスインジケーター */}
+      {projectId && saveStatus !== "idle" && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-sm font-medium transition-all",
+            saveStatus === "saving" && "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
+            saveStatus === "saved" && "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
+            saveStatus === "error" && "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
+          )}>
+            {saveStatus === "saving" && (
               <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 保存中...
               </>
-            ) : hasChanges ? (
-              "法令判定を保存"
-            ) : (
-              <><Check className="h-4 w-4 mr-2" />保存済み</>
             )}
-          </Button>
+            {saveStatus === "saved" && (
+              <>
+                <CheckCircle2 className="h-4 w-4" />
+                保存しました
+              </>
+            )}
+            {saveStatus === "error" && (
+              <>
+                <XCircle className="h-4 w-4" />
+                保存失敗
+                <button
+                  onClick={retrySave}
+                  className="ml-2 px-2 py-0.5 rounded bg-red-200 hover:bg-red-300 dark:bg-red-800 dark:hover:bg-red-700 text-xs"
+                >
+                  再試行
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -2371,19 +2555,19 @@ export default function ProjectDetailPage() {
   if (!project) return null;
 
   return (
-    <div className="min-h-screen bg-background px-6">
-      <div className="mx-auto max-w-7xl py-10">
-        <div className="space-y-6">
+    <div className="min-h-screen bg-background px-4 sm:px-6">
+      <div className="mx-auto max-w-7xl py-6 sm:py-10">
+        <div className="space-y-4 sm:space-y-6">
           {/* ヘッダー */}
           <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon">
+            <Button asChild variant="ghost" size="icon" className="shrink-0">
               <Link href="/projects">
                 <ArrowLeft className="h-4 w-4" />
               </Link>
             </Button>
-            <div className="space-y-1">
-              <h1 className="text-xl font-semibold">{project.managementNumber}</h1>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-1 min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold truncate">{project.managementNumber}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">
                 {project.client} / {project.projectNumber}
               </p>
               {project.completionMonth && (
@@ -3008,17 +3192,17 @@ export default function ProjectDetailPage() {
 
           {/* タブ UI */}
           <Tabs defaultValue="details" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="details">案件情報</TabsTrigger>
-              <TabsTrigger value="legal">法令</TabsTrigger>
-              <TabsTrigger value="construction">工事</TabsTrigger>
-              <TabsTrigger value="comments">コメント</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+              <TabsTrigger value="details" className="text-xs sm:text-sm py-2">案件情報</TabsTrigger>
+              <TabsTrigger value="legal" className="text-xs sm:text-sm py-2">法令</TabsTrigger>
+              <TabsTrigger value="construction" className="text-xs sm:text-sm py-2">工事</TabsTrigger>
+              <TabsTrigger value="comments" className="text-xs sm:text-sm py-2">コメント</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="details" className="mt-6">
+            <TabsContent value="details" className="mt-4 sm:mt-6">
               <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <div className="grid grid-cols-3 items-start border-b pb-3">
+                <CardContent className="pt-4 sm:pt-6 space-y-3 sm:space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 items-start border-b pb-3 gap-1 sm:gap-0">
                     <span className="text-sm font-medium text-muted-foreground">現地住所</span>
                     <div className="col-span-2 flex items-center gap-2">
                       <span className="text-sm">{project.address || "未登録"}</span>
@@ -3109,6 +3293,34 @@ export default function ProjectDetailPage() {
                             })()
                           : null;
 
+                        // 法令名からIDを取得するヘルパー
+                        const getLawId = (lawName: string) => {
+                          const law = laws.find(l => l.name === lawName);
+                          return law?.id;
+                        };
+
+                        // 法令セクションにスクロール
+                        const scrollToLawSection = (lawName: string) => {
+                          const lawId = getLawId(lawName);
+                          if (lawId) {
+                            setActiveTab("legal");
+                            // タブ切り替え後にスクロール
+                            setTimeout(() => {
+                              const element = document.getElementById(`law-section-${lawId}`);
+                              if (element) {
+                                element.scrollIntoView({ behavior: "smooth", block: "center" });
+                                // 一時的にハイライト
+                                element.classList.add("ring-2", "ring-primary", "ring-offset-2");
+                                setTimeout(() => {
+                                  element.classList.remove("ring-2", "ring-primary", "ring-offset-2");
+                                }, 2000);
+                              }
+                            }, 100);
+                          } else {
+                            setActiveTab("legal");
+                          }
+                        };
+
                         if (legalStatuses && Object.keys(legalStatuses).length > 0) {
                           // 該当・要確認・非該当でグループ分け
                           const applicable = Object.entries(legalStatuses).filter(([, v]) => v.status === "該当");
@@ -3116,32 +3328,46 @@ export default function ProjectDetailPage() {
                           const notApplicable = Object.entries(legalStatuses).filter(([, v]) => v.status === "非該当");
 
                           return (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {applicable.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-red-600 dark:text-red-400 font-medium">該当</span>
                                   {applicable.map(([name, info]) => (
-                                    <span
-                                      key={name}
-                                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 border border-red-200 dark:border-red-800 cursor-pointer hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors"
-                                      onClick={() => setActiveTab("legal")}
-                                      title={info.note || "該当"}
-                                    >
-                                      {name}
-                                    </span>
+                                    <div key={name} className="flex flex-col gap-1">
+                                      <span
+                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200 border border-red-200 dark:border-red-800 cursor-pointer hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors w-fit"
+                                        onClick={() => scrollToLawSection(name)}
+                                        title="クリックで詳細に移動"
+                                      >
+                                        {name}
+                                      </span>
+                                      {info.note && (
+                                        <p className="text-xs text-muted-foreground pl-2 border-l-2 border-red-200 dark:border-red-800">
+                                          {info.note}
+                                        </p>
+                                      )}
+                                    </div>
                                   ))}
                                 </div>
                               )}
                               {needsCheck.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">要確認</span>
                                   {needsCheck.map(([name, info]) => (
-                                    <span
-                                      key={name}
-                                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
-                                      onClick={() => setActiveTab("legal")}
-                                      title={info.note || "要確認"}
-                                    >
-                                      {name}
-                                    </span>
+                                    <div key={name} className="flex flex-col gap-1">
+                                      <span
+                                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors w-fit"
+                                        onClick={() => scrollToLawSection(name)}
+                                        title="クリックで詳細に移動"
+                                      >
+                                        {name}
+                                      </span>
+                                      {info.note && (
+                                        <p className="text-xs text-muted-foreground pl-2 border-l-2 border-amber-200 dark:border-amber-800">
+                                          {info.note}
+                                        </p>
+                                      )}
+                                    </div>
                                   ))}
                                 </div>
                               )}
@@ -3151,13 +3377,21 @@ export default function ProjectDetailPage() {
                                     非該当 ({notApplicable.length}件)
                                   </summary>
                                   <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                    {notApplicable.map(([name]) => (
-                                      <span
-                                        key={name}
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground"
-                                      >
-                                        {name}
-                                      </span>
+                                    {notApplicable.map(([name, info]) => (
+                                      <div key={name} className="flex flex-col gap-0.5">
+                                        <span
+                                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground cursor-pointer hover:bg-muted/80 transition-colors"
+                                          onClick={() => scrollToLawSection(name)}
+                                          title="クリックで詳細に移動"
+                                        >
+                                          {name}
+                                        </span>
+                                        {info.note && (
+                                          <p className="text-xs text-muted-foreground/70 pl-1 truncate max-w-[200px]" title={info.note}>
+                                            {info.note}
+                                          </p>
+                                        )}
+                                      </div>
                                     ))}
                                   </div>
                                 </details>

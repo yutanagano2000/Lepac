@@ -101,8 +101,8 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="px-6 py-8">
-        <div className="space-y-6">
+      <div className="px-4 sm:px-6 py-6 sm:py-8">
+        <div className="space-y-4 sm:space-y-6">
           <div>
             <h1 className="text-lg font-semibold">カレンダー</h1>
             <p className="text-sm text-muted-foreground mt-1">

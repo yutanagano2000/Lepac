@@ -11,15 +11,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "next-auth/react";
-import { LogOut, User } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useMobileMenu } from "@/components/MobileMenuContext";
 
 export function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const { toggle } = useMobileMenu();
 
-  // ログインページでは非表示
-  if (pathname === "/login") return null;
+  // ログインページと組織選択ページでは非表示
+  if (pathname === "/login" || pathname === "/onboarding/select-organization") return null;
 
   const user = session?.user;
   const userName = user?.name || user?.username || "ユーザー";
@@ -27,10 +29,26 @@ export function Header() {
   const initials = userName.slice(0, 2).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-end border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6">
+      {/* ハンバーガーメニュー（モバイルのみ） - 44x44pxタッチターゲット */}
+      <button
+        onClick={toggle}
+        className="flex items-center justify-center h-11 w-11 -ml-2 rounded-lg hover:bg-muted transition-colors md:hidden"
+        aria-label="メニューを開く"
+      >
+        <Menu className="h-6 w-6" />
+      </button>
+
+      {/* デスクトップ用スペーサー */}
+      <div className="hidden md:block" />
+
+      {/* ユーザーメニュー */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-2 rounded-full p-1 hover:bg-muted transition-colors">
+          <button
+            className="flex items-center gap-2 rounded-full p-1 hover:bg-muted transition-colors"
+            suppressHydrationWarning
+          >
             <Avatar className="h-8 w-8">
               {userImage && <AvatarImage src={userImage} alt={userName} />}
               <AvatarFallback className="text-xs bg-primary text-primary-foreground">

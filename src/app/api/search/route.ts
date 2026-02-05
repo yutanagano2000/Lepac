@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, todos, meetings } from "@/db/schema";
-import { like, or, asc, desc } from "drizzle-orm";
+import { like, or, asc, desc, and, eq } from "drizzle-orm";
+import { requireOrganization } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  // 認証・組織チェック
+  const authResult = await requireOrganization();
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { organizationId } = authResult;
+
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim();
 
@@ -15,42 +23,53 @@ export async function GET(request: Request) {
 
   const searchPattern = `%${query}%`;
 
-  // 案件を検索（管理番号、販売先、担当、現地住所、案件番号、地権者）
+  // 案件を検索（組織フィルタリング）
   const projectResults = await db
     .select()
     .from(projects)
     .where(
-      or(
-        like(projects.managementNumber, searchPattern),
-        like(projects.client, searchPattern),
-        like(projects.manager, searchPattern),
-        like(projects.address, searchPattern),
-        like(projects.projectNumber, searchPattern),
-        like(projects.landowner1, searchPattern),
-        like(projects.landowner2, searchPattern),
-        like(projects.landowner3, searchPattern)
+      and(
+        eq(projects.organizationId, organizationId),
+        or(
+          like(projects.managementNumber, searchPattern),
+          like(projects.client, searchPattern),
+          like(projects.manager, searchPattern),
+          like(projects.address, searchPattern),
+          like(projects.projectNumber, searchPattern),
+          like(projects.landowner1, searchPattern),
+          like(projects.landowner2, searchPattern),
+          like(projects.landowner3, searchPattern)
+        )
       )
     )
     .orderBy(asc(projects.managementNumber))
     .limit(10);
 
-  // TODOを検索
+  // TODOを検索（組織フィルタリング）
   const todoResults = await db
     .select()
     .from(todos)
-    .where(like(todos.content, searchPattern))
+    .where(
+      and(
+        eq(todos.organizationId, organizationId),
+        like(todos.content, searchPattern)
+      )
+    )
     .orderBy(asc(todos.dueDate))
     .limit(10);
 
-  // 会議を検索（タイトル、内容、議題）
+  // 会議を検索（組織フィルタリング）
   const meetingResults = await db
     .select()
     .from(meetings)
     .where(
-      or(
-        like(meetings.title, searchPattern),
-        like(meetings.content, searchPattern),
-        like(meetings.agenda, searchPattern)
+      and(
+        eq(meetings.organizationId, organizationId),
+        or(
+          like(meetings.title, searchPattern),
+          like(meetings.content, searchPattern),
+          like(meetings.agenda, searchPattern)
+        )
       )
     )
     .orderBy(desc(meetings.meetingDate))

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { calculateTimeline } from "@/lib/timeline";
+import { requireProjectAccess } from "@/lib/auth-guard";
 
 /**
  * タイムラインのフェーズ予定日を進捗として自動生成
@@ -15,6 +16,12 @@ export async function POST(
 ) {
   const { id } = await params;
   const projectId = Number(id);
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
 
   // 案件を取得
   const [project] = await db

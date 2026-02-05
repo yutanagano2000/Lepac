@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { projectFiles } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
+import { requireProjectAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,12 @@ export async function DELETE(
 
   if (isNaN(projectId) || isNaN(fileIdNum)) {
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+  }
+
+  // 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
   }
 
   // ファイル情報を取得
