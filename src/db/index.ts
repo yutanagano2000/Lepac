@@ -250,6 +250,34 @@ async function initDb() {
   try { await c.execute(`ALTER TABLE users ADD COLUMN line_id TEXT UNIQUE`); } catch (e) {}
   try { await c.execute(`ALTER TABLE users ADD COLUMN email TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE users ADD COLUMN image TEXT`); } catch (e) {}
+  // 法人テナント用カラム追加
+  try { await c.execute(`ALTER TABLE users ADD COLUMN organization_id INTEGER`); } catch (e) {}
+
+  // 法人（組織）テーブル
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  // 初期組織データ投入（存在しない場合のみ）
+  const initialOrgs = [
+    { name: "Person Energy", code: "person-energy" },
+    { name: "ROOTS", code: "roots" },
+    { name: "エクソル", code: "exsol" },
+    { name: "双日", code: "sojitz" },
+  ];
+  for (const org of initialOrgs) {
+    try {
+      await c.execute(
+        `INSERT OR IGNORE INTO organizations (name, code, created_at) VALUES (?, ?, ?)`,
+        [org.name, org.code, new Date().toISOString()]
+      );
+    } catch (e) {}
+  }
 
   await c.execute(`
     CREATE TABLE IF NOT EXISTS progress (

@@ -1,5 +1,16 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
+// 法人（組織）テーブル
+export const organizations = sqliteTable("organizations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(), // 法人名
+  code: text("code").notNull().unique(), // 法人コード（URLスラッグ用）
+  createdAt: text("created_at").notNull(),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+export type NewOrganization = typeof organizations.$inferInsert;
+
 export const projects = sqliteTable("projects", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   // 基本情報
@@ -255,6 +266,8 @@ export const users = sqliteTable("users", {
   lineId: text("line_id").unique(), // LINE User ID
   email: text("email"), // メールアドレス（OAuth取得用）
   image: text("image"), // プロフィール画像URL
+  // 法人テナント
+  organizationId: integer("organization_id"), // 所属法人ID
 });
 
 export type User = typeof users.$inferSelect;

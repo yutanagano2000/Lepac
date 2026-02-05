@@ -32,7 +32,8 @@ export default function LoginPage() {
       if (result?.error) {
         setError("ユーザー名またはパスワードが正しくありません");
       } else {
-        router.push("/");
+        // 組織選択画面へリダイレクト（既に選択済みの場合はauthorizedコールバックでホームへ）
+        router.push("/onboarding/select-organization");
         router.refresh();
       }
     } catch (err) {
@@ -46,7 +47,7 @@ export default function LoginPage() {
     setLineLoading(true);
     setError("");
     try {
-      await signIn("line", { callbackUrl: "/" });
+      await signIn("line", { callbackUrl: "/onboarding/select-organization" });
     } catch (err) {
       setError("LINE認証中にエラーが発生しました");
       setLineLoading(false);

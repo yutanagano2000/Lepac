@@ -34,7 +34,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!user) return null;
 
           const passwordsMatch = await bcrypt.compare(password, user.password);
-          if (passwordsMatch) return user as any;
+          if (passwordsMatch) {
+            return {
+              ...user,
+              id: String(user.id),
+              organizationId: user.organizationId,
+              role: user.role,
+            } as any;
+          }
         }
 
         console.log("Invalid credentials");
@@ -77,6 +84,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             // user.idを既存のDBのIDに設定
             user.id = String(existingUser.id);
             (user as any).username = existingUser.username;
+            (user as any).organizationId = existingUser.organizationId;
+            (user as any).role = existingUser.role;
           } else {
             console.log("[LINE Auth] Creating new user");
             // 新規ユーザーを作成
@@ -98,6 +107,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             console.log("[LINE Auth] New user created:", newUser.id);
             user.id = String(newUser.id);
             (user as any).username = newUser.username;
+            (user as any).organizationId = newUser.organizationId;
+            (user as any).role = newUser.role;
           }
         } catch (error) {
           console.error("[LINE Auth] Error in signIn callback:", error);
@@ -106,13 +117,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return true;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       if (user) {
         token.username = (user as any).username;
         token.sub = user.id;
+        token.organizationId = (user as any).organizationId ?? null;
+        token.role = (user as any).role ?? "user";
       }
       if (account?.provider === "line") {
         token.provider = "line";
+      }
+      // organizationIdがnullの場合、またはセッション更新時にDBから最新の値を取得
+      // これによりDB更新後のページリロードでも最新の値が反映される
+      if (token.sub && (token.organizationId === null || token.organizationId === undefined || trigger === "update")) {
+        try {
+          const [currentUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, parseInt(token.sub)));
+          if (currentUser) {
+            token.organizationId = currentUser.organizationId ?? null;
+            token.role = currentUser.role ?? "user";
+          }
+        } catch (e) {
+          console.error("[JWT] Error fetching user:", e);
+        }
       }
       return token;
     },
@@ -125,6 +154,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (token.provider && session.user) {
         (session.user as any).provider = token.provider;
+      }
+      if (session.user) {
+        (session.user as any).organizationId = token.organizationId ?? null;
+        (session.user as any).role = token.role ?? "user";
       }
       return session;
     },
