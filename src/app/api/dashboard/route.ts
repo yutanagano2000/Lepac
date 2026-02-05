@@ -11,6 +11,19 @@ const PHASES = [
   "SS実施", "土地決済", "発注", "着工", "連系", "完工"
 ];
 
+// 完工月から月初の日付を取得するヘルパー
+function parseCompletionMonth(completionMonth: string | null): Date | null {
+  if (!completionMonth) return null;
+  // "YYYY-MM" または "YYYY/MM" または "YYYY年MM月" などの形式に対応
+  const match = completionMonth.match(/(\d{4})[年\/\-]?(\d{1,2})/);
+  if (match) {
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]) - 1; // 0-indexed
+    return new Date(year, month, 1);
+  }
+  return null;
+}
+
 export async function GET() {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -98,6 +111,118 @@ export async function GET() {
     .sort((a, b) => b.id - a.id)
     .slice(0, 5);
 
+  // 7. 完工アラート（完工2ヶ月前:赤、3ヶ月前:黄）
+  const twoMonthsFromNow = new Date(now);
+  twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+  const threeMonthsFromNow = new Date(now);
+  threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+
+  const completionAlerts: {
+    id: number;
+    managementNumber: string;
+    client: string;
+    completionMonth: string;
+    level: "red" | "yellow";
+    monthsRemaining: number;
+  }[] = [];
+
+  for (const project of allProjects) {
+    const completionDate = parseCompletionMonth(project.completionMonth);
+    if (!completionDate) continue;
+
+    // 既に完工済みの場合はスキップ
+    const projectProgress = allProgress.filter((p) => p.projectId === project.id);
+    const completionProgress = projectProgress.find((p) => p.title === "完工");
+    if (completionProgress?.status === "completed") continue;
+
+    // 月の差分を計算
+    const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
+                       (completionDate.getMonth() - now.getMonth());
+
+    if (monthsDiff <= 2) {
+      completionAlerts.push({
+        id: project.id,
+        managementNumber: project.managementNumber,
+        client: project.client || "",
+        completionMonth: project.completionMonth || "",
+        level: "red",
+        monthsRemaining: monthsDiff,
+      });
+    } else if (monthsDiff <= 3) {
+      completionAlerts.push({
+        id: project.id,
+        managementNumber: project.managementNumber,
+        client: project.client || "",
+        completionMonth: project.completionMonth || "",
+        level: "yellow",
+        monthsRemaining: monthsDiff,
+      });
+    }
+  }
+
+  // 緊急度でソート（赤が先、残り月数が少ない順）
+  completionAlerts.sort((a, b) => {
+    if (a.level !== b.level) return a.level === "red" ? -1 : 1;
+    return a.monthsRemaining - b.monthsRemaining;
+  });
+
+  // 8. 現調未実施アラート（完工が近いのに現調が終わっていない）
+  const siteInvestigationAlerts: {
+    id: number;
+    managementNumber: string;
+    client: string;
+    completionMonth: string;
+    level: "red" | "yellow";
+  }[] = [];
+
+  for (const project of allProjects) {
+    // 現調が実施済みかチェック
+    const hasSiteInvestigation = project.siteInvestigation &&
+      project.siteInvestigation.trim() !== "" &&
+      project.siteInvestigation !== "未実施" &&
+      project.siteInvestigation !== "未";
+
+    if (hasSiteInvestigation) continue;
+
+    // 既に完工済みの場合はスキップ
+    const projectProgress = allProgress.filter((p) => p.projectId === project.id);
+    const completionProgress = projectProgress.find((p) => p.title === "完工");
+    if (completionProgress?.status === "completed") continue;
+
+    // 完工月を取得
+    const completionDate = parseCompletionMonth(project.completionMonth);
+    if (!completionDate) continue;
+
+    // 月の差分を計算
+    const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
+                       (completionDate.getMonth() - now.getMonth());
+
+    // 3ヶ月以内に完工予定で現調未実施
+    if (monthsDiff <= 2) {
+      siteInvestigationAlerts.push({
+        id: project.id,
+        managementNumber: project.managementNumber,
+        client: project.client || "",
+        completionMonth: project.completionMonth || "",
+        level: "red",
+      });
+    } else if (monthsDiff <= 3) {
+      siteInvestigationAlerts.push({
+        id: project.id,
+        managementNumber: project.managementNumber,
+        client: project.client || "",
+        completionMonth: project.completionMonth || "",
+        level: "yellow",
+      });
+    }
+  }
+
+  // 緊急度でソート
+  siteInvestigationAlerts.sort((a, b) => {
+    if (a.level !== b.level) return a.level === "red" ? -1 : 1;
+    return 0;
+  });
+
   // TODO詳細を案件情報付きで取得
   const enrichTodos = (todoList: typeof allTodos) => {
     return todoList.slice(0, 5).map((t) => {
@@ -144,6 +269,18 @@ export async function GET() {
         managementNumber: p.managementNumber,
         client: p.client,
       })),
+    },
+    // 完工アラート（2ヶ月前:赤、3ヶ月前:黄）
+    completionAlerts: {
+      redCount: completionAlerts.filter((a) => a.level === "red").length,
+      yellowCount: completionAlerts.filter((a) => a.level === "yellow").length,
+      items: completionAlerts.slice(0, 5),
+    },
+    // 現調未実施アラート
+    siteInvestigationAlerts: {
+      redCount: siteInvestigationAlerts.filter((a) => a.level === "red").length,
+      yellowCount: siteInvestigationAlerts.filter((a) => a.level === "yellow").length,
+      items: siteInvestigationAlerts.slice(0, 5),
     },
   });
 }

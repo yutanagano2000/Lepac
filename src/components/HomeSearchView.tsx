@@ -13,10 +13,10 @@ import {
   Loader2,
   AlertTriangle,
   CalendarClock,
-  CalendarDays,
   Activity,
-  Clock,
   ChevronRight,
+  Construction,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +48,23 @@ interface DashboardProject {
   updatedAt?: string;
 }
 
+interface CompletionAlert {
+  id: number;
+  managementNumber: string;
+  client: string;
+  completionMonth: string;
+  level: "red" | "yellow";
+  monthsRemaining: number;
+}
+
+interface SiteInvestigationAlert {
+  id: number;
+  managementNumber: string;
+  client: string;
+  completionMonth: string;
+  level: "red" | "yellow";
+}
+
 interface DashboardData {
   overdueTodos: { count: number; items: DashboardTodo[] };
   todayTodos: { count: number; items: DashboardTodo[] };
@@ -55,6 +72,8 @@ interface DashboardData {
   projectAlerts: { count: number; totalAlerts: number; items: DashboardProject[] };
   activeProjects: { count: number; items: DashboardProject[] };
   recentProjects: { items: DashboardProject[] };
+  completionAlerts: { redCount: number; yellowCount: number; items: CompletionAlert[] };
+  siteInvestigationAlerts: { redCount: number; yellowCount: number; items: SiteInvestigationAlert[] };
 }
 
 // デバウンス用のカスタムフック
@@ -426,30 +445,65 @@ export function HomeSearchView() {
                   </CardContent>
                 </Card>
 
-                {/* 今週期日のTODO */}
-                <Card className="transition-all hover:shadow-md cursor-pointer h-[180px]">
+                {/* 完工アラート */}
+                <Card className={cn(
+                  "transition-all hover:shadow-md cursor-pointer h-[180px]",
+                  dashboard.completionAlerts.redCount > 0 && "border-red-500/50 bg-red-500/5",
+                  dashboard.completionAlerts.redCount === 0 && dashboard.completionAlerts.yellowCount > 0 && "border-yellow-500/50 bg-yellow-500/5"
+                )}>
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <CalendarDays className="h-4 w-4 text-blue-500" />
-                      今週期日
+                      <Construction className={cn(
+                        "h-4 w-4",
+                        dashboard.completionAlerts.redCount > 0 ? "text-red-500" :
+                        dashboard.completionAlerts.yellowCount > 0 ? "text-yellow-500" : "text-muted-foreground"
+                      )} />
+                      完工アラート
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                      {dashboard.thisWeekTodos.count}
+                    <div className="flex items-baseline gap-2">
+                      {dashboard.completionAlerts.redCount > 0 && (
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {dashboard.completionAlerts.redCount}
+                          <span className="text-xs font-normal ml-1">件</span>
+                        </div>
+                      )}
+                      {dashboard.completionAlerts.yellowCount > 0 && (
+                        <div className={cn(
+                          "font-bold",
+                          dashboard.completionAlerts.redCount > 0 ? "text-lg text-yellow-600 dark:text-yellow-400" : "text-2xl text-yellow-600 dark:text-yellow-400"
+                        )}>
+                          {dashboard.completionAlerts.yellowCount}
+                          <span className="text-xs font-normal ml-1">件</span>
+                        </div>
+                      )}
+                      {dashboard.completionAlerts.redCount === 0 && dashboard.completionAlerts.yellowCount === 0 && (
+                        <div className="text-2xl font-bold text-muted-foreground">0</div>
+                      )}
                     </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      2ヶ月以内:赤 / 3ヶ月以内:黄
+                    </p>
                     <div className="mt-2 space-y-1">
-                      {dashboard.thisWeekTodos.items.slice(0, 2).map((todo) => (
+                      {dashboard.completionAlerts.items.slice(0, 2).map((alert) => (
                         <Link
-                          key={todo.id}
-                          href={`/projects/${todo.projectId}`}
-                          className="block text-xs text-muted-foreground hover:text-foreground truncate"
+                          key={alert.id}
+                          href={`/projects/${alert.id}`}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                         >
-                          <span className="font-medium">{todo.managementNumber}</span>: {todo.content}
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            alert.level === "red" ? "bg-red-500" : "bg-yellow-500"
+                          )} />
+                          <span className="font-medium truncate">{alert.managementNumber}</span>
+                          <span className="text-[10px]">({alert.completionMonth})</span>
                         </Link>
                       ))}
-                      {dashboard.thisWeekTodos.count > 2 && (
-                        <p className="text-xs text-muted-foreground">他{dashboard.thisWeekTodos.count - 2}件</p>
+                      {(dashboard.completionAlerts.redCount + dashboard.completionAlerts.yellowCount) > 2 && (
+                        <p className="text-xs text-muted-foreground">
+                          他{dashboard.completionAlerts.redCount + dashboard.completionAlerts.yellowCount - 2}件
+                        </p>
                       )}
                     </div>
                   </CardContent>
@@ -519,28 +573,66 @@ export function HomeSearchView() {
                   </Card>
                 </Link>
 
-                {/* 最近更新 */}
-                <Card className="transition-all hover:shadow-md h-[180px]">
+                {/* 現調未実施アラート */}
+                <Card className={cn(
+                  "transition-all hover:shadow-md h-[180px]",
+                  dashboard.siteInvestigationAlerts.redCount > 0 && "border-red-500/50 bg-red-500/5",
+                  dashboard.siteInvestigationAlerts.redCount === 0 && dashboard.siteInvestigationAlerts.yellowCount > 0 && "border-yellow-500/50 bg-yellow-500/5"
+                )}>
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <Clock className="h-4 w-4 text-purple-500" />
-                      最近更新
+                      <MapPin className={cn(
+                        "h-4 w-4",
+                        dashboard.siteInvestigationAlerts.redCount > 0 ? "text-red-500" :
+                        dashboard.siteInvestigationAlerts.yellowCount > 0 ? "text-yellow-500" : "text-muted-foreground"
+                      )} />
+                      現調未実施
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      {dashboard.recentProjects.items.slice(0, 3).map((project) => (
+                    <div className="flex items-baseline gap-2">
+                      {dashboard.siteInvestigationAlerts.redCount > 0 && (
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {dashboard.siteInvestigationAlerts.redCount}
+                          <span className="text-xs font-normal ml-1">件</span>
+                        </div>
+                      )}
+                      {dashboard.siteInvestigationAlerts.yellowCount > 0 && (
+                        <div className={cn(
+                          "font-bold",
+                          dashboard.siteInvestigationAlerts.redCount > 0 ? "text-lg text-yellow-600 dark:text-yellow-400" : "text-2xl text-yellow-600 dark:text-yellow-400"
+                        )}>
+                          {dashboard.siteInvestigationAlerts.yellowCount}
+                          <span className="text-xs font-normal ml-1">件</span>
+                        </div>
+                      )}
+                      {dashboard.siteInvestigationAlerts.redCount === 0 && dashboard.siteInvestigationAlerts.yellowCount === 0 && (
+                        <div className="text-2xl font-bold text-muted-foreground">0</div>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      完工間近で現調未実施
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {dashboard.siteInvestigationAlerts.items.slice(0, 2).map((alert) => (
                         <Link
-                          key={project.id}
-                          href={`/projects/${project.id}`}
-                          className="flex items-center gap-2 text-xs hover:text-foreground group"
+                          key={alert.id}
+                          href={`/projects/${alert.id}`}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                         >
-                          <span className="font-medium text-muted-foreground group-hover:text-foreground truncate flex-1">
-                            {project.managementNumber}
-                          </span>
-                          <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            alert.level === "red" ? "bg-red-500" : "bg-yellow-500"
+                          )} />
+                          <span className="font-medium truncate">{alert.managementNumber}</span>
+                          <span className="text-[10px]">({alert.completionMonth})</span>
                         </Link>
                       ))}
+                      {(dashboard.siteInvestigationAlerts.redCount + dashboard.siteInvestigationAlerts.yellowCount) > 2 && (
+                        <p className="text-xs text-muted-foreground">
+                          他{dashboard.siteInvestigationAlerts.redCount + dashboard.siteInvestigationAlerts.yellowCount - 2}件
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
