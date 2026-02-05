@@ -508,8 +508,8 @@ export function GeoSearchView() {
           // 各法律ごとの条件分岐
           const isOkayama = prefecture === "okayama";
           const isHiroshima = prefecture === "hiroshima";
-          let additionalButtons: AdditionalButton[] = [];
-          let badges: string[] = [];
+          const additionalButtons: AdditionalButton[] = [];
+          const badges: string[] = [];
           let caption: string | undefined;
           let fixedTextWithCopy = law.fixedText;
           let noteForCard: string | undefined;

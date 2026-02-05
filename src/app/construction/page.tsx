@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
-import { format, parse, isValid } from "date-fns";
-import { ja } from "date-fns/locale";
 import {
   Table,
   TableBody,
@@ -18,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { DatePicker } from "@/components/ui/date-picker";
+import { StatusSelect } from "@/components/ui/status-select";
 
 type Project = {
   id: number;
@@ -26,6 +25,8 @@ type Project = {
   projectNumber: string;
   prefecture: string;
   address: string;
+  completionMonth: string | null;
+  // 発注タブ用
   deliveryLocation: string | null;
   mountOrderVendor: string | null;
   mountOrderDate: string | null;
@@ -38,12 +39,27 @@ type Project = {
   constructionAvailableDate: string | null;
   constructionRemarks: string | null;
   constructionNote: string | null;
-  completionMonth: string | null;
+  // 工程タブ用
+  siteName: string | null;
+  cityName: string | null;
+  panelCount: string | null;
+  panelLayout: string | null;
+  loadTestStatus: string | null;
+  loadTestDate: string | null;
+  pileStatus: string | null;
+  pileDate: string | null;
+  framePanelStatus: string | null;
+  framePanelDate: string | null;
+  electricalStatus: string | null;
+  electricalDate: string | null;
+  fenceStatus: string | null;
+  fenceDate: string | null;
+  inspectionPhotoDate: string | null;
+  processRemarks: string | null;
 };
 
 function parseCompletionMonth(completionMonth: string | null): { year: number; month: number } | null {
   if (!completionMonth) return null;
-  // "YYYY-MM" または "YYYY/MM" または "YYYY年MM月" などの形式に対応
   const match = completionMonth.match(/(\d{4})[-/年]?(\d{1,2})/);
   if (match) {
     return {
@@ -84,7 +100,6 @@ export default function ConstructionPage() {
     fetchProjects();
   }, []);
 
-  // 月の切り替え
   const goToPreviousMonth = () => {
     setCurrentMonth((prev) => {
       if (prev.month === 1) {
@@ -103,15 +118,13 @@ export default function ConstructionPage() {
     });
   };
 
-  // 現在の月でフィルタリング
   const filteredProjects = projects.filter((project) => {
     const parsed = parseCompletionMonth(project.completionMonth);
     if (!parsed) return false;
     return parsed.year === currentMonth.year && parsed.month === currentMonth.month;
   });
 
-  // 日付フィールドの更新
-  const updateProjectDate = useCallback(async (projectId: number, field: string, value: string | null) => {
+  const updateProjectField = useCallback(async (projectId: number, field: string, value: string | null) => {
     console.log("[Construction] Updating:", { projectId, field, value });
     try {
       const res = await fetch(`/api/construction/${projectId}`, {
@@ -128,7 +141,6 @@ export default function ConstructionPage() {
         return;
       }
 
-      // ローカル状態を更新
       setProjects((prev) =>
         prev.map((p) =>
           p.id === projectId ? { ...p, [field]: value } : p
@@ -188,10 +200,9 @@ export default function ConstructionPage() {
             <div className="flex items-center justify-between mb-4">
               <TabsList>
                 <TabsTrigger value="orders">発注</TabsTrigger>
-                <TabsTrigger value="schedule">工程</TabsTrigger>
+                <TabsTrigger value="process">工程</TabsTrigger>
               </TabsList>
 
-              {/* 月切り替え */}
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
                   <ChevronLeft className="h-4 w-4" />
@@ -209,7 +220,6 @@ export default function ConstructionPage() {
             <TabsContent value="orders">
               <div className="rounded-md border overflow-hidden">
                 <div className="flex">
-                  {/* 固定列（左側） */}
                   <div className="shrink-0 border-r bg-background z-10">
                     <Table>
                       <TableHeader>
@@ -252,7 +262,6 @@ export default function ConstructionPage() {
                     </Table>
                   </div>
 
-                  {/* スクロール可能列（右側） */}
                   <ScrollArea className="flex-1">
                     <div className="min-w-[1400px]">
                       <Table>
@@ -281,14 +290,14 @@ export default function ConstructionPage() {
                               <TableCell className="whitespace-nowrap">
                                 <DatePicker
                                   value={project.mountOrderDate}
-                                  onChange={(value) => updateProjectDate(project.id, "mountOrderDate", value)}
+                                  onChange={(value) => updateProjectField(project.id, "mountOrderDate", value)}
                                   placeholder="-"
                                 />
                               </TableCell>
                               <TableCell className="whitespace-nowrap">
                                 <DatePicker
                                   value={project.mountDeliveryScheduled}
-                                  onChange={(value) => updateProjectDate(project.id, "mountDeliveryScheduled", value)}
+                                  onChange={(value) => updateProjectField(project.id, "mountDeliveryScheduled", value)}
                                   placeholder="-"
                                 />
                               </TableCell>
@@ -297,14 +306,14 @@ export default function ConstructionPage() {
                               <TableCell className="whitespace-nowrap">
                                 <DatePicker
                                   value={project.panelOrderDate}
-                                  onChange={(value) => updateProjectDate(project.id, "panelOrderDate", value)}
+                                  onChange={(value) => updateProjectField(project.id, "panelOrderDate", value)}
                                   placeholder="-"
                                 />
                               </TableCell>
                               <TableCell className="whitespace-nowrap">
                                 <DatePicker
                                   value={project.panelDeliveryScheduled}
-                                  onChange={(value) => updateProjectDate(project.id, "panelDeliveryScheduled", value)}
+                                  onChange={(value) => updateProjectField(project.id, "panelDeliveryScheduled", value)}
                                   placeholder="-"
                                 />
                               </TableCell>
@@ -312,7 +321,7 @@ export default function ConstructionPage() {
                               <TableCell className="whitespace-nowrap">
                                 <DatePicker
                                   value={project.constructionAvailableDate}
-                                  onChange={(value) => updateProjectDate(project.id, "constructionAvailableDate", value)}
+                                  onChange={(value) => updateProjectField(project.id, "constructionAvailableDate", value)}
                                   placeholder="-"
                                 />
                               </TableCell>
@@ -342,10 +351,176 @@ export default function ConstructionPage() {
             </TabsContent>
 
             {/* 工程タブ */}
-            <TabsContent value="schedule">
-              <div className="rounded-md border p-8 text-center text-muted-foreground">
-                <p className="text-lg">工程表</p>
-                <p className="text-sm mt-2">（実装予定）</p>
+            <TabsContent value="process">
+              <div className="rounded-md border overflow-hidden">
+                <div className="flex">
+                  {/* 固定列（左側） */}
+                  <div className="shrink-0 border-r bg-background z-10">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-[120px] whitespace-nowrap font-medium">現場</TableHead>
+                          <TableHead className="w-[80px] whitespace-nowrap font-medium">都道府県</TableHead>
+                          <TableHead className="w-[100px] whitespace-nowrap font-medium">市名</TableHead>
+                          <TableHead className="w-[80px] whitespace-nowrap font-medium">完工月</TableHead>
+                          <TableHead className="w-[100px] whitespace-nowrap font-medium">案件番号</TableHead>
+                          <TableHead className="w-[100px] whitespace-nowrap font-medium">販売先</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredProjects.map((project) => (
+                          <TableRow key={project.id} className="h-[52px]">
+                            <TableCell className="whitespace-nowrap font-medium">
+                              <Link
+                                href={`/projects/${project.id}`}
+                                className="text-blue-600 hover:underline dark:text-blue-400 inline-flex items-center gap-1"
+                              >
+                                {project.siteName || project.managementNumber}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{project.prefecture || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">{project.cityName || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">{project.completionMonth || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">{project.projectNumber || "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">{project.client || "-"}</TableCell>
+                          </TableRow>
+                        ))}
+                        {filteredProjects.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                              {monthDisplay}の案件がありません
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* スクロール可能列（右側） */}
+                  <ScrollArea className="flex-1">
+                    <div className="min-w-[1600px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="w-[80px] whitespace-nowrap font-medium">パネル枚数</TableHead>
+                            <TableHead className="w-[100px] whitespace-nowrap font-medium">パネルレイアウト</TableHead>
+                            <TableHead className="w-[90px] whitespace-nowrap font-medium">載荷試験</TableHead>
+                            <TableHead className="w-[140px] whitespace-nowrap font-medium">載荷試験日</TableHead>
+                            <TableHead className="w-[90px] whitespace-nowrap font-medium">杭</TableHead>
+                            <TableHead className="w-[140px] whitespace-nowrap font-medium">杭日</TableHead>
+                            <TableHead className="w-[90px] whitespace-nowrap font-medium">架台・パネル</TableHead>
+                            <TableHead className="w-[140px] whitespace-nowrap font-medium">架台・パネル日</TableHead>
+                            <TableHead className="w-[90px] whitespace-nowrap font-medium">電気</TableHead>
+                            <TableHead className="w-[140px] whitespace-nowrap font-medium">電気日</TableHead>
+                            <TableHead className="w-[90px] whitespace-nowrap font-medium">フェンス</TableHead>
+                            <TableHead className="w-[140px] whitespace-nowrap font-medium">フェンス日</TableHead>
+                            <TableHead className="w-[140px] whitespace-nowrap font-medium">検写日</TableHead>
+                            <TableHead className="w-[200px] whitespace-nowrap font-medium">備考</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredProjects.map((project) => (
+                            <TableRow key={project.id} className="h-[52px]">
+                              <TableCell className="whitespace-nowrap">{project.panelCount || "-"}</TableCell>
+                              <TableCell className="whitespace-nowrap">{project.panelLayout || "-"}</TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <StatusSelect
+                                  value={project.loadTestStatus}
+                                  onChange={(value) => updateProjectField(project.id, "loadTestStatus", value)}
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <DatePicker
+                                  value={project.loadTestDate}
+                                  onChange={(value) => updateProjectField(project.id, "loadTestDate", value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <StatusSelect
+                                  value={project.pileStatus}
+                                  onChange={(value) => updateProjectField(project.id, "pileStatus", value)}
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <DatePicker
+                                  value={project.pileDate}
+                                  onChange={(value) => updateProjectField(project.id, "pileDate", value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <StatusSelect
+                                  value={project.framePanelStatus}
+                                  onChange={(value) => updateProjectField(project.id, "framePanelStatus", value)}
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <DatePicker
+                                  value={project.framePanelDate}
+                                  onChange={(value) => updateProjectField(project.id, "framePanelDate", value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <StatusSelect
+                                  value={project.electricalStatus}
+                                  onChange={(value) => updateProjectField(project.id, "electricalStatus", value)}
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <DatePicker
+                                  value={project.electricalDate}
+                                  onChange={(value) => updateProjectField(project.id, "electricalDate", value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <StatusSelect
+                                  value={project.fenceStatus}
+                                  onChange={(value) => updateProjectField(project.id, "fenceStatus", value)}
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <DatePicker
+                                  value={project.fenceDate}
+                                  onChange={(value) => updateProjectField(project.id, "fenceDate", value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <DatePicker
+                                  value={project.inspectionPhotoDate}
+                                  onChange={(value) => updateProjectField(project.id, "inspectionPhotoDate", value)}
+                                  placeholder="-"
+                                />
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={project.processRemarks || ""}>
+                                {project.processRemarks || "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredProjects.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                                &nbsp;
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </div>
+              </div>
+
+              {/* 将来の写真機能についての注釈 */}
+              <div className="mt-4 p-4 rounded-md border border-dashed bg-muted/30">
+                <p className="text-sm text-muted-foreground">
+                  将来的にiOSから撮影された写真（載荷試験・杭などのエビデンス写真）を表示予定
+                </p>
               </div>
             </TabsContent>
           </Tabs>

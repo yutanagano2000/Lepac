@@ -3,13 +3,31 @@ import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-// 許可されたフィールド（工事部向け日付フィールド）
+// 許可されたフィールド（工事部向けフィールド）
 const ALLOWED_FIELDS = new Set([
+  // 発注タブ用
   "mountOrderDate",
   "mountDeliveryScheduled",
   "panelOrderDate",
   "panelDeliveryScheduled",
   "constructionAvailableDate",
+  // 工程タブ用
+  "siteName",
+  "cityName",
+  "panelCount",
+  "panelLayout",
+  "loadTestStatus",
+  "loadTestDate",
+  "pileStatus",
+  "pileDate",
+  "framePanelStatus",
+  "framePanelDate",
+  "electricalStatus",
+  "electricalDate",
+  "fenceStatus",
+  "fenceDate",
+  "inspectionPhotoDate",
+  "processRemarks",
 ]);
 
 export async function PATCH(

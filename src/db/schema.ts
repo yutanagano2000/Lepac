@@ -159,7 +159,7 @@ export const projects = sqliteTable("projects", {
   interconnectionScheduled: text("interconnection_scheduled"), // 連系 予定日
   interconnectionDate: text("interconnection_date"), // 連系日
 
-  // 工事部向け追加フィールド
+  // 工事部向け追加フィールド（発注タブ用）
   deliveryLocation: text("delivery_location"), // 納品場所
   mountOrderVendor: text("mount_order_vendor"), // 架台発注先
   mountOrderDate: text("mount_order_date"), // 架台発注日
@@ -171,6 +171,24 @@ export const projects = sqliteTable("projects", {
   panelDeliveryStatus: text("panel_delivery_status"), // パネル納品状況
   constructionRemarks: text("construction_remarks"), // 着工備考
   constructionNote: text("construction_note"), // 工事備考
+
+  // 工事部向け追加フィールド（工程タブ用）
+  siteName: text("site_name"), // 現場（地名）
+  cityName: text("city_name"), // 市名
+  panelCount: text("panel_count"), // パネル枚数
+  panelLayout: text("panel_layout"), // パネルレイアウト
+  loadTestStatus: text("load_test_status"), // 載荷試験ステータス
+  loadTestDate: text("load_test_date"), // 載荷試験日付
+  pileStatus: text("pile_status"), // 杭ステータス
+  pileDate: text("pile_date"), // 杭日付
+  framePanelStatus: text("frame_panel_status"), // 架台・パネルステータス
+  framePanelDate: text("frame_panel_date"), // 架台・パネル日付
+  electricalStatus: text("electrical_status"), // 電気ステータス
+  electricalDate: text("electrical_date"), // 電気日付
+  fenceStatus: text("fence_status"), // フェンスステータス
+  fenceDate: text("fence_date"), // フェンス日付
+  inspectionPhotoDate: text("inspection_photo_date"), // 検写日付
+  processRemarks: text("process_remarks"), // 工程備考
 
   // その他
   burdenLandOther: text("burden_land_other"), // 負担金土地 その他

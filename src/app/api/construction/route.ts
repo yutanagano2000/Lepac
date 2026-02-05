@@ -37,6 +37,7 @@ export async function GET() {
     projectNumber: p.projectNumber,
     prefecture: p.prefecture,
     address: p.address,
+    // 発注タブ用
     deliveryLocation: p.deliveryLocation,
     mountOrderVendor: p.mountOrderVendor,
     mountOrderDate: p.mountOrderDate,
@@ -50,6 +51,23 @@ export async function GET() {
     constructionRemarks: p.constructionRemarks,
     constructionNote: p.constructionNote,
     completionMonth: p.completionMonth,
+    // 工程タブ用
+    siteName: p.siteName,
+    cityName: p.cityName,
+    panelCount: p.panelCount,
+    panelLayout: p.panelLayout,
+    loadTestStatus: p.loadTestStatus,
+    loadTestDate: p.loadTestDate,
+    pileStatus: p.pileStatus,
+    pileDate: p.pileDate,
+    framePanelStatus: p.framePanelStatus,
+    framePanelDate: p.framePanelDate,
+    electricalStatus: p.electricalStatus,
+    electricalDate: p.electricalDate,
+    fenceStatus: p.fenceStatus,
+    fenceDate: p.fenceDate,
+    inspectionPhotoDate: p.inspectionPhotoDate,
+    processRemarks: p.processRemarks,
   }));
 
   // 完成月でソート（古い順）

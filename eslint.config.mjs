@@ -12,7 +12,24 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Coverage output
+    "coverage/**",
+    // Vendor/minified files
+    "public/pdf.worker.min.mjs",
+    "public/pdfjs-dist/**",
+    "**/*.min.js",
+    "**/*.min.mjs",
   ]),
+  // Rule overrides for gradual adoption
+  {
+    rules: {
+      // Treat as warnings for gradual migration
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "prefer-const": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;

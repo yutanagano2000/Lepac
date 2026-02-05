@@ -661,8 +661,8 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
 
         {/* 法律検索カード一覧 */}
         {hasSearched && laws.map((law) => {
-          let additionalButtons: AdditionalButton[] = [];
-          let badges: string[] = [];
+          const additionalButtons: AdditionalButton[] = [];
+          const badges: string[] = [];
           let caption: string | undefined;
           let fixedTextWithCopy = law.fixedText;
           let noteForCard: string | undefined;
@@ -1197,8 +1197,8 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
 
       {/* 法律検索カード一覧 */}
       {hasSearched && laws.map((law) => {
-        let additionalButtons: AdditionalButton[] = [];
-        let badges: string[] = [];
+        const additionalButtons: AdditionalButton[] = [];
+        const badges: string[] = [];
         let caption: string | undefined;
         let fixedTextWithCopy = law.fixedText;
         let noteForCard: string | undefined;
