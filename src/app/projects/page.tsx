@@ -4,8 +4,8 @@ import { eq, asc, sql } from "drizzle-orm";
 import { calculateTimeline } from "@/lib/timeline";
 import ProjectsView from "./ProjectsView";
 
-// 60秒キャッシュ（Sheets同期やCRUD後にrevalidateされる）
-export const revalidate = 60;
+// DBアクセスが必要なため動的レンダリング（ビルド時の静的生成を防止）
+export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
 
