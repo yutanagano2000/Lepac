@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
+import type { DrawMode } from "./PolygonToolbar";
 
 const PolygonDrawMapCore = dynamic(() => import("./PolygonDrawMapCore"), {
   ssr: false,
@@ -25,6 +26,8 @@ interface PolygonDrawMapProps {
   analyzed?: boolean;
   initialCenter?: [number, number];
   initialZoom?: number;
+  drawMode?: DrawMode;
+  onDrawModeChange?: (mode: DrawMode) => void;
 }
 
 export function PolygonDrawMap(props: PolygonDrawMapProps) {

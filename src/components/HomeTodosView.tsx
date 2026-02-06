@@ -6,7 +6,6 @@ import {
   AlertCircle,
   Calendar as CalendarIcon,
   Clock,
-  Trash2,
   ArrowRight,
   Search,
   ListTodo,
@@ -28,8 +27,10 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDateJp } from "@/lib/timeline";
-import { parseTodoMessages, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { TodoItem } from "@/components/home-todos/TodoItem";
+import { TodoSection } from "@/components/home-todos/TodoSection";
 
 export type TodoWithProject = {
   id: number;
@@ -183,154 +184,6 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
       setIsCreating(false);
     }
   };
-
-  const TodoItem = ({ todo }: { todo: TodoWithProject }) => {
-    const info = getDueDateInfo(todo.dueDate);
-    const dueDateFormatted = formatDateJp(new Date(todo.dueDate + "T00:00:00"));
-    const isCompleted = !!todo.completedAt;
-    const hasProject = todo.projectId !== null;
-
-    const innerContent = (
-      <>
-        <p className={`text-sm font-medium ${hasProject ? "group-hover:underline" : ""} truncate ${isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
-          {todo.content}
-        </p>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <span className="text-xs text-muted-foreground">
-            {dueDateFormatted}
-            {!isCompleted && <span className="ml-1">({info.label})</span>}
-            {isCompleted && todo.completedAt && (
-              <span className="ml-1">· 完了: {formatDateJp(new Date(todo.completedAt))}</span>
-            )}
-          </span>
-          {todo.managementNumber ? (
-            <span className="text-xs text-primary font-medium">
-              {todo.managementNumber}
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground/70 italic">
-              個人TODO
-            </span>
-          )}
-          {todo.userName && (
-            <span className="text-xs text-muted-foreground">
-              · {todo.userName}
-            </span>
-          )}
-        </div>
-        {todo.completedMemo && (
-          <div className="mt-2 space-y-1">
-            {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
-              <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
-                <div className="flex flex-col items-center">
-                  <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
-                  {idx < arr.length - 1 && (
-                    <div className="w-0.5 h-full bg-zinc-300 dark:bg-zinc-700 min-h-[16px]"></div>
-                  )}
-                </div>
-                <div className="flex-1 p-2 rounded bg-muted/50 border border-border/50">
-                  <p className="text-xs">{msg.message}</p>
-                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                    {formatDateJp(new Date(msg.createdAt))}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </>
-    );
-
-    return (
-      <div className="flex items-start justify-between gap-3 p-3 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
-        {hasProject ? (
-          <Link href={`/projects/${todo.projectId}`} className="flex-1 min-w-0 group">
-            {innerContent}
-          </Link>
-        ) : (
-          <div className="flex-1 min-w-0">
-            {innerContent}
-          </div>
-        )}
-        <div className="flex items-center gap-1 shrink-0">
-          {isCompleted ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={(e) => {
-                e.preventDefault();
-                handleReopen(todo);
-              }}
-            >
-              再開
-            </Button>
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={(e) => {
-                  e.preventDefault();
-                  openDeleteDialog(todo.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              {hasProject && (
-                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                  <Link href={`/projects/${todo.projectId}`}>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const Section = ({
-    title,
-    description,
-    icon: Icon,
-    items,
-    emptyMessage,
-    badge,
-  }: {
-    title: string;
-    description: string;
-    icon: React.ElementType;
-    items: TodoWithProject[];
-    emptyMessage: string;
-    badge?: React.ReactNode;
-  }) => (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="space-y-1">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Icon className="h-4 w-4" />
-            {title}
-          </CardTitle>
-          <CardDescription className="text-xs">{description}</CardDescription>
-        </div>
-        {badge}
-      </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">{emptyMessage}</p>
-        ) : (
-          <div className="space-y-2">
-            {items.map((todo) => (
-              <TodoItem key={todo.id} todo={todo} />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="min-h-screen bg-background px-4 sm:px-6">
@@ -504,51 +357,61 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
 
           {/* TODO Grid */}
           <div className="grid gap-6 lg:grid-cols-3">
-            <Section
+            <TodoSection
               title="超過"
               description="期限を過ぎたTODO"
               icon={AlertCircle}
               items={grouped.overdue}
               emptyMessage="超過したTODOはありません"
+              onReopen={handleReopen}
+              onDelete={openDeleteDialog}
               badge={
                 grouped.overdue.length > 0 ? (
                   <span className="text-xs font-bold text-destructive">優先</span>
                 ) : undefined
               }
             />
-            <Section
+            <TodoSection
               title="今日"
               description="本日期限のTODO"
               icon={CalendarIcon}
               items={grouped.today}
               emptyMessage="本日のTODOはありません"
+              onReopen={handleReopen}
+              onDelete={openDeleteDialog}
             />
-            <Section
+            <TodoSection
               title="３日以内"
               description="3日以内に期限のTODO"
               icon={Clock}
               items={grouped.upcoming}
               emptyMessage="３日以内のTODOはありません"
+              onReopen={handleReopen}
+              onDelete={openDeleteDialog}
             />
           </div>
 
           {grouped.later.length > 0 && (
-            <Section
+            <TodoSection
               title="それ以降"
               description="4日以降に期限のTODO"
               icon={ListTodo}
               items={grouped.later}
               emptyMessage=""
+              onReopen={handleReopen}
+              onDelete={openDeleteDialog}
             />
           )}
 
           {grouped.completed.length > 0 && (
-            <Section
+            <TodoSection
               title="完了済み"
               description="完了したTODO"
               icon={CheckCircle2}
               items={grouped.completed}
               emptyMessage=""
+              onReopen={handleReopen}
+              onDelete={openDeleteDialog}
             />
           )}
         </div>

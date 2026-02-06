@@ -23,75 +23,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-interface SearchResult {
-  type: "project" | "todo" | "meeting";
-  id: number;
-  title: string;
-  subtitle?: string;
-  href: string;
-}
-
-interface DashboardTodo {
-  id: number;
-  content: string;
-  dueDate: string;
-  projectId: number;
-  managementNumber: string;
-}
-
-interface DashboardProject {
-  id: number;
-  managementNumber: string;
-  client?: string;
-  alertCount?: number;
-  updatedAt?: string;
-}
-
-interface CompletionAlert {
-  id: number;
-  managementNumber: string;
-  client: string;
-  completionMonth: string;
-  level: "red" | "yellow";
-  monthsRemaining: number;
-}
-
-interface SiteInvestigationAlert {
-  id: number;
-  managementNumber: string;
-  client: string;
-  completionMonth: string;
-  level: "red" | "yellow";
-}
-
-interface DashboardData {
-  overdueTodos: { count: number; items: DashboardTodo[] };
-  todayTodos: { count: number; items: DashboardTodo[] };
-  thisWeekTodos: { count: number; items: DashboardTodo[] };
-  projectAlerts: { count: number; totalAlerts: number; items: DashboardProject[] };
-  activeProjects: { count: number; items: DashboardProject[] };
-  recentProjects: { items: DashboardProject[] };
-  completionAlerts: { redCount: number; yellowCount: number; items: CompletionAlert[] };
-  siteInvestigationAlerts: { redCount: number; yellowCount: number; items: SiteInvestigationAlert[] };
-}
-
-// デバウンス用のカスタムフック
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
+import type { SearchResult, DashboardData } from "@/components/home-search/types";
+import { useDebounce } from "@/components/home-search/useDebounce";
 
 export function HomeSearchView() {
   const router = useRouter();

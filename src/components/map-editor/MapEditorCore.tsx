@@ -6,6 +6,10 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { DrawingToolbar } from "./DrawingToolbar";
+import { TILE_LAYERS, createSitePinIcon, createLeaderBoxHtml, formatCoord } from "./constants";
+import type { TileLayerType } from "./constants";
+export type { TileLayerType } from "./constants";
+import type { MapEditorCoreProps } from "./types";
 
 // Leaflet default icon fix for Next.js/Webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -14,64 +18,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
-
-export type TileLayerType = "std" | "photo" | "pale";
-
-const TILE_LAYERS: Record<TileLayerType, { url: string; attribution: string; maxZoom: number }> = {
-  std: {
-    url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-    attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
-    maxZoom: 18,
-  },
-  photo: {
-    url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
-    attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
-    maxZoom: 18,
-  },
-  pale: {
-    url: "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
-    attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
-    maxZoom: 18,
-  },
-};
-
-interface MapEditorCoreProps {
-  projectId?: number;
-  initialCenter?: [number, number];
-  initialZoom?: number;
-  initialTileLayer?: TileLayerType;
-  initialGeoJson?: string;
-  annotationId?: number;
-  annotationName?: string;
-  siteCoordinate?: [number, number];
-  onSave?: (data: {
-    geoJson: string;
-    center: [number, number];
-    zoom: number;
-    tileLayer: TileLayerType;
-    name: string;
-  }) => Promise<void>;
-}
-
-// Helper: create site pin icon (red circle)
-function createSitePinIcon() {
-  return L.divIcon({
-    className: "site-pin-icon",
-    html: `<div style="width:20px;height:20px;background:#ef4444;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
-}
-
-// Helper: create leader box HTML
-function createLeaderBoxHtml(postalCode: string, address: string) {
-  return `<div style="background:#fff;border:2px solid #333;padding:4px 8px;font-size:12px;white-space:nowrap;color:#000;font-family:sans-serif;line-height:1.4;">〒${postalCode}<br/>${address}</div>`;
-}
-
-// Helper: format coordinate display
-function formatCoord(lat: number, lng: number) {
-  return `座標: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-}
 
 export default function MapEditorCore({
   projectId,
@@ -101,6 +47,10 @@ export default function MapEditorCore({
   const leaderAnchorRef = useRef<L.LatLng | null>(null);
   const leaderLinksRef = useRef<Map<string, { anchor: L.CircleMarker; line: L.Polyline; box: L.Marker }>>(new Map());
 
+  // 画像オーバーレイ refs
+  const imageOverlayRef = useRef<L.ImageOverlay | null>(null);
+  const cornerMarkersRef = useRef<L.CircleMarker[]>([]);
+
   const [activeTile, setActiveTile] = useState<TileLayerType>(initialTileLayer);
   const [drawMode, setDrawMode] = useState<string | null>(null);
   const [name, setName] = useState(annotationName);
@@ -109,6 +59,11 @@ export default function MapEditorCore({
   const [isLeaderMode, setIsLeaderMode] = useState(false);
   const [isSitePinMode, setIsSitePinMode] = useState(false);
   const [currentCoord, setCurrentCoord] = useState<[number, number] | null>(siteCoordinate ?? null);
+
+  // 画像オーバーレイ状態
+  const [overlayImage, setOverlayImage] = useState<string | null>(null);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.5);
+  const [overlayVisible, setOverlayVisible] = useState(true);
 
   // Update coordinate overlay text
   const updateCoordOverlay = useCallback((lat: number, lng: number) => {
@@ -249,6 +204,114 @@ export default function MapEditorCore({
     leaderLinksRef.current.set(id, { anchor, line, box });
 
     return id;
+  }, []);
+
+  // ─── 画像オーバーレイ: コーナーマーカー配置 ───
+  const placeCornerMarkers = useCallback((map: L.Map, bounds: L.LatLngBounds) => {
+    cornerMarkersRef.current.forEach((m) => map.removeLayer(m));
+    cornerMarkersRef.current = [];
+
+    const corners = [
+      bounds.getNorthWest(),
+      bounds.getNorthEast(),
+      bounds.getSouthEast(),
+      bounds.getSouthWest(),
+    ];
+
+    const markers = corners.map((corner) => {
+      const marker = L.circleMarker(corner, {
+        radius: 8,
+        color: "#ef4444",
+        fillColor: "#ef4444",
+        fillOpacity: 0.5,
+        weight: 2,
+        interactive: true,
+      });
+      let dragging = false;
+      marker.on("mousedown", (e: L.LeafletMouseEvent) => {
+        dragging = true;
+        map.dragging.disable();
+        L.DomEvent.stopPropagation(e.originalEvent);
+      });
+      map.on("mousemove", (e: L.LeafletMouseEvent) => {
+        if (!dragging) return;
+        marker.setLatLng(e.latlng);
+        const currentPositions = cornerMarkersRef.current.map((m) => m.getLatLng());
+        const lats = currentPositions.map((p) => p.lat);
+        const lngs = currentPositions.map((p) => p.lng);
+        const newBounds = L.latLngBounds(
+          [Math.min(...lats), Math.min(...lngs)],
+          [Math.max(...lats), Math.max(...lngs)]
+        );
+        imageOverlayRef.current?.setBounds(newBounds);
+      });
+      map.on("mouseup", () => {
+        if (!dragging) return;
+        dragging = false;
+        map.dragging.enable();
+      });
+      marker.addTo(map);
+      return marker;
+    });
+
+    cornerMarkersRef.current = markers;
+  }, []);
+
+  // ─── 画像オーバーレイ: アップロードハンドラ ───
+  const handleImageUpload = useCallback((dataUrl: string) => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (imageOverlayRef.current) {
+      map.removeLayer(imageOverlayRef.current);
+    }
+    cornerMarkersRef.current.forEach((m) => map.removeLayer(m));
+    cornerMarkersRef.current = [];
+
+    const bounds = map.getBounds();
+    const overlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.5 });
+    overlay.addTo(map);
+    imageOverlayRef.current = overlay;
+
+    setOverlayImage(dataUrl);
+    setOverlayOpacity(0.5);
+    setOverlayVisible(true);
+
+    placeCornerMarkers(map, bounds);
+  }, [placeCornerMarkers]);
+
+  // ─── 画像オーバーレイ: 透過度変更 ───
+  const handleOpacityChange = useCallback((value: number) => {
+    setOverlayOpacity(value);
+    imageOverlayRef.current?.setOpacity(value);
+  }, []);
+
+  // ─── 画像オーバーレイ: 表示/非表示 ───
+  const handleToggleOverlay = useCallback(() => {
+    setOverlayVisible((prev) => {
+      const next = !prev;
+      if (imageOverlayRef.current) {
+        imageOverlayRef.current.setOpacity(next ? overlayOpacity : 0);
+      }
+      cornerMarkersRef.current.forEach((m) => {
+        m.setStyle({ opacity: next ? 1 : 0, fillOpacity: next ? 0.5 : 0 });
+      });
+      return next;
+    });
+  }, [overlayOpacity]);
+
+  // ─── 画像オーバーレイ: 削除 ───
+  const handleRemoveOverlay = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (imageOverlayRef.current) {
+      map.removeLayer(imageOverlayRef.current);
+      imageOverlayRef.current = null;
+    }
+    cornerMarkersRef.current.forEach((m) => map.removeLayer(m));
+    cornerMarkersRef.current = [];
+    setOverlayImage(null);
+    setOverlayOpacity(0.5);
+    setOverlayVisible(true);
   }, []);
 
   // Initialize map
@@ -548,7 +611,6 @@ export default function MapEditorCore({
       featureGroupRef.current.clearLayers();
       sitePinRef.current = null;
       leaderLinksRef.current.clear();
-      // Remove coordinate overlays
       if (coordTopRightRef.current) {
         coordTopRightRef.current.remove();
         coordTopRightRef.current = null;
@@ -558,8 +620,9 @@ export default function MapEditorCore({
         coordBottomRef.current = null;
       }
       setCurrentCoord(null);
+      handleRemoveOverlay();
     }
-  }, []);
+  }, [handleRemoveOverlay]);
 
   // Save handler
   const handleSave = useCallback(async () => {
@@ -639,6 +702,13 @@ export default function MapEditorCore({
         onToggleSitePinMode={toggleSitePinMode}
         mapContainerRef={mapContainerRef}
         projectId={projectId}
+        onImageUpload={handleImageUpload}
+        overlayOpacity={overlayOpacity}
+        onOpacityChange={handleOpacityChange}
+        overlayVisible={overlayVisible}
+        onToggleOverlay={handleToggleOverlay}
+        onRemoveOverlay={handleRemoveOverlay}
+        hasOverlay={!!overlayImage}
       />
     </div>
   );

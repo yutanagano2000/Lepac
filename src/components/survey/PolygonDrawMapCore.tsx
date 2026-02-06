@@ -5,6 +5,9 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
+import { Button } from "@/components/ui/button";
+import { Map, Satellite } from "lucide-react";
+import type { DrawMode } from "./PolygonToolbar";
 
 // Leaflet default icon fix for Next.js/Webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -19,14 +22,16 @@ L.Icon.Default.mergeOptions({
 
 type TileType = "std" | "photo";
 
-const TILES: Record<TileType, { url: string; label: string }> = {
+const TILES: Record<TileType, { url: string; label: string; icon: typeof Map }> = {
   photo: {
     url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
     label: "航空写真",
+    icon: Satellite,
   },
   std: {
     url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
     label: "標準",
+    icon: Map,
   },
 };
 
@@ -34,23 +39,20 @@ const ATTRIBUTION =
   '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>';
 
 interface PolygonDrawMapCoreProps {
-  /** ポリゴン確定コールバック: coordinates は [lon, lat][] (GeoJSON形式) */
   onPolygonReady: (coords: [number, number][]) => void;
-  /** 断面ライン確定コールバック: coordinates は [lon, lat][] */
   onCrossSectionLine?: (coords: [number, number][]) => void;
-  /** 傾斜ヒートマップデータ（オプション） */
   slopeOverlay?: {
     originLat: number;
     originLon: number;
     interval: number;
     slopeMatrix: (number | null)[][];
   };
-  /** 地図をこの座標にジャンプ（変更されるたびに flyTo） */
   flyTo?: [number, number] | null;
-  /** 解析済みかどうか（断面ライン案内の切替に使用） */
   analyzed?: boolean;
   initialCenter?: [number, number];
   initialZoom?: number;
+  drawMode?: DrawMode;
+  onDrawModeChange?: (mode: DrawMode) => void;
 }
 
 export default function PolygonDrawMapCore({
@@ -61,6 +63,8 @@ export default function PolygonDrawMapCore({
   analyzed = false,
   initialCenter = [36.0, 138.0],
   initialZoom = 5,
+  drawMode = null,
+  onDrawModeChange,
 }: PolygonDrawMapCoreProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -68,17 +72,16 @@ export default function PolygonDrawMapCore({
   const featureGroupRef = useRef<L.FeatureGroup>(new L.FeatureGroup());
   const overlayGroupRef = useRef<L.LayerGroup>(new L.LayerGroup());
   const labelGroupRef = useRef<L.LayerGroup>(new L.LayerGroup());
+  const drawHandlerRef = useRef<any>(null);
   const [activeTile, setActiveTile] = useState<TileType>("photo");
   const [hasPolygon, setHasPolygon] = useState(false);
   const [hasCrossSection, setHasCrossSection] = useState(false);
 
-  // コールバックを ref に保持（Leaflet イベントハンドラ内の stale closure を回避）
   const onPolygonReadyRef = useRef(onPolygonReady);
   const onCrossSectionLineRef = useRef(onCrossSectionLine);
   useEffect(() => { onPolygonReadyRef.current = onPolygonReady; }, [onPolygonReady]);
   useEffect(() => { onCrossSectionLineRef.current = onCrossSectionLine; }, [onCrossSectionLine]);
 
-  // タイル切替
   const switchTile = useCallback((type: TileType) => {
     if (tileRef.current) {
       tileRef.current.setUrl(TILES[type].url);
@@ -86,7 +89,6 @@ export default function PolygonDrawMapCore({
     }
   }, []);
 
-  // 頂点ラベルマーカーを配置
   const addVertexLabels = useCallback((latlngs: L.LatLng[]) => {
     labelGroupRef.current.clearLayers();
     latlngs.forEach((ll, i) => {
@@ -124,7 +126,7 @@ export default function PolygonDrawMapCore({
     overlayGroupRef.current.addTo(map);
     labelGroupRef.current.addTo(map);
 
-    // Draw control
+    // Draw control (非表示 — プログラマティック制御のみ)
     const drawControl = new L.Control.Draw({
       position: "topright",
       draw: {
@@ -147,6 +149,12 @@ export default function PolygonDrawMapCore({
     });
     drawControl.addTo(map);
 
+    // Leaflet Drawのツールバーを非表示にする
+    const drawToolbar = mapContainerRef.current.querySelector(".leaflet-draw") as HTMLElement;
+    if (drawToolbar) {
+      drawToolbar.style.display = "none";
+    }
+
     map.on(L.Draw.Event.CREATED, (e: any) => {
       const layer = e.layer;
       featureGroupRef.current.addLayer(layer);
@@ -157,10 +165,8 @@ export default function PolygonDrawMapCore({
           ll.lng,
           ll.lat,
         ]);
-        // 閉じたポリゴンにする
         coords.push(coords[0]);
         setHasPolygon(true);
-        // 頂点ラベル(A,B,C...)を配置
         addVertexLabels(latlngs);
         onPolygonReadyRef.current(coords);
       } else if (e.layerType === "polyline" && onCrossSectionLineRef.current) {
@@ -172,10 +178,12 @@ export default function PolygonDrawMapCore({
         setHasCrossSection(true);
         onCrossSectionLineRef.current(coords);
       }
+
+      // 描画完了後にモードをリセット
+      onDrawModeChange?.(null);
     });
 
     map.on(L.Draw.Event.DELETED, () => {
-      // 削除後、ポリゴン・ラインが残っているか確認
       let polygonExists = false;
       let lineExists = false;
       featureGroupRef.current.eachLayer((layer) => {
@@ -190,6 +198,10 @@ export default function PolygonDrawMapCore({
       }
     });
 
+    // 編集/削除完了時もモードリセット
+    map.on("draw:editstop", () => onDrawModeChange?.(null));
+    map.on("draw:deletestop", () => onDrawModeChange?.(null));
+
     mapRef.current = map;
 
     return () => {
@@ -199,7 +211,57 @@ export default function PolygonDrawMapCore({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // flyTo: 座標ジャンプ
+  // drawMode変更時にプログラマティックに描画モードを制御
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // 現在のハンドラを無効化
+    if (drawHandlerRef.current) {
+      try { drawHandlerRef.current.disable(); } catch { /* ignore */ }
+      drawHandlerRef.current = null;
+    }
+
+    if (!drawMode) return;
+
+    switch (drawMode) {
+      case "polygon":
+        drawHandlerRef.current = new (L.Draw as any).Polygon(map, {
+          shapeOptions: { color: "#3b82f6", weight: 2, fillOpacity: 0.15 },
+          allowIntersection: false,
+        });
+        drawHandlerRef.current.enable();
+        break;
+      case "polyline":
+        drawHandlerRef.current = new (L.Draw as any).Polyline(map, {
+          shapeOptions: { color: "#f59e0b", weight: 3 },
+        });
+        drawHandlerRef.current.enable();
+        break;
+      case "edit": {
+        const EditHandler = (L as any).EditToolbar?.Edit;
+        if (EditHandler) {
+          drawHandlerRef.current = new EditHandler(map, {
+            featureGroup: featureGroupRef.current,
+          });
+          drawHandlerRef.current.enable();
+        }
+        break;
+      }
+      case "delete": {
+        const DeleteHandler = (L as any).EditToolbar?.Delete;
+        if (DeleteHandler) {
+          drawHandlerRef.current = new DeleteHandler(map, {
+            featureGroup: featureGroupRef.current,
+          });
+          drawHandlerRef.current.enable();
+        }
+        break;
+      }
+    }
+  }, [drawMode]);
+
+  // flyTo
   useEffect(() => {
     if (!mapRef.current || !flyTo) return;
     mapRef.current.flyTo(flyTo, 17, { duration: 1.2 });
@@ -248,27 +310,30 @@ export default function PolygonDrawMapCore({
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainerRef} className="w-full h-full min-h-[400px]" />
-      {/* タイル切替ボタン */}
-      <div className="absolute top-2 left-2 z-[1000] flex gap-1">
-        {(Object.keys(TILES) as TileType[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => switchTile(t)}
-            className={`px-2 py-1 text-xs rounded shadow ${
-              activeTile === t
-                ? "bg-primary text-primary-foreground"
-                : "bg-white text-gray-700 hover:bg-gray-100"
-            }`}
-          >
-            {TILES[t].label}
-          </button>
-        ))}
+      {/* タイル切替ボタン (shadcn) */}
+      <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-zinc-900 rounded-lg shadow-lg p-1 flex gap-1">
+        {(Object.keys(TILES) as TileType[]).map((t) => {
+          const TileIcon = TILES[t].icon;
+          return (
+            <Button
+              key={t}
+              variant={activeTile === t ? "default" : "ghost"}
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => switchTile(t)}
+              title={TILES[t].label}
+            >
+              <TileIcon className="h-3.5 w-3.5 mr-1" />
+              {TILES[t].label}
+            </Button>
+          );
+        })}
       </div>
       {/* 操作ガイド */}
       <div className="absolute bottom-2 left-2 z-[1000] bg-black/70 text-white text-xs px-3 py-1.5 rounded max-w-[320px]">
         {analyzed && !hasCrossSection ? (
           <>
-            断面を確認するには、右上の <span className="inline-block w-3 h-0.5 bg-yellow-400 align-middle mx-0.5" /> <b>ライン（折れ線）</b>ツールでポリゴン上にラインを引いてください
+            断面を確認するには、ツールバーの <b>ライン</b> ボタンでポリゴン上にラインを引いてください
           </>
         ) : analyzed && hasCrossSection ? (
           "断面ラインを設定済み。下の断面プロファイルを確認してください"
@@ -276,7 +341,7 @@ export default function PolygonDrawMapCore({
           "ポリゴン設定済み。「解析」ボタンを押してください"
         ) : (
           <>
-            右上の <b>ポリゴン</b>ツールで調査範囲を描画してください
+            ツールバーの <b>ポリゴン</b> ボタンで調査範囲を描画してください
           </>
         )}
       </div>
@@ -287,9 +352,9 @@ export default function PolygonDrawMapCore({
 const VERTEX_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 function slopeToColor(degrees: number): string {
-  if (degrees < 3) return "#22c55e";   // green
-  if (degrees < 8) return "#eab308";   // yellow
-  if (degrees < 15) return "#f97316";  // orange
-  if (degrees < 30) return "#ef4444";  // red
-  return "#7f1d1d";                    // darkred
+  if (degrees < 3) return "#22c55e";
+  if (degrees < 8) return "#eab308";
+  if (degrees < 15) return "#f97316";
+  if (degrees < 30) return "#ef4444";
+  return "#7f1d1d";
 }

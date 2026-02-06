@@ -19,175 +19,20 @@ import { Button } from "@/components/ui/button";
 import { ContactDeptAlertCard } from "@/components/ContactDeptAlertCard";
 import { LawAlertCard } from "@/components/LawAlertCard";
 import { CheckCircle2, XCircle, Copy, Check, Loader2, ExternalLink } from "lucide-react";
+import { LawSearchCard } from "@/components/geo-search/LawSearchCard";
+import type { AdditionalButton } from "@/components/geo-search/LawSearchCard";
+import {
+  TEMPLATES,
+  laws,
+  CONTACT_DEPT_LAW_IDS,
+  CONTACT_DEPT_MESSAGE,
+  HIROSHIMA_BIRD_PROTECTION_URL,
+  isHiroshimaBirdProtectionArea,
+} from "@/components/geo-search/constants";
 
 interface JudgmentResult {
   宅地造成等工事規制区域: boolean;
   特定盛土等規制区域: boolean;
-}
-
-const TEMPLATES = {
-  宅地造成等工事規制区域: "宅地造成規制区域。造成の規模によっては許可申請が必要。現調結果次第で判断いたします。",
-  特定盛土等規制区域: "特定盛土規制区域。造成の規模によっては届出 / 許可申請が必要。現調結果次第で判断いたします。",
-};
-
-// 追加ボタンの型定義
-interface AdditionalButton {
-  label: string;
-  url: string;
-}
-
-// 法律検索カードコンポーネント
-interface LawSearchCardProps {
-  lawName: string;
-  onSearch: (lawName: string, lawId?: number) => void;
-  lawId?: number;
-  fixedText?: string;
-  copiedText: string | null;
-  onCopy: (text: string) => void;
-  prefecture?: string;
-  additionalButtons?: AdditionalButton[];
-  badges?: string[];
-  caption?: string;
-  /** 注意書き（コピーアイコンなしで表示） */
-  note?: string;
-  /** 地目に農地（田・畑）が含まれる場合の小さなアラート表示 */
-  farmlandAlert?: boolean;
-}
-
-const LawSearchCard: React.FC<LawSearchCardProps> = ({
-  lawName,
-  onSearch,
-  lawId,
-  fixedText,
-  copiedText,
-  onCopy,
-  prefecture,
-  additionalButtons = [],
-  badges = [],
-  caption,
-  note,
-  farmlandAlert,
-}) => {
-  return (
-    <div className="bg-card rounded-4xl border border-border shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="font-medium text-foreground">{lawName}</p>
-          {farmlandAlert && (
-            <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
-              地目に農地が含まれています
-            </p>
-          )}
-          {caption && (
-            <p className="text-sm text-muted-foreground mt-2">{caption}</p>
-          )}
-          {fixedText && (
-            <div className="flex items-start gap-2 mt-3 p-3 rounded-xl bg-muted/50 border border-border">
-              <p className="flex-1 text-sm text-foreground leading-relaxed">{fixedText}</p>
-              <button
-                onClick={() => onCopy(fixedText)}
-                className="shrink-0 p-2 rounded-lg hover:bg-accent transition-colors"
-                title="コピー"
-              >
-                {copiedText === fixedText ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                )}
-              </button>
-            </div>
-          )}
-          {note && (
-            <p className="text-xs text-muted-foreground mt-2">{note}</p>
-          )}
-          {badges.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {badges.map((badge, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
-                >
-                  {badge}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 shrink-0 ml-4">
-          <Button onClick={() => onSearch(lawName, lawId)} className="w-full">
-            Googleで検索
-          </Button>
-          {additionalButtons.map((button, index) => (
-            <Button
-              key={index}
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(button.url, '_blank')}
-              className="w-full"
-            >
-              <ExternalLink className="h-3 w-3 mr-2" />
-              {button.label}
-            </Button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 法律リスト
-interface Law {
-  id: number;
-  name: string;
-  fixedText?: string;
-}
-
-const laws: Law[] = [
-  { id: 1, name: "国土利用計画法" },
-  { id: 2, name: "都市計画法" },
-  { id: 3, name: "河川法" },
-  { id: 4, name: "港湾法" },
-  { id: 5, name: "海岸法" },
-  { id: 6, name: "急傾斜地の崩壊による災害の防止に関する法律" },
-  { id: 7, name: "砂防法" },
-  { id: 8, name: "地すべり等防止法" },
-  { id: 9, name: "景観法" },
-  { id: 10, name: "農業振興地域の整備に関する法律" },
-  { id: 11, name: "農地法" },
-  { id: 12, name: "森林法" },
-  { id: 13, name: "文化財保護法" },
-  { id: 14, name: "土壌汚染対策法" },
-  { id: 15, name: "自然公園法" },
-  { id: 16, name: "自然環境保全法" },
-  { id: 17, name: "絶滅の恐れがある野生動植物の種の保存に関する法律" },
-  { id: 18, name: "鳥獣の保護及び管理並びに狩猟の適正化に関する法律" },
-  { id: 19, name: "環境影響評価法・条例" },
-  { id: 20, name: "消防法", fixedText: "低圧の為、消防署への届出が必要な機器設置なく、該当しません。" },
-  { id: 21, name: "振動規制法", fixedText: "特定施設を設置しないため、該当しません。" },
-  { id: 22, name: "道路法", fixedText: "工事区域に道路が無い為、道路使用許可が占用許可の必要な行為は予定されていません。" },
-  { id: 23, name: "廃棄物の処理及び清掃に関する法律", fixedText: "敷地内の残置物及び工事で発生した産廃物については適正に処理します。" },
-];
-
-// 担当部署にお問い合わせのアラートを表示し、検索クエリに「担当部署」を追加する法律（河川法・急傾斜地・砂防・地すべり・森林法）
-const CONTACT_DEPT_LAW_IDS = [3, 6, 7, 8, 12] as const;
-const CONTACT_DEPT_MESSAGE = "担当部署にお問い合わせください";
-
-// 鳥獣の保護及び管理並びに狩猟の適正化に関する法律：赤アラート表示対象（広島県内）
-const HIROSHIMA_BIRD_PROTECTION_AREAS = [
-  "庄原市口和町",
-  "東広島市志和町",
-  "福山市走島町",
-  "福山市赤坂町",
-  "福山市沼隈町",
-  "福山市千田町",
-  "三原市",
-] as const;
-const HIROSHIMA_BIRD_PROTECTION_URL =
-  "https://www.pref.hiroshima.lg.jp/site/huntinglicense/hunter-map.html";
-
-function isHiroshimaBirdProtectionArea(address: string | null): boolean {
-  if (!address || !address.includes("広島県")) return false;
-  return HIROSHIMA_BIRD_PROTECTION_AREAS.some((area) => address.includes(area));
 }
 
 export function GeoSearchView() {
@@ -315,7 +160,7 @@ export function GeoSearchView() {
       const location = await getLocationFromCoordinates(lat, lon);
       if (location) setLocationInfo(location);
 
-      const response = await fetch("https://geo-checker-backend-aj4j.onrender.com/api/v1/check", {
+      const response = await fetch("/api/legal-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ latitude: lat, longitude: lon, prefecture: pref }),

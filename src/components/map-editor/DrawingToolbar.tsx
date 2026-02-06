@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import {
   Map,
@@ -14,8 +15,12 @@ import {
   Loader2,
   ArrowUpRight,
   MapPin,
+  ImagePlus,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
-import type { TileLayerType } from "./MapEditorCore";
+import type { TileLayerType } from "./constants";
 import { captureMapAsPng, captureMapAsPdf, downloadBlob } from "@/lib/map-export";
 
 interface DrawingToolbarProps {
@@ -34,6 +39,14 @@ interface DrawingToolbarProps {
   onToggleSitePinMode: () => void;
   mapContainerRef: React.RefObject<HTMLDivElement | null>;
   projectId?: number;
+  // 画像オーバーレイ
+  onImageUpload: (dataUrl: string) => void;
+  overlayOpacity: number;
+  onOpacityChange: (value: number) => void;
+  overlayVisible: boolean;
+  onToggleOverlay: () => void;
+  onRemoveOverlay: () => void;
+  hasOverlay: boolean;
 }
 
 const TILE_OPTIONS: { type: TileLayerType; label: string; icon: typeof Map }[] = [
@@ -58,8 +71,30 @@ export function DrawingToolbar({
   onToggleSitePinMode,
   mapContainerRef,
   projectId,
+  onImageUpload,
+  overlayOpacity,
+  onOpacityChange,
+  overlayVisible,
+  onToggleOverlay,
+  onRemoveOverlay,
+  hasOverlay,
 }: DrawingToolbarProps) {
   const [exporting, setExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        onImageUpload(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    // リセットして同じファイルも再選択可能に
+    e.target.value = "";
+  };
 
   const handleExportPng = async () => {
     if (!mapContainerRef.current) return;
@@ -154,6 +189,68 @@ export function DrawingToolbar({
             </Button>
           );
         })}
+      </div>
+
+      {/* 画像オーバーレイ */}
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-lg p-1 flex flex-col gap-1">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs w-full"
+          onClick={() => fileInputRef.current?.click()}
+          title="画像を重ねる"
+        >
+          <ImagePlus className="h-3.5 w-3.5 mr-1" />
+          画像を重ねる
+        </Button>
+        {hasOverlay && (
+          <>
+            <div className="flex items-center gap-1">
+              <Button
+                variant={overlayVisible ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-1.5"
+                onClick={onToggleOverlay}
+                title={overlayVisible ? "非表示" : "表示"}
+              >
+                {overlayVisible ? (
+                  <Eye className="h-3.5 w-3.5" />
+                ) : (
+                  <EyeOff className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-1.5 text-destructive hover:text-destructive"
+                onClick={onRemoveOverlay}
+                title="画像削除"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="px-1 pb-1">
+              <label className="text-[10px] text-muted-foreground">
+                透過度: {Math.round(overlayOpacity * 100)}%
+              </label>
+              <Slider
+                value={[overlayOpacity * 100]}
+                onValueChange={(v) => onOpacityChange(v[0] / 100)}
+                min={0}
+                max={100}
+                step={1}
+                className="w-full"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* テキストモード */}

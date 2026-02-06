@@ -13,6 +13,8 @@ import { PolygonDrawMap } from "@/components/survey/PolygonDrawMap";
 import { Surface3D } from "@/components/survey/Surface3D";
 import { CrossSectionChart } from "@/components/survey/CrossSectionChart";
 import { SlopeStatsCard } from "@/components/survey/SlopeStatsCard";
+import { PolygonToolbar } from "@/components/survey/PolygonToolbar";
+import type { DrawMode } from "@/components/survey/PolygonToolbar";
 import type { SlopeResult } from "@/lib/slope";
 import type { SlopeStats, CrossSectionPoint } from "@/lib/slope-analysis";
 
@@ -49,6 +51,7 @@ export default function SurveyPage() {
   const [jumpCoordInput, setJumpCoordInput] = useState("");
   const [jumpTarget, setJumpTarget] = useState<[number, number] | null>(null);
   const jumpCountRef = useRef(0);
+  const [drawMode, setDrawMode] = useState<DrawMode>(null);
 
   // ─── 座標入力タブのハンドラ ─────────────────────────
   const handleMeasure = async () => {
@@ -324,13 +327,15 @@ export default function SurveyPage() {
 
           {/* 地図 + 3Dサーフェス */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden relative">
               <div className="h-[450px]">
                 <PolygonDrawMap
                   onPolygonReady={handlePolygonReady}
                   onCrossSectionLine={handleCrossSectionLine}
                   flyTo={jumpTarget}
                   analyzed={!!gridResult}
+                  drawMode={drawMode}
+                  onDrawModeChange={setDrawMode}
                   slopeOverlay={
                     gridResult
                       ? {
@@ -341,6 +346,10 @@ export default function SurveyPage() {
                         }
                       : undefined
                   }
+                />
+                <PolygonToolbar
+                  activeMode={drawMode}
+                  onModeChange={setDrawMode}
                 />
               </div>
             </Card>

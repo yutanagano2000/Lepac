@@ -99,9 +99,12 @@ export function HomeProjectSearch({ size = "default" }: HomeProjectSearchProps) 
   };
 
   useEffect(() => {
-    fetch("/api/projects", { cache: "no-store" })
+    fetch("/api/projects?limit=200", { cache: "no-store" })
       .then((res) => res.json())
-      .then(setProjects)
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.projects;
+        setProjects(Array.isArray(list) ? list : []);
+      })
       .catch((err) => console.error("案件一覧の取得に失敗しました:", err));
     fetch("/api/meetings", { cache: "no-store" })
       .then((res) => res.json())
