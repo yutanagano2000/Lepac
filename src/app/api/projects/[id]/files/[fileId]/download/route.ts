@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projectFiles } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
+import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { requireProjectAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +54,7 @@ export async function GET(
   const filePath = decodeURIComponent(pathMatch[1]);
 
   // 新しい署名付きURLを生成（1時間有効）
-  const { data, error } = await supabaseAdmin.storage
+  const { data, error } = await getSupabaseAdmin().storage
     .from(STORAGE_BUCKET)
     .createSignedUrl(filePath, 3600, {
       download: file.fileName, // ダウンロード時のファイル名を指定

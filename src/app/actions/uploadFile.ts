@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { projectFiles } from "@/db/schema";
-import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
+import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 
 export async function uploadFile(formData: FormData) {
   const file = formData.get("file") as File | null;
@@ -76,7 +76,7 @@ export async function uploadFile(formData: FormData) {
     console.log("Upload - buffer.length:", buffer.length);
 
     // Supabase Storageにアップロード
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+    const { data: uploadData, error: uploadError } = await getSupabaseAdmin().storage
       .from(STORAGE_BUCKET)
       .upload(filePath, buffer, {
         contentType: file.type,
@@ -89,7 +89,7 @@ export async function uploadFile(formData: FormData) {
     }
 
     // 署名付きURLを生成（1年間有効）
-    const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+    const { data: signedUrlData, error: signedUrlError } = await getSupabaseAdmin().storage
       .from(STORAGE_BUCKET)
       .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1年
 

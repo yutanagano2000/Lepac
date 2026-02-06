@@ -20,11 +20,4 @@ export function getSupabaseAdmin(): SupabaseClient {
   return _supabaseAdmin;
 }
 
-// 後方互換: 既存コードの supabaseAdmin 参照を維持
-export const supabaseAdmin = new Proxy({} as SupabaseClient, {
-  get(_, prop) {
-    return (getSupabaseAdmin() as unknown as Record<string, unknown>)[prop as string];
-  },
-});
-
 export const STORAGE_BUCKET = "project-files";

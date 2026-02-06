@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projectFiles } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
+import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { requireProjectAccess } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +49,7 @@ export async function DELETE(
     if (pathMatch) {
       const filePath = decodeURIComponent(pathMatch[1]);
       // Supabase Storageから削除
-      const { error: deleteError } = await supabaseAdmin.storage
+      const { error: deleteError } = await getSupabaseAdmin().storage
         .from(STORAGE_BUCKET)
         .remove([filePath]);
 

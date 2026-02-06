@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projectFiles } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
+import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { ApiError, createErrorResponse } from "@/lib/api-error";
 import { requireProjectAccess } from "@/lib/auth-guard";
 
@@ -55,7 +55,7 @@ export async function GET(
     const filePath = decodeURIComponent(pathMatch[1]);
 
     // Supabaseからファイルをダウンロード
-    const { data, error } = await supabaseAdmin.storage
+    const { data, error } = await getSupabaseAdmin().storage
       .from(STORAGE_BUCKET)
       .download(filePath);
 
