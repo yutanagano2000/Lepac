@@ -20,6 +20,10 @@ function getClient(): Client {
   return client;
 }
 
+function isDbAvailable(): boolean {
+  return !!process.env.TURSO_DATABASE_URL;
+}
+
 export const db: LibSQLDatabase<typeof schema> = new Proxy({} as LibSQLDatabase<typeof schema>, {
   get(_, prop) {
     if (!dbInstance) {
@@ -30,9 +34,10 @@ export const db: LibSQLDatabase<typeof schema> = new Proxy({} as LibSQLDatabase<
   },
 });
 
-// テーブル作成（初回のみ）
+// テーブル作成（初回のみ。環境変数未設定時はスキップ）
 async function initDb() {
   if (initialized) return;
+  if (!isDbAvailable()) return;
 
   const rawClient = getClient();
   await runMigrations(rawClient);
