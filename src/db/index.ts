@@ -5,7 +5,7 @@ import { runMigrations } from "./migrations";
 
 let client: Client | null = null;
 let dbInstance: LibSQLDatabase<typeof schema> | null = null;
-let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 function getClient(): Client {
   if (!client) {
@@ -24,25 +24,48 @@ function isDbAvailable(): boolean {
   return !!process.env.TURSO_DATABASE_URL;
 }
 
+function getDbInstance(): LibSQLDatabase<typeof schema> {
+  if (!dbInstance) {
+    dbInstance = drizzle(getClient(), { schema });
+  }
+  return dbInstance;
+}
+
 export const db: LibSQLDatabase<typeof schema> = new Proxy({} as LibSQLDatabase<typeof schema>, {
   get(_, prop) {
-    if (!dbInstance) {
-      initDb(); // 背景で初期化（非同期だが、次は待たれる）
-      dbInstance = drizzle(getClient(), { schema });
+    const instance = getDbInstance();
+    // マイグレーションをバックグラウンドで実行（初回のみ）
+    if (!initPromise) {
+      initPromise = initDb().catch((err) => {
+        console.error("[DB] Migration error:", err);
+        initPromise = null; // 失敗時は再試行可能に
+      });
     }
-    return (dbInstance as unknown as Record<string, unknown>)[prop as string];
+    return (instance as unknown as Record<string, unknown>)[prop as string];
   },
 });
 
 // テーブル作成（初回のみ。環境変数未設定時はスキップ）
 async function initDb() {
-  if (initialized) return;
   if (!isDbAvailable()) return;
 
   const rawClient = getClient();
   await runMigrations(rawClient);
+}
 
-  initialized = true;
+/**
+ * DB初期化完了を待つ（API routeの先頭で呼ぶことを推奨）
+ * マイグレーション完了後にクエリを実行するため
+ */
+export async function ensureDbReady(): Promise<void> {
+  getDbInstance();
+  if (!initPromise) {
+    initPromise = initDb().catch((err) => {
+      console.error("[DB] Migration error:", err);
+      initPromise = null;
+    });
+  }
+  await initPromise;
 }
 
 // 初期化関数をエクスポート

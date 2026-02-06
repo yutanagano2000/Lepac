@@ -14,7 +14,17 @@ function getAllowedOrigins(): string[] {
     origins.push(new URL(process.env.NEXTAUTH_URL).origin);
   }
 
-  // Vercelプレビュー/本番URL
+  // Vercel本番URL（ユーザーが実際にアクセスするURL）
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    origins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+  }
+
+  // Vercelブランチ/デプロイURL
+  if (process.env.VERCEL_BRANCH_URL) {
+    origins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+  }
+
+  // Vercelデプロイ固有URL
   if (process.env.VERCEL_URL) {
     origins.push(`https://${process.env.VERCEL_URL}`);
   }
