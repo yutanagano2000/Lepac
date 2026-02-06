@@ -84,12 +84,6 @@ function isDateColumn(columnName: string): boolean {
   return DATE_COLUMN_PATTERNS.some((p) => p.test(columnName));
 }
 
-// ── camelCase → snake_case 変換 ──
-
-function camelToSnake(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-}
-
 // ── メイン同期処理 ──
 
 export async function syncFromSheets(organizationId: number): Promise<SyncResult> {
@@ -201,13 +195,9 @@ export async function syncFromSheets(organizationId: number): Promise<SyncResult
         if (existing.length > 0) {
           // UPDATE（値があるフィールドのみ）
           if (Object.keys(rowData).length > 0) {
-            const snakeData: Record<string, string> = {};
-            for (const [key, val] of Object.entries(rowData)) {
-              snakeData[camelToSnake(key)] = val;
-            }
             await db
               .update(projects)
-              .set(snakeData)
+              .set(rowData as Partial<typeof projects.$inferInsert>)
               .where(eq(projects.id, existing[0].id));
           }
           result.updatedCount++;
