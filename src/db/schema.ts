@@ -204,6 +204,9 @@ export const projects = sqliteTable("projects", {
   landowner1: text("landowner_1"), // 地権者1
   landowner2: text("landowner_2"), // 地権者2
   landowner3: text("landowner_3"), // 地権者3
+  landowner1Kana: text("landowner_1_kana"), // 地権者1フリガナ
+  landowner2Kana: text("landowner_2_kana"), // 地権者2フリガナ
+  landowner3Kana: text("landowner_3_kana"), // 地権者3フリガナ
   landownerAddress1: text("landowner_address_1"), // 地権者1の住所
   landownerAddress2: text("landowner_address_2"), // 地権者2の住所
   landownerAddress3: text("landowner_address_3"), // 地権者3の住所
@@ -450,3 +453,19 @@ export const rateLimits = sqliteTable("rate_limits", {
 
 export type RateLimit = typeof rateLimits.$inferSelect;
 export type NewRateLimit = typeof rateLimits.$inferInsert;
+
+// 地図アノテーションテーブル（現場案内図エディタ用）
+export const mapAnnotations = sqliteTable("map_annotations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  name: text("name").notNull().default("無題の案内図"),
+  geoJson: text("geo_json").notNull(), // GeoJSON文字列
+  mapCenter: text("map_center"), // JSON: [lat, lng]
+  mapZoom: integer("map_zoom"),
+  tileLayer: text("tile_layer").default("std"), // std | photo | pale
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+});
+
+export type MapAnnotation = typeof mapAnnotations.$inferSelect;
+export type NewMapAnnotation = typeof mapAnnotations.$inferInsert;

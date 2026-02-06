@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon, PenTool } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
 import {
@@ -50,6 +50,7 @@ import {
 import { LawAlertCard } from "@/components/LawAlertCard";
 import { ProjectFolderLink } from "@/components/ProjectFolderLink";
 import { ProjectPhotoGallery } from "@/components/ProjectPhotoGallery";
+import { ProjectDashboard } from "@/components/ProjectDashboard";
 
 const PROGRESS_TITLES = [
   "合意書",
@@ -817,6 +818,61 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           </div>
         )}
 
+        {/* 一括ステータス設定 */}
+        {hasSearched && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Scale className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">一括設定</span>
+                <span className="text-xs text-muted-foreground">
+                  ({Object.keys(legalStatuses).length}/{laws.length} 設定済み)
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // 未設定の法令をすべて「非該当」に設定
+                    const updates: LegalStatuses = { ...legalStatuses };
+                    laws.forEach((law) => {
+                      if (!updates[law.name]) {
+                        updates[law.name] = {
+                          status: "非該当",
+                          note: "対象地区ではありません。",
+                          updatedBy: currentUserName,
+                          updatedAt: new Date().toISOString(),
+                        };
+                      }
+                    });
+                    setLegalStatuses(updates);
+                    immediateSave(updates);
+                  }}
+                  className="text-xs"
+                >
+                  <CheckCircle2 className="h-3 w-3 mr-1.5 text-green-500" />
+                  未設定を全て非該当
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (confirm("すべての法令ステータスをリセットしますか？")) {
+                      setLegalStatuses({});
+                      immediateSave({});
+                    }
+                  }}
+                  className="text-xs text-muted-foreground"
+                >
+                  <XCircle className="h-3 w-3 mr-1.5" />
+                  リセット
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 法律検索カード一覧 */}
         {hasSearched && laws.map((law) => {
           const additionalButtons: AdditionalButton[] = [];
@@ -1380,6 +1436,61 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
         </div>
       )}
 
+      {/* 一括ステータス設定 */}
+      {hasSearched && (
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Scale className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">一括設定</span>
+              <span className="text-xs text-muted-foreground">
+                ({Object.keys(legalStatuses).length}/{laws.length} 設定済み)
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // 未設定の法令をすべて「非該当」に設定
+                  const updates: LegalStatuses = { ...legalStatuses };
+                  laws.forEach((law) => {
+                    if (!updates[law.name]) {
+                      updates[law.name] = {
+                        status: "非該当",
+                        note: "対象地区ではありません。",
+                        updatedBy: currentUserName,
+                        updatedAt: new Date().toISOString(),
+                      };
+                    }
+                  });
+                  setLegalStatuses(updates);
+                  immediateSave(updates);
+                }}
+                className="text-xs"
+              >
+                <CheckCircle2 className="h-3 w-3 mr-1.5 text-green-500" />
+                未設定を全て非該当
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (confirm("すべての法令ステータスをリセットしますか？")) {
+                    setLegalStatuses({});
+                    immediateSave({});
+                  }
+                }}
+                className="text-xs text-muted-foreground"
+              >
+                <XCircle className="h-3 w-3 mr-1.5" />
+                リセット
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 法律検索カード一覧 */}
       {hasSearched && laws.map((law) => {
         const additionalButtons: AdditionalButton[] = [];
@@ -1900,6 +2011,10 @@ export default function ProjectDetailPage() {
     landowner1: "",
     landowner2: "",
     landowner3: "",
+    // 地権者フリガナ
+    landowner1Kana: "",
+    landowner2Kana: "",
+    landowner3Kana: "",
     // 地権者追加情報
     landownerAddress1: "",
     landownerAddress2: "",
@@ -1926,6 +2041,45 @@ export default function ProjectDetailPage() {
     // 外部連携
     dococabiLink: "",
   });
+  const [furiganaLoading, setFuriganaLoading] = useState<{ [key: string]: boolean }>({});
+  const furiganaTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+
+  // フリガナ自動取得関数（debounce付き）
+  const fetchFurigana = useCallback(async (name: string, field: "landowner1Kana" | "landowner2Kana" | "landowner3Kana") => {
+    // 既存のタイムアウトをクリア
+    if (furiganaTimeoutRef.current[field]) {
+      clearTimeout(furiganaTimeoutRef.current[field]);
+    }
+
+    // 空の場合はスキップ
+    if (!name.trim()) {
+      setDetailForm((prev) => ({ ...prev, [field]: "" }));
+      return;
+    }
+
+    // 300ms後にAPIを呼び出し
+    furiganaTimeoutRef.current[field] = setTimeout(async () => {
+      setFuriganaLoading((prev) => ({ ...prev, [field]: true }));
+      try {
+        const res = await fetch("/api/furigana", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.furigana) {
+            setDetailForm((prev) => ({ ...prev, [field]: data.furigana }));
+          }
+        }
+      } catch (error) {
+        console.error("Furigana fetch error:", error);
+      } finally {
+        setFuriganaLoading((prev) => ({ ...prev, [field]: false }));
+      }
+    }, 300);
+  }, []);
+
   const [open, setOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -2024,6 +2178,10 @@ export default function ProjectDetailPage() {
         landowner1: detailForm.landowner1,
         landowner2: detailForm.landowner2,
         landowner3: detailForm.landowner3,
+        // 地権者フリガナ
+        landowner1Kana: detailForm.landowner1Kana,
+        landowner2Kana: detailForm.landowner2Kana,
+        landowner3Kana: detailForm.landowner3Kana,
         // 地権者追加情報
         landownerAddress1: detailForm.landownerAddress1,
         landownerAddress2: detailForm.landownerAddress2,
@@ -2063,6 +2221,10 @@ export default function ProjectDetailPage() {
       landowner1: project.landowner1 ?? "",
       landowner2: project.landowner2 ?? "",
       landowner3: project.landowner3 ?? "",
+      // 地権者フリガナ
+      landowner1Kana: project.landowner1Kana ?? "",
+      landowner2Kana: project.landowner2Kana ?? "",
+      landowner3Kana: project.landowner3Kana ?? "",
       // 地権者追加情報
       landownerAddress1: project.landownerAddress1 ?? "",
       landownerAddress2: project.landownerAddress2 ?? "",
@@ -2579,6 +2741,9 @@ export default function ProjectDetailPage() {
               )}
             </div>
           </div>
+
+          {/* 進捗ダッシュボード */}
+          <ProjectDashboard project={project} progressList={progressList} />
 
           {/* 進捗追加ダイアログ */}
           <Dialog open={open} onOpenChange={setOpen}>
@@ -3276,6 +3441,14 @@ export default function ProjectDetailPage() {
                               ハザード
                             </a>
                           </Button>
+                          <Button variant="outline" size="sm" asChild className="h-8">
+                            <Link
+                              href={`/map-editor?projectId=${project.id}&lat=${parseCoordinateString(project.coordinates)?.lat || ""}&lon=${parseCoordinateString(project.coordinates)?.lon || ""}`}
+                            >
+                              <PenTool className="h-3 w-3 mr-2" />
+                              案内図エディタ
+                            </Link>
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -3637,23 +3810,57 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   </div>
-                  {/* どこキャビ連携 */}
+                  {/* どこキャビ連携・サブフォルダクイックアクセス */}
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">どこキャビ</span>
-                    <div className="col-span-2 text-sm">
+                    <div className="col-span-2 space-y-3">
                       {project.dococabiLink ? (
-                        <Button variant="outline" size="sm" asChild className="h-8">
-                          <a
-                            href={project.dococabiLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <ExternalLink className="h-3 w-3 mr-2" />
-                            どこキャビを開く
-                          </a>
-                        </Button>
+                        <>
+                          <Button variant="outline" size="sm" asChild className="h-8">
+                            <a
+                              href={project.dococabiLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-2" />
+                              どこキャビを開く
+                            </a>
+                          </Button>
+                          {/* サブフォルダクイックアクセス */}
+                          <div className="pt-2">
+                            <p className="text-xs text-muted-foreground mb-2">サブフォルダ</p>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {[
+                                { name: "01_合意書", icon: "📝" },
+                                { name: "02_土地情報", icon: "🗺️" },
+                                { name: "03_図面", icon: "📐" },
+                                { name: "04_発電シミュレーション", icon: "☀️" },
+                                { name: "05_法令関係", icon: "⚖️" },
+                                { name: "06_電力申請", icon: "⚡" },
+                                { name: "07_材料発注", icon: "📦" },
+                                { name: "08_工事関係", icon: "🔧" },
+                                { name: "09_連系資料", icon: "🔌" },
+                                { name: "10_土地決済・所有権移転", icon: "🏠" },
+                              ].map((folder) => (
+                                <Button
+                                  key={folder.name}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 justify-start text-xs px-2"
+                                  onClick={() => {
+                                    const url = `${project.dococabiLink}/${encodeURIComponent(folder.name)}`;
+                                    window.open(url, "_blank");
+                                  }}
+                                >
+                                  <span className="mr-1.5">{folder.icon}</span>
+                                  <span className="truncate">{folder.name.substring(3)}</span>
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
                       ) : (
-                        <span className="text-muted-foreground">未登録</span>
+                        <span className="text-sm text-muted-foreground">未登録</span>
                       )}
                     </div>
                   </div>
@@ -4164,11 +4371,28 @@ export default function ProjectDetailPage() {
                   {/* 地権者1 */}
                   <div className="p-3 border rounded-lg space-y-2">
                     <div className="text-xs font-medium text-muted-foreground">地権者1</div>
-                    <Input
-                      value={detailForm.landowner1}
-                      onChange={(e) => setDetailForm({ ...detailForm, landowner1: e.target.value })}
-                      placeholder="氏名"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={detailForm.landowner1}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setDetailForm({ ...detailForm, landowner1: newValue });
+                          fetchFurigana(newValue, "landowner1Kana");
+                        }}
+                        placeholder="氏名"
+                      />
+                      <div className="relative">
+                        <Input
+                          value={detailForm.landowner1Kana}
+                          onChange={(e) => setDetailForm({ ...detailForm, landowner1Kana: e.target.value })}
+                          placeholder=""
+                          className={furiganaLoading.landowner1Kana ? "pr-8" : ""}
+                        />
+                        {furiganaLoading.landowner1Kana && (
+                          <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
                     <Input
                       value={detailForm.landownerAddress1}
                       onChange={(e) => setDetailForm({ ...detailForm, landownerAddress1: e.target.value })}
@@ -4219,11 +4443,28 @@ export default function ProjectDetailPage() {
                   {/* 地権者2 */}
                   <div className="p-3 border rounded-lg space-y-2">
                     <div className="text-xs font-medium text-muted-foreground">地権者2</div>
-                    <Input
-                      value={detailForm.landowner2}
-                      onChange={(e) => setDetailForm({ ...detailForm, landowner2: e.target.value })}
-                      placeholder="氏名"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={detailForm.landowner2}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setDetailForm({ ...detailForm, landowner2: newValue });
+                          fetchFurigana(newValue, "landowner2Kana");
+                        }}
+                        placeholder="氏名"
+                      />
+                      <div className="relative">
+                        <Input
+                          value={detailForm.landowner2Kana}
+                          onChange={(e) => setDetailForm({ ...detailForm, landowner2Kana: e.target.value })}
+                          placeholder=""
+                          className={furiganaLoading.landowner2Kana ? "pr-8" : ""}
+                        />
+                        {furiganaLoading.landowner2Kana && (
+                          <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
                     <Input
                       value={detailForm.landownerAddress2}
                       onChange={(e) => setDetailForm({ ...detailForm, landownerAddress2: e.target.value })}
@@ -4274,11 +4515,28 @@ export default function ProjectDetailPage() {
                   {/* 地権者3 */}
                   <div className="p-3 border rounded-lg space-y-2">
                     <div className="text-xs font-medium text-muted-foreground">地権者3</div>
-                    <Input
-                      value={detailForm.landowner3}
-                      onChange={(e) => setDetailForm({ ...detailForm, landowner3: e.target.value })}
-                      placeholder="氏名"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={detailForm.landowner3}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setDetailForm({ ...detailForm, landowner3: newValue });
+                          fetchFurigana(newValue, "landowner3Kana");
+                        }}
+                        placeholder="氏名"
+                      />
+                      <div className="relative">
+                        <Input
+                          value={detailForm.landowner3Kana}
+                          onChange={(e) => setDetailForm({ ...detailForm, landowner3Kana: e.target.value })}
+                          placeholder=""
+                          className={furiganaLoading.landowner3Kana ? "pr-8" : ""}
+                        />
+                        {furiganaLoading.landowner3Kana && (
+                          <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    </div>
                     <Input
                       value={detailForm.landownerAddress3}
                       onChange={(e) => setDetailForm({ ...detailForm, landownerAddress3: e.target.value })}

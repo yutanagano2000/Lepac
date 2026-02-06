@@ -15,9 +15,8 @@ import {
   Image as ImageIcon,
   FileSpreadsheet,
   File,
-  Eye,
   Loader2,
-  X,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +26,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { cn } from "@/lib/utils";
 
 interface FileInfo {
@@ -73,8 +66,6 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
   const [expandedSubfolders, setExpandedSubfolders] = useState<Set<string>>(new Set());
   const [subfolderFiles, setSubfolderFiles] = useState<Record<string, FileInfo[]>>({});
   const [loadingSubfolder, setLoadingSubfolder] = useState<string | null>(null);
-  const [previewFile, setPreviewFile] = useState<{ file: FileInfo; subfolderKey: string } | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchFolderInfo = async () => {
     if (!projectNumber) return;
@@ -167,30 +158,26 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
     return <File className="h-4 w-4 text-zinc-500" />;
   };
 
-  const isPreviewable = (fileName: string) => {
-    const ext = fileName.toLowerCase().split(".").pop();
-    const previewableExts = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "pdf"];
-    return previewableExts.includes(ext || "");
+  // ファイルのフルパスを取得
+  const getFilePath = (file: FileInfo, subfolderPath: string) => {
+    // subfolderPathとファイルのpathを結合
+    return `${subfolderPath}\\${file.path.replace(/\//g, "\\")}`;
   };
 
-  const getPreviewUrl = (file: FileInfo, subfolderKey: string) => {
-    if (!projectNumber) return "";
-    return `/api/filesystem/preview?projectNumber=${encodeURIComponent(projectNumber)}&subfolder=${subfolderKey}&path=${encodeURIComponent(file.path)}`;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
+  // エクスプローラーでフォルダを開く
+  const openInExplorer = async (folderPath: string) => {
+    try {
+      const res = await fetch("/api/filesystem/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: folderPath }),
+      });
+      if (!res.ok) {
+        console.error("エクスプローラーを開けませんでした");
+      }
+    } catch (err) {
+      console.error("エクスプローラーを開けませんでした:", err);
+    }
   };
 
   if (!projectNumber) {
@@ -274,8 +261,7 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
   const totalCount = folderInfo.subfolders?.length || 0;
 
   return (
-    <>
-      <Card>
+    <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -294,27 +280,40 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{folderInfo.folderName}</p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-7 px-2 gap-1",
-                copySuccess === folderInfo.folderPath && "text-green-600"
-              )}
-              onClick={() => folderInfo.folderPath && copyPath(folderInfo.folderPath)}
-            >
-              {copySuccess === folderInfo.folderPath ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span className="text-xs">コピー済</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3 w-3" />
-                  <span className="text-xs">コピー</span>
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-7 px-2 gap-1",
+                  copySuccess === folderInfo.folderPath && "text-green-600"
+                )}
+                onClick={() => folderInfo.folderPath && copyPath(folderInfo.folderPath)}
+                title="パスをコピー"
+              >
+                {copySuccess === folderInfo.folderPath ? (
+                  <>
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span className="text-xs">コピー済</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    <span className="text-xs">コピー</span>
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 gap-1"
+                onClick={() => folderInfo.folderPath && openInExplorer(folderInfo.folderPath)}
+                title="フォルダを開く"
+              >
+                <ExternalLink className="h-3 w-3" />
+                <span className="text-xs">開く</span>
+              </Button>
+            </div>
           </div>
 
           {/* サブフォルダ一覧 */}
@@ -357,24 +356,39 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
                           {sf.fileCount}件
                         </Badge>
                         {sf.exists && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "h-6 px-2",
-                              copySuccess === sf.path && "text-green-600"
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyPath(sf.path);
-                            }}
-                          >
-                            {copySuccess === sf.path ? (
-                              <CheckCircle2 className="h-3 w-3" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn(
+                                "h-6 px-1",
+                                copySuccess === sf.path && "text-green-600"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyPath(sf.path);
+                              }}
+                              title="パスをコピー"
+                            >
+                              {copySuccess === sf.path ? (
+                                <CheckCircle2 className="h-3 w-3" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openInExplorer(sf.path);
+                              }}
+                              title="フォルダを開く"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          </div>
                         )}
                       </div>
 
@@ -387,33 +401,53 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
                               読み込み中...
                             </div>
                           ) : files.length > 0 ? (
-                            files.map((file, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center gap-2 p-1.5 rounded text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                              >
-                                {getFileIcon(file.name)}
-                                <span className="flex-1 truncate" title={file.name}>
-                                  {file.name}
-                                </span>
-                                <span className="text-muted-foreground shrink-0">
-                                  {formatFileSize(file.size)}
-                                </span>
-                                {isPreviewable(file.name) && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-5 px-1"
-                                    onClick={() => {
-                                      setPreviewLoading(true);
-                                      setPreviewFile({ file, subfolderKey: sf.key });
-                                    }}
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                  </Button>
-                                )}
-                              </div>
-                            ))
+                            files.map((file, idx) => {
+                              const filePath = getFilePath(file, sf.path);
+                              return (
+                                <div
+                                  key={idx}
+                                  className="flex items-center gap-2 p-1.5 rounded text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 group"
+                                >
+                                  {getFileIcon(file.name)}
+                                  <span className="flex-1 truncate" title={file.name}>
+                                    {file.name}
+                                  </span>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className={cn(
+                                        "h-5 px-1",
+                                        copySuccess === filePath && "text-green-600"
+                                      )}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        copyPath(filePath);
+                                      }}
+                                      title="パスをコピー"
+                                    >
+                                      {copySuccess === filePath ? (
+                                        <CheckCircle2 className="h-3 w-3" />
+                                      ) : (
+                                        <Copy className="h-3 w-3" />
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 px-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openInExplorer(sf.path);
+                                      }}
+                                      title="フォルダを開く"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })
                           ) : (
                             <p className="text-xs text-muted-foreground py-2">ファイルがありません</p>
                           )}
@@ -427,58 +461,5 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
           </Collapsible>
         </CardContent>
       </Card>
-
-      {/* プレビューダイアログ */}
-      <Dialog open={previewFile !== null} onOpenChange={(open) => !open && setPreviewFile(null)}>
-        <DialogContent className="max-w-4xl p-0 overflow-hidden">
-          <VisuallyHidden>
-            <DialogTitle>
-              {previewFile?.file.name || "ファイルプレビュー"}
-            </DialogTitle>
-          </VisuallyHidden>
-          {previewFile && (
-            <div className="relative">
-              <div className="aspect-video bg-black flex items-center justify-center relative">
-                {previewLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
-                    <Loader2 className="h-8 w-8 animate-spin text-white" />
-                  </div>
-                )}
-                {previewFile.file.name.toLowerCase().endsWith(".pdf") ? (
-                  <iframe
-                    src={getPreviewUrl(previewFile.file, previewFile.subfolderKey)}
-                    className="w-full h-[70vh]"
-                    onLoad={() => setPreviewLoading(false)}
-                  />
-                ) : (
-                  <img
-                    src={getPreviewUrl(previewFile.file, previewFile.subfolderKey)}
-                    alt={previewFile.file.name}
-                    className="max-w-full max-h-[70vh] object-contain"
-                    onLoad={() => setPreviewLoading(false)}
-                    onError={() => setPreviewLoading(false)}
-                  />
-                )}
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                <p className="text-white font-medium truncate">{previewFile.file.name}</p>
-                <div className="flex items-center gap-4 text-white/70 text-sm">
-                  <span>{formatFileSize(previewFile.file.size)}</span>
-                  <span>{formatDate(previewFile.file.modifiedAt)}</span>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
-                onClick={() => setPreviewFile(null)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }

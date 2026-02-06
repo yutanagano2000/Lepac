@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder } from "lucide-react";
+import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder, PenTool } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const tools = [
@@ -52,6 +52,12 @@ const tools = [
     label: "謄本検索",
     description: "登記簿謄本を住所で検索",
     icon: Folder,
+  },
+  {
+    href: "/map-editor",
+    label: "現場案内図",
+    description: "地図上で筆界をトレースして案内図を作成",
+    icon: PenTool,
   },
 ] as const;
 

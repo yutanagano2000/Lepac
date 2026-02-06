@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { MapPin, ExternalLink } from "lucide-react";
+import { MapPin, ExternalLink, PenTool } from "lucide-react";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -168,6 +169,26 @@ export default function MapPage() {
                 <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
               </a>
             </div>
+          </div>
+
+          {/* 案内図エディタで開く */}
+          <div className="space-y-3">
+            <h2 className="text-base font-semibold text-foreground">
+              案内図エディタ
+            </h2>
+            <Link
+              href={hasValidCoords
+                ? `/map-editor?lat=${parseCoordinateString(coordinates)!.lat}&lon=${parseCoordinateString(coordinates)!.lon}`
+                : "/map-editor"
+              }
+              className={`flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors bg-card hover:bg-muted border-border cursor-pointer`}
+            >
+              <span className="font-medium flex items-center gap-2">
+                <PenTool className="h-4 w-4" />
+                現場案内図エディタで開く
+              </span>
+              <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </Link>
           </div>
         </div>
       </div>

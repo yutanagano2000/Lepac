@@ -63,6 +63,10 @@ async function initDb() {
   try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_2 TEXT`); } catch (e) {}
   try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_3 TEXT`); } catch (e) {}
   try { await c.execute(`UPDATE projects SET landowner_1 = landowner WHERE landowner IS NOT NULL AND landowner_1 IS NULL`); } catch (e) {}
+  // 地権者フリガナ
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_1_kana TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_2_kana TEXT`); } catch (e) {}
+  try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_3_kana TEXT`); } catch (e) {}
 
   // 地権者追加情報（住所、相続有無、更正登記有無、抵当権有無）
   try { await c.execute(`ALTER TABLE projects ADD COLUMN landowner_address_1 TEXT`); } catch (e) {}
@@ -566,6 +570,22 @@ async function initDb() {
   // レート制限のインデックス作成
   try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_rate_limits_identifier_endpoint ON rate_limits (identifier, endpoint)`); } catch (e) {}
   try { await c.execute(`CREATE INDEX IF NOT EXISTS idx_rate_limits_window ON rate_limits (window_start)`); } catch (e) {}
+
+  // 地図アノテーションテーブル（現場案内図エディタ用）
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS map_annotations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      name TEXT NOT NULL DEFAULT '無題の案内図',
+      geo_json TEXT NOT NULL,
+      map_center TEXT,
+      map_zoom INTEGER,
+      tile_layer TEXT DEFAULT 'std',
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    )
+  `);
 
   initialized = true;
 }

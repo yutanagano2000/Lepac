@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle, Search, Loader2, Filter, X, ChevronDown, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, AlertCircle, Search, Loader2, Filter, X, ChevronDown, Check, FolderInput, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -254,7 +254,15 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [selectedProjectNumbers, setSelectedProjectNumbers] = useState<Set<string>>(new Set());
   const [selectedCompletionMonths, setSelectedCompletionMonths] = useState<Set<string>>(new Set());
+  const [selectedInterconnectionMonths, setSelectedInterconnectionMonths] = useState<Set<string>>(new Set());
   const [filterSearchQuery, setFilterSearchQuery] = useState("");
+
+  // インポート機能用のstate
+  const [importOpen, setImportOpen] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [importableFolders, setImportableFolders] = useState<{ folderName: string; managementNumber: string; manager: string; projectNumber: string }[]>([]);
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
 
   // 各フィルターの選択肢を取得
   const uniqueManagementNumbers = useMemo(() =>
@@ -267,6 +275,21 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     [...new Set(projects.map(p => p.projectNumber))].sort(), [projects]);
   const uniqueCompletionMonths = useMemo(() =>
     [...new Set(projects.map(p => p.completionMonth || "未設定"))].sort(), [projects]);
+
+  // 連系予定月の選択肢（YYYY-MM形式から「YYYY年M月」形式に変換）
+  const uniqueInterconnectionMonths = useMemo(() => {
+    const months = projects.map(p => {
+      const date = p.interconnectionScheduled || p.interconnectionDate;
+      if (!date) return "未設定";
+      // YYYY-MM-DD または YYYY/MM/DD 形式から YYYY年M月 に変換
+      const match = date.match(/^(\d{4})[-/](\d{1,2})/);
+      if (match) {
+        return `${match[1]}年${parseInt(match[2], 10)}月`;
+      }
+      return date;
+    });
+    return [...new Set(months)].sort();
+  }, [projects]);
 
   // フィルター内検索で絞り込んだ選択肢
   const getFilteredOptions = (options: string[], searchQuery: string) => {
@@ -313,6 +336,7 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     setSelectedClients(new Set());
     setSelectedProjectNumbers(new Set());
     setSelectedCompletionMonths(new Set());
+    setSelectedInterconnectionMonths(new Set());
     setFilterSearchQuery("");
   };
 
@@ -321,7 +345,8 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     selectedManagers.size > 0 ||
     selectedClients.size > 0 ||
     selectedProjectNumbers.size > 0 ||
-    selectedCompletionMonths.size > 0;
+    selectedCompletionMonths.size > 0 ||
+    selectedInterconnectionMonths.size > 0;
 
   // 検索フィルタリング（管理番号・案件番号・地権者・現地住所・コメント・TODO内容）+ チェックボックスフィルタ
   const filteredProjects = useMemo(() => {
@@ -366,9 +391,21 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     if (selectedCompletionMonths.size > 0) {
       result = result.filter(p => selectedCompletionMonths.has(p.completionMonth || "未設定"));
     }
+    if (selectedInterconnectionMonths.size > 0) {
+      result = result.filter(p => {
+        const date = p.interconnectionScheduled || p.interconnectionDate;
+        if (!date) return selectedInterconnectionMonths.has("未設定");
+        const match = date.match(/^(\d{4})[-/](\d{1,2})/);
+        if (match) {
+          const monthStr = `${match[1]}年${parseInt(match[2], 10)}月`;
+          return selectedInterconnectionMonths.has(monthStr);
+        }
+        return selectedInterconnectionMonths.has(date);
+      });
+    }
 
     return result;
-  }, [projects, searchQuery, selectedManagementNumbers, selectedManagers, selectedClients, selectedProjectNumbers, selectedCompletionMonths]);
+  }, [projects, searchQuery, selectedManagementNumbers, selectedManagers, selectedClients, selectedProjectNumbers, selectedCompletionMonths, selectedInterconnectionMonths]);
 
   const fetchProjects = () => {
     fetch("/api/projects", { cache: "no-store" })
@@ -400,6 +437,60 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
     setSearchQuery(text);
     setRecentSearches(addRecentSearch(text));
     setShowSuggestions(false);
+  };
+
+  // インポート機能: フォルダ一覧を取得
+  const fetchImportableFolders = async () => {
+    setImportLoading(true);
+    try {
+      const res = await fetch("/api/projects/import");
+      if (res.ok) {
+        const data = await res.json();
+        setImportableFolders(data.importable || []);
+        setSelectedFolders(new Set()); // 選択をリセット
+      }
+    } catch (error) {
+      console.error("Failed to fetch importable folders:", error);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  // インポート機能: 選択した案件を登録
+  const handleImport = async () => {
+    if (selectedFolders.size === 0) return;
+
+    const foldersToImport = importableFolders.filter(f => selectedFolders.has(f.folderName));
+
+    setImportSubmitting(true);
+    try {
+      const res = await fetch("/api/projects/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folders: foldersToImport }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        setImportOpen(false);
+        router.refresh();
+      } else {
+        const data = await res.json();
+        alert(data.error || "インポートに失敗しました");
+      }
+    } catch (error) {
+      console.error("Import error:", error);
+      alert("インポートに失敗しました");
+    } finally {
+      setImportSubmitting(false);
+    }
+  };
+
+  // インポートダイアログを開く
+  const openImportDialog = () => {
+    setImportOpen(true);
+    fetchImportableFolders();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -849,7 +940,109 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
                 </form>
               </DialogContent>
             </Dialog>
+
+            {/* フォルダからインポートボタン */}
+            <Button size="sm" variant="outline" onClick={openImportDialog}>
+              <FolderInput className="h-4 w-4" />
+              一括取込
+            </Button>
           </div>
+
+          {/* インポートダイアログ */}
+          <Dialog open={importOpen} onOpenChange={setImportOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>フォルダから案件を取込</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {importLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">読み込み中...</span>
+                  </div>
+                ) : importableFolders.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                    <p>すべての案件が登録済みです</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>未登録の案件フォルダ: {importableFolders.length}件</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedFolders.size === importableFolders.length) {
+                            setSelectedFolders(new Set());
+                          } else {
+                            setSelectedFolders(new Set(importableFolders.map(f => f.folderName)));
+                          }
+                        }}
+                      >
+                        {selectedFolders.size === importableFolders.length ? "全解除" : "全選択"}
+                      </Button>
+                    </div>
+                    <ScrollArea className="h-[300px] border rounded-lg">
+                      <div className="p-2 space-y-1">
+                        {importableFolders.map((folder) => (
+                          <label
+                            key={folder.folderName}
+                            className={cn(
+                              "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors",
+                              selectedFolders.has(folder.folderName)
+                                ? "bg-primary/10 border border-primary"
+                                : "hover:bg-muted border border-transparent"
+                            )}
+                          >
+                            <Checkbox
+                              checked={selectedFolders.has(folder.folderName)}
+                              onCheckedChange={(checked) => {
+                                const newSet = new Set(selectedFolders);
+                                if (checked) {
+                                  newSet.add(folder.folderName);
+                                } else {
+                                  newSet.delete(folder.folderName);
+                                }
+                                setSelectedFolders(newSet);
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs shrink-0">
+                                  {folder.managementNumber}
+                                </Badge>
+                                <span className="text-sm font-medium">{folder.manager}</span>
+                                <span className="text-sm text-muted-foreground">{folder.projectNumber}</span>
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setImportOpen(false)}>
+                    キャンセル
+                  </Button>
+                  <Button
+                    onClick={handleImport}
+                    disabled={selectedFolders.size === 0 || importSubmitting}
+                  >
+                    {importSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        取込中...
+                      </>
+                    ) : (
+                      `${selectedFolders.size}件を取込`
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* 編集ダイアログ */}
           <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -991,24 +1184,47 @@ export default function ProjectsView({ initialProjects }: ProjectsViewProps) {
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* フィルター適用中の表示 */}
-          {isFiltered && (
-            <div className="flex items-center gap-2 text-sm">
-              <Badge variant="secondary" className="gap-1">
-                <Filter className="h-3 w-3" />
-                {filteredProjects.length}件を表示中
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearAllFilters}
-                className="h-7 text-xs"
-              >
-                <X className="h-3 w-3 mr-1" />
-                フィルターを解除
-              </Button>
-            </div>
-          )}
+          {/* クイックフィルタ（連系予定月・完成月） */}
+          <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-muted/30 border border-border">
+            <span className="text-xs font-medium text-muted-foreground">クイックフィルタ:</span>
+
+            {/* 連系予定月フィルタ */}
+            <FilterableHeader
+              columnKey="interconnectionMonth"
+              label="連系予定月"
+              options={uniqueInterconnectionMonths}
+              selected={selectedInterconnectionMonths}
+              setSelected={setSelectedInterconnectionMonths}
+            />
+
+            {/* 完成月フィルタ */}
+            <FilterableHeader
+              columnKey="completionMonth"
+              label="完成月"
+              options={uniqueCompletionMonths}
+              selected={selectedCompletionMonths}
+              setSelected={setSelectedCompletionMonths}
+            />
+
+            {/* フィルター数表示 */}
+            {isFiltered && (
+              <div className="flex items-center gap-2 ml-auto">
+                <Badge variant="secondary" className="gap-1">
+                  <Filter className="h-3 w-3" />
+                  {filteredProjects.length}件
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllFilters}
+                  className="h-7 text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  解除
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* 編集モード時のヘルプテキスト */}
           {isEditMode && (
