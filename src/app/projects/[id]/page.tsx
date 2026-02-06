@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon, PenTool } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, Scale, CheckCircle2, XCircle, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon, PenTool, Wand2, Download } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
 import {
@@ -12,6 +12,7 @@ import {
   normalizeCoordinateString,
 } from "@/lib/coordinates";
 import { parsePrefectureAndCity } from "@/lib/address";
+import { generateLegalExcel } from "@/lib/legal-excel-export";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +48,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DatePicker } from "@/components/ui/date-picker";
 import { LawAlertCard } from "@/components/LawAlertCard";
 import { ProjectFolderLink } from "@/components/ProjectFolderLink";
 import { ProjectPhotoGallery } from "@/components/ProjectPhotoGallery";
@@ -144,8 +146,20 @@ interface LawSearchCardProps {
   farmlandAlert?: boolean;
   /** 現在のステータス */
   currentStatus?: LegalStatus;
-  /** 現在のユーザーメモ */
+  /** 現在のユーザーメモ（確認内容） */
   currentNote?: string;
+  /** 確認先（URL・リンク） */
+  currentConfirmationSource?: string;
+  /** 連絡先（TEL等） */
+  currentContactInfo?: string;
+  /** 確認方法 */
+  currentConfirmationMethod?: ConfirmationMethod;
+  /** 確認日 */
+  currentConfirmationDate?: string;
+  /** 担当者 */
+  currentConfirmedBy?: string;
+  /** 担当部署 */
+  currentDepartment?: string;
   /** 編集者名 */
   updatedBy?: string;
   /** 編集日時 */
@@ -156,6 +170,8 @@ interface LawSearchCardProps {
   onStatusRemove?: () => void;
   /** メモ変更時のコールバック */
   onNoteChange?: (note: string) => void;
+  /** 追加フィールド変更時のコールバック */
+  onFieldChange?: (field: string, value: string) => void;
   /** 「対象地区ではありません」ボタンを非表示にする */
   hideNotApplicableButton?: boolean;
 }
@@ -175,24 +191,58 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
   farmlandAlert,
   currentStatus,
   currentNote,
+  currentConfirmationSource,
+  currentContactInfo,
+  currentConfirmationMethod,
+  currentConfirmationDate,
+  currentConfirmedBy,
+  currentDepartment,
   updatedBy,
   updatedAt,
   onStatusChange,
   onStatusRemove,
   onNoteChange,
+  onFieldChange,
   hideNotApplicableButton,
 }) => {
   const [localNote, setLocalNote] = useState(currentNote || "");
+  const [localConfirmationSource, setLocalConfirmationSource] = useState(currentConfirmationSource || "");
+  const [localContactInfo, setLocalContactInfo] = useState(currentContactInfo || "");
+  const [localConfirmationMethod, setLocalConfirmationMethod] = useState<ConfirmationMethod>(currentConfirmationMethod || "");
+  const [localConfirmationDate, setLocalConfirmationDate] = useState(currentConfirmationDate || "");
+  const [localConfirmedBy, setLocalConfirmedBy] = useState(currentConfirmedBy || "");
+  const [localDepartment, setLocalDepartment] = useState(currentDepartment || "");
 
-  // currentNoteが変わったら同期
-  useEffect(() => {
-    setLocalNote(currentNote || "");
-  }, [currentNote]);
+  // 外部stateが変わったら同期
+  useEffect(() => { setLocalNote(currentNote || ""); }, [currentNote]);
+  useEffect(() => { setLocalConfirmationSource(currentConfirmationSource || ""); }, [currentConfirmationSource]);
+  useEffect(() => { setLocalContactInfo(currentContactInfo || ""); }, [currentContactInfo]);
+  useEffect(() => { setLocalConfirmationMethod(currentConfirmationMethod || ""); }, [currentConfirmationMethod]);
+  useEffect(() => { setLocalConfirmationDate(currentConfirmationDate || ""); }, [currentConfirmationDate]);
+  useEffect(() => { setLocalConfirmedBy(currentConfirmedBy || ""); }, [currentConfirmedBy]);
+  useEffect(() => { setLocalDepartment(currentDepartment || ""); }, [currentDepartment]);
 
   // メモの保存（debounce的に入力完了後に呼び出し）
   const handleNoteBlur = () => {
     if (onNoteChange && localNote !== currentNote) {
       onNoteChange(localNote);
+    }
+  };
+
+  // フィールドのblur保存
+  const handleFieldBlur = (field: string, localValue: string, currentValue?: string) => {
+    if (onFieldChange && localValue !== (currentValue || "")) {
+      onFieldChange(field, localValue);
+    }
+  };
+
+  // URLかどうか判定
+  const isUrl = (str: string) => {
+    try {
+      const url = new URL(str);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
     }
   };
 
@@ -333,14 +383,13 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
                 )}
               </div>
 
-              {/* 検索結果入力欄 - 常に表示 */}
-              <div className="space-y-2 bg-muted/30 rounded-lg p-3 border border-border/50">
+              {/* 確認情報入力欄 */}
+              <div className="space-y-3 bg-muted/30 rounded-lg p-3 border border-border/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Pencil className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">検索結果</span>
+                    <span className="text-sm font-medium">確認情報</span>
                   </div>
-                  {/* 編集者情報 */}
                   {updatedBy && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="px-1.5 py-0.5 rounded bg-muted">{updatedBy}</span>
@@ -348,13 +397,116 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
                     </div>
                   )}
                 </div>
-                <Textarea
-                  placeholder="調査結果を入力してください"
-                  value={localNote}
-                  onChange={(e) => setLocalNote(e.target.value)}
-                  onBlur={handleNoteBlur}
-                  className="text-sm min-h-[80px] resize-none bg-background"
-                />
+
+                {/* 確認日・担当部署・担当者 */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">確認日</label>
+                    <DatePicker
+                      value={localConfirmationDate || null}
+                      onChange={(v) => {
+                        const val = v || "";
+                        setLocalConfirmationDate(val);
+                        if (onFieldChange) onFieldChange("confirmationDate", val);
+                      }}
+                      placeholder="日付を選択"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">担当部署</label>
+                    <Input
+                      type="text"
+                      placeholder="担当部署"
+                      value={localDepartment}
+                      onChange={(e) => setLocalDepartment(e.target.value)}
+                      onBlur={() => handleFieldBlur("department", localDepartment, currentDepartment)}
+                      className="text-sm h-8 bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">担当者</label>
+                    <Input
+                      type="text"
+                      placeholder="担当者名"
+                      value={localConfirmedBy}
+                      onChange={(e) => setLocalConfirmedBy(e.target.value)}
+                      onBlur={() => handleFieldBlur("confirmedBy", localConfirmedBy, currentConfirmedBy)}
+                      className="text-sm h-8 bg-background"
+                    />
+                  </div>
+                </div>
+
+                {/* 確認先・連絡先・確認方法 */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">確認先（ページ・エビデンスURL）</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        placeholder="https://... 確認したページのURL"
+                        value={localConfirmationSource}
+                        onChange={(e) => setLocalConfirmationSource(e.target.value)}
+                        onBlur={() => handleFieldBlur("confirmationSource", localConfirmationSource, currentConfirmationSource)}
+                        className="text-sm h-8 bg-background flex-1"
+                      />
+                      {localConfirmationSource && isUrl(localConfirmationSource) && (
+                        <a
+                          href={localConfirmationSource}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 p-1.5 rounded-md border border-border hover:bg-accent transition-colors"
+                          title="リンクを開く"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-blue-500" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">連絡先（TEL等）</label>
+                    <Input
+                      type="text"
+                      placeholder="例: 082-XXX-XXXX"
+                      value={localContactInfo}
+                      onChange={(e) => setLocalContactInfo(e.target.value)}
+                      onBlur={() => handleFieldBlur("contactInfo", localContactInfo, currentContactInfo)}
+                      className="text-sm h-8 bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">確認方法</label>
+                    <Select
+                      value={localConfirmationMethod || undefined}
+                      onValueChange={(v) => {
+                        const val = v as ConfirmationMethod;
+                        setLocalConfirmationMethod(val);
+                        if (onFieldChange) onFieldChange("confirmationMethod", val);
+                      }}
+                    >
+                      <SelectTrigger size="sm" className="min-w-[110px] bg-background">
+                        <SelectValue placeholder="未選択" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="電話">電話</SelectItem>
+                        <SelectItem value="メール">メール</SelectItem>
+                        <SelectItem value="WEB">WEB</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* 確認内容（旧：検索結果） */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">確認内容</label>
+                  <Textarea
+                    placeholder="調査・確認結果を入力してください"
+                    value={localNote}
+                    onChange={(e) => setLocalNote(e.target.value)}
+                    onBlur={handleNoteBlur}
+                    className="text-sm min-h-[80px] resize-none bg-background"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -414,9 +566,16 @@ const laws: Law[] = [
 
 // 法令ステータスの型
 type LegalStatus = "該当" | "非該当" | "要確認";
+type ConfirmationMethod = "電話" | "メール" | "WEB" | "";
 interface LegalStatusInfo {
   status: LegalStatus;
-  note?: string;
+  note?: string; // 確認内容（検索結果）
+  confirmationSource?: string; // 確認先（URL・リンク）
+  contactInfo?: string; // 連絡先（TEL等）
+  confirmationMethod?: ConfirmationMethod; // 確認方法
+  confirmationDate?: string; // 確認日
+  confirmedBy?: string; // 担当者
+  department?: string; // 担当部署
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -433,13 +592,15 @@ interface LegalSearchTabProps {
     landCategory3: string | null;
   } | null;
   projectId?: number;
+  projectClient?: string | null; // 貴社名（販売先）
+  projectNumber?: string | null; // 案件番号
   initialLegalStatuses?: string | null;
   onLegalStatusesChange?: (statuses: LegalStatuses) => void;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
-function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, projectLandCategories, projectId, initialLegalStatuses, onLegalStatusesChange }: LegalSearchTabProps) {
+function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, projectLandCategories, projectId, projectClient, projectNumber, initialLegalStatuses, onLegalStatusesChange }: LegalSearchTabProps) {
   const { data: session } = useSession();
   const currentUserName = session?.user?.name || session?.user?.username || "不明";
 
@@ -462,6 +623,8 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
     return {};
   });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [isAutoChecking, setIsAutoChecking] = useState(false);
+  const [autoCheckResult, setAutoCheckResult] = useState<{ applied: number; skipped: number } | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const savedTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pendingStatusesRef = useRef<LegalStatuses | null>(null);
@@ -511,6 +674,36 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
     saveLegalStatusesInternal(newStatuses);
   };
 
+  // 法令自動チェック
+  const handleAutoCheck = async () => {
+    if (!projectId || isAutoChecking) return;
+    setIsAutoChecking(true);
+    setAutoCheckResult(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/legal-check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "自動チェックに失敗しました");
+        return;
+      }
+      const data = await res.json();
+      const newStatuses = data.legalStatuses as LegalStatuses;
+      setLegalStatuses(newStatuses);
+      onLegalStatusesChange?.(newStatuses);
+      setAutoCheckResult({
+        applied: data.autoApplied?.length ?? 0,
+        skipped: data.skipped ?? 0,
+      });
+    } catch {
+      alert("自動チェック中にエラーが発生しました");
+    } finally {
+      setIsAutoChecking(false);
+    }
+  };
+
   // クリーンアップ
   useEffect(() => {
     return () => {
@@ -527,6 +720,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
       const updated = {
         ...prev,
         [lawName]: {
+          ...existing,
           status,
           note: updatedNote,
           updatedBy: currentUserName,
@@ -547,6 +741,7 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
       const updated = {
         ...prev,
         [lawName]: {
+          ...existing,
           status,
           note,
           updatedBy: currentUserName,
@@ -554,6 +749,26 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
         }
       };
       // メモ変更はデバウンス保存
+      debouncedSave(updated);
+      return updated;
+    });
+  };
+
+  // 法令の追加フィールドを更新（デバウンス保存）
+  const updateLegalField = (lawName: string, field: string, value: string) => {
+    setLegalStatuses(prev => {
+      const existing = prev[lawName];
+      const status = existing?.status || "要確認";
+      const updated = {
+        ...prev,
+        [lawName]: {
+          ...existing,
+          status,
+          [field]: value,
+          updatedBy: currentUserName,
+          updatedAt: new Date().toISOString(),
+        }
+      };
       debouncedSave(updated);
       return updated;
     });
@@ -573,6 +788,34 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
   // 手動再試行用
   const retrySave = () => {
     saveLegalStatusesInternal(legalStatuses);
+  };
+
+  // Excel出力
+  const [isExporting, setIsExporting] = useState(false);
+  const handleExcelExport = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await generateLegalExcel({
+        clientName: projectClient || "",
+        projectNumber: projectNumber || "",
+        projectAddress: projectAddress || "",
+        legalStatuses,
+        laws: laws.map((l) => ({ id: l.id, name: l.name })),
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${projectNumber || "法令"}　関係法令一覧.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Excel出力エラー:", error);
+      alert("Excel出力に失敗しました。");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // 座標入力を解析（カンマ・スラッシュ・空白区切りに対応）し、有効なら正規化表示
@@ -818,6 +1061,46 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
           </div>
         )}
 
+        {/* 法令自動チェック */}
+        {projectId && (
+          <div className="bg-card rounded-4xl border border-border shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Wand2 className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm font-medium">法令自動チェック</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  座標・住所・地目から自動で法令を判定します（手動入力済みの法令は上書きしません）
+                </p>
+                {autoCheckResult && (
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    {autoCheckResult.applied}件を自動設定しました{autoCheckResult.skipped > 0 && `（${autoCheckResult.skipped}件は既に入力済みのためスキップ）`}
+                  </p>
+                )}
+              </div>
+              <Button
+                size="sm"
+                onClick={handleAutoCheck}
+                disabled={isAutoChecking}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {isAutoChecking ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                    チェック中...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="h-3 w-3 mr-1.5" />
+                    自動チェック実行
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* 一括ステータス設定 */}
         {hasSearched && (
           <div className="bg-card rounded-4xl border border-border shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -867,6 +1150,20 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
                 >
                   <XCircle className="h-3 w-3 mr-1.5" />
                   リセット
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExcelExport}
+                  disabled={isExporting}
+                  className="text-xs"
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3 mr-1.5" />
+                  )}
+                  {isExporting ? "出力中..." : "Excel出力"}
                 </Button>
               </div>
             </div>
@@ -1096,11 +1393,18 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               farmlandAlert={showFarmlandAlert}
               currentStatus={legalStatuses[law.name]?.status}
               currentNote={legalStatuses[law.name]?.note}
+              currentConfirmationSource={legalStatuses[law.name]?.confirmationSource}
+              currentContactInfo={legalStatuses[law.name]?.contactInfo}
+              currentConfirmationMethod={legalStatuses[law.name]?.confirmationMethod}
+              currentConfirmationDate={legalStatuses[law.name]?.confirmationDate}
+              currentConfirmedBy={legalStatuses[law.name]?.confirmedBy}
+              currentDepartment={legalStatuses[law.name]?.department}
               updatedBy={legalStatuses[law.name]?.updatedBy}
               updatedAt={legalStatuses[law.name]?.updatedAt}
               onStatusChange={(status) => updateLegalStatus(law.name, status)}
               onStatusRemove={() => removeLegalStatus(law.name)}
               onNoteChange={(note) => updateLegalNote(law.name, note)}
+              onFieldChange={(field, value) => updateLegalField(law.name, field, value)}
               hideNotApplicableButton={hideNotApplicable}
             />
           );
@@ -1436,6 +1740,46 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
         </div>
       )}
 
+      {/* 法令自動チェック（モバイル） */}
+      {projectId && (
+        <div className="bg-card rounded-4xl border border-border shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Wand2 className="h-4 w-4 text-purple-500" />
+                <span className="text-sm font-medium">法令自動チェック</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                座標・住所・地目から自動で法令を判定します
+              </p>
+              {autoCheckResult && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                  {autoCheckResult.applied}件を自動設定しました{autoCheckResult.skipped > 0 && `（${autoCheckResult.skipped}件スキップ）`}
+                </p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              onClick={handleAutoCheck}
+              disabled={isAutoChecking}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {isAutoChecking ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  チェック中...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-3 w-3 mr-1.5" />
+                  自動チェック
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 一括ステータス設定 */}
       {hasSearched && (
         <div className="bg-card rounded-4xl border border-border shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1485,6 +1829,20 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
               >
                 <XCircle className="h-3 w-3 mr-1.5" />
                 リセット
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExcelExport}
+                disabled={isExporting}
+                className="text-xs"
+              >
+                {isExporting ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3 mr-1.5" />
+                )}
+                {isExporting ? "出力中..." : "Excel出力"}
               </Button>
             </div>
           </div>
@@ -1714,11 +2072,17 @@ function LegalSearchTab({ searchParams, projectAddress, projectCoordinates, proj
             farmlandAlert={showFarmlandAlert}
             currentStatus={legalStatuses[law.name]?.status}
             currentNote={legalStatuses[law.name]?.note}
+            currentConfirmationSource={legalStatuses[law.name]?.confirmationSource}
+            currentConfirmationMethod={legalStatuses[law.name]?.confirmationMethod}
+            currentConfirmationDate={legalStatuses[law.name]?.confirmationDate}
+            currentConfirmedBy={legalStatuses[law.name]?.confirmedBy}
+            currentDepartment={legalStatuses[law.name]?.department}
             updatedBy={legalStatuses[law.name]?.updatedBy}
             updatedAt={legalStatuses[law.name]?.updatedAt}
             onStatusChange={(status) => updateLegalStatus(law.name, status)}
             onStatusRemove={() => removeLegalStatus(law.name)}
             onNoteChange={(note) => updateLegalNote(law.name, note)}
+            onFieldChange={(field, value) => updateLegalField(law.name, field, value)}
             hideNotApplicableButton={hideNotApplicable}
           />
         );
@@ -3883,12 +4247,12 @@ export default function ProjectDetailPage() {
 
               {/* フォルダ連携 */}
               <div className="mt-6">
-                <ProjectFolderLink projectNumber={project?.projectNumber || null} />
+                <ProjectFolderLink managementNumber={project?.managementNumber || null} />
               </div>
 
               {/* 現場写真 */}
               <div className="mt-6">
-                <ProjectPhotoGallery projectNumber={project?.projectNumber || null} />
+                <ProjectPhotoGallery managementNumber={project?.managementNumber || null} />
               </div>
             </TabsContent>
 
@@ -3897,6 +4261,8 @@ export default function ProjectDetailPage() {
                 searchParams={legalSearchParams}
                 projectAddress={project?.address || null}
                 projectCoordinates={project?.coordinates || null}
+                projectClient={project?.client}
+                projectNumber={project?.managementNumber}
                 projectLandCategories={
                   project
                     ? {

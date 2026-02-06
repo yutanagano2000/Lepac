@@ -230,7 +230,10 @@ export const projects = sqliteTable("projects", {
   dococabiLink: text("dococabi_link"), // どこキャビ連携URL
 
   // 法令チェック結果（JSON形式で保存）
-  // 形式: { "法令名": { "status": "該当" | "非該当" | "要確認", "note": "メモ" }, ... }
+  // 形式: { "法令名": { "status": "該当"|"非該当"|"要確認", "note": "確認内容",
+  //   "confirmationSource": "URL", "contactInfo": "連絡先TEL",
+  //   "confirmationMethod": "電話"|"メール"|"WEB",
+  //   "confirmationDate": "YYYY-MM-DD", "confirmedBy": "担当者", "department": "担当部署" }, ... }
   legalStatuses: text("legal_statuses"),
 });
 
@@ -469,3 +472,19 @@ export const mapAnnotations = sqliteTable("map_annotations", {
 
 export type MapAnnotation = typeof mapAnnotations.$inferSelect;
 export type NewMapAnnotation = typeof mapAnnotations.$inferInsert;
+
+// Google Sheets 同期ログテーブル
+export const sheetsSyncLogs = sqliteTable("sheets_sync_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  syncedAt: text("synced_at").notNull(), // 同期実行日時
+  totalRows: integer("total_rows").notNull(), // スプレッドシートの総行数
+  updatedCount: integer("updated_count").notNull(), // 更新件数
+  insertedCount: integer("inserted_count").notNull(), // 新規挿入件数
+  skippedCount: integer("skipped_count").notNull(), // スキップ件数
+  errorCount: integer("error_count").notNull(), // エラー件数
+  errors: text("errors"), // エラー詳細（JSON配列）
+  durationMs: integer("duration_ms").notNull(), // 処理時間（ミリ秒）
+});
+
+export type SheetsSyncLog = typeof sheetsSyncLogs.$inferSelect;
+export type NewSheetsSyncLog = typeof sheetsSyncLogs.$inferInsert;

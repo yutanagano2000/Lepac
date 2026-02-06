@@ -8,19 +8,23 @@ export const dynamic = "force-dynamic";
 const CABINET_BASE_PATH = process.env.CABINET_BASE_PATH || "C:\\Person Energy\\◇Person独自案件管理\\□Person独自案件";
 
 /**
- * 案件番号からフォルダを検索
+ * 管理番号からフォルダを検索
+ * フォルダ名は "0012-担当者　P3327" 形式のため、先頭一致で検索
  */
-function findProjectFolder(projectNumber: string): string | null {
+function findProjectFolder(managementNumber: string): string | null {
   if (!fs.existsSync(CABINET_BASE_PATH)) {
     return null;
   }
+
+  // ゼロ埋め4桁に正規化
+  const padded = managementNumber.padStart(4, "0");
 
   try {
     const entries = fs.readdirSync(CABINET_BASE_PATH, { withFileTypes: true });
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (entry.name.includes(projectNumber)) {
+        if (entry.name.startsWith(`${padded}-`)) {
           return path.join(CABINET_BASE_PATH, entry.name);
         }
       }
@@ -43,15 +47,15 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const projectNumber = searchParams.get("projectNumber");
+  const managementNumber = searchParams.get("managementNumber");
   const filePath = searchParams.get("path");
   const subfolder = searchParams.get("subfolder"); // サブフォルダキー（例: landInfo, photos）
 
-  if (!projectNumber || !filePath) {
-    return NextResponse.json({ error: "projectNumber and path are required" }, { status: 400 });
+  if (!managementNumber || !filePath) {
+    return NextResponse.json({ error: "managementNumber and path are required" }, { status: 400 });
   }
 
-  const folderPath = findProjectFolder(projectNumber);
+  const folderPath = findProjectFolder(managementNumber);
   if (!folderPath) {
     return NextResponse.json({ error: "Project folder not found" }, { status: 404 });
   }

@@ -47,7 +47,7 @@ interface Subfolder {
 
 interface FolderInfo {
   found: boolean;
-  projectNumber: string;
+  managementNumber: string;
   folderPath?: string;
   folderName?: string;
   subfolders?: Subfolder[];
@@ -55,10 +55,10 @@ interface FolderInfo {
 }
 
 interface ProjectFolderLinkProps {
-  projectNumber: string | null;
+  managementNumber: string | null;
 }
 
-export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
+export function ProjectFolderLink({ managementNumber }: ProjectFolderLinkProps) {
   const [folderInfo, setFolderInfo] = useState<FolderInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,13 +68,13 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
   const [loadingSubfolder, setLoadingSubfolder] = useState<string | null>(null);
 
   const fetchFolderInfo = async () => {
-    if (!projectNumber) return;
+    if (!managementNumber) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/filesystem?action=findFolder&projectNumber=${encodeURIComponent(projectNumber)}`);
+      const res = await fetch(`/api/filesystem?action=findFolder&managementNumber=${encodeURIComponent(managementNumber)}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -91,18 +91,18 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
   };
 
   useEffect(() => {
-    if (projectNumber) {
+    if (managementNumber) {
       fetchFolderInfo();
     }
-  }, [projectNumber]);
+  }, [managementNumber]);
 
   const fetchSubfolderFiles = async (subfolderKey: string) => {
-    if (!projectNumber) return;
+    if (!managementNumber) return;
 
     setLoadingSubfolder(subfolderKey);
 
     try {
-      const res = await fetch(`/api/filesystem?action=listFiles&projectNumber=${encodeURIComponent(projectNumber)}&subfolder=${subfolderKey}`);
+      const res = await fetch(`/api/filesystem?action=listFiles&managementNumber=${encodeURIComponent(managementNumber)}&subfolder=${subfolderKey}`);
       const data = await res.json();
 
       if (res.ok) {
@@ -180,7 +180,7 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
     }
   };
 
-  if (!projectNumber) {
+  if (!managementNumber) {
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -190,7 +190,7 @@ export function ProjectFolderLink({ projectNumber }: ProjectFolderLinkProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">案件番号が設定されていません</p>
+          <p className="text-sm text-muted-foreground">管理番号が設定されていません</p>
         </CardContent>
       </Card>
     );

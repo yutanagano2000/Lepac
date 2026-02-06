@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface ProjectPhotoGalleryProps {
-  projectNumber: string | null;
+  managementNumber: string | null;
 }
 
-export function ProjectPhotoGallery({ projectNumber }: ProjectPhotoGalleryProps) {
+export function ProjectPhotoGallery({ managementNumber }: ProjectPhotoGalleryProps) {
   const [photoCount, setPhotoCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,13 +19,13 @@ export function ProjectPhotoGallery({ projectNumber }: ProjectPhotoGalleryProps)
   const [copySuccess, setCopySuccess] = useState(false);
 
   const fetchPhotos = async () => {
-    if (!projectNumber) return;
+    if (!managementNumber) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/filesystem?action=getPhotos&projectNumber=${encodeURIComponent(projectNumber)}`);
+      const res = await fetch(`/api/filesystem?action=getPhotos&managementNumber=${encodeURIComponent(managementNumber)}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -43,10 +43,10 @@ export function ProjectPhotoGallery({ projectNumber }: ProjectPhotoGalleryProps)
   };
 
   useEffect(() => {
-    if (projectNumber) {
+    if (managementNumber) {
       fetchPhotos();
     }
-  }, [projectNumber]);
+  }, [managementNumber]);
 
   const copyPath = async () => {
     if (!folderPath) return;
@@ -72,7 +72,7 @@ export function ProjectPhotoGallery({ projectNumber }: ProjectPhotoGalleryProps)
     }
   };
 
-  if (!projectNumber) {
+  if (!managementNumber) {
     return null;
   }
 

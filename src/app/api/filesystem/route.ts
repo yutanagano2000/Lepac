@@ -23,20 +23,24 @@ const SUBFOLDERS = [
 ];
 
 /**
- * 案件番号からフォルダを検索
+ * 管理番号からフォルダを検索
+ * フォルダ名は "0012-担当者　P3327" 形式のため、先頭一致で検索
  */
-function findProjectFolder(projectNumber: string): string | null {
+function findProjectFolder(managementNumber: string): string | null {
   if (!fs.existsSync(CABINET_BASE_PATH)) {
     return null;
   }
+
+  // ゼロ埋め4桁に正規化（"12" → "0012"）
+  const padded = managementNumber.padStart(4, "0");
 
   try {
     const entries = fs.readdirSync(CABINET_BASE_PATH, { withFileTypes: true });
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        // フォルダ名に案件番号が含まれているかチェック
-        if (entry.name.includes(projectNumber)) {
+        // フォルダ名が "0012-" で始まるかチェック（完全な管理番号一致）
+        if (entry.name.startsWith(`${padded}-`)) {
           return path.join(CABINET_BASE_PATH, entry.name);
         }
       }
@@ -111,7 +115,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
-  const projectNumber = searchParams.get("projectNumber");
+  const managementNumber = searchParams.get("managementNumber");
 
   // ベースパスの存在確認
   if (!fs.existsSync(CABINET_BASE_PATH)) {
@@ -121,15 +125,15 @@ export async function GET(request: Request) {
     }, { status: 503 });
   }
 
-  // アクション: フォルダ検索
-  if (action === "findFolder" && projectNumber) {
-    const folderPath = findProjectFolder(projectNumber);
+  // アクション: フォルダ検索（管理番号で検索）
+  if (action === "findFolder" && managementNumber) {
+    const folderPath = findProjectFolder(managementNumber);
 
     if (!folderPath) {
       return NextResponse.json({
         found: false,
-        projectNumber,
-        message: `案件番号「${projectNumber}」に該当するフォルダが見つかりません`,
+        managementNumber,
+        message: `管理番号「${managementNumber}」に該当するフォルダが見つかりません`,
       });
     }
 
@@ -148,7 +152,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       found: true,
-      projectNumber,
+      managementNumber,
       folderPath,
       folderName: path.basename(folderPath),
       subfolders,
@@ -156,9 +160,9 @@ export async function GET(request: Request) {
   }
 
   // アクション: サブフォルダ内のファイル一覧
-  if (action === "listFiles" && projectNumber) {
+  if (action === "listFiles" && managementNumber) {
     const subfolder = searchParams.get("subfolder");
-    const folderPath = findProjectFolder(projectNumber);
+    const folderPath = findProjectFolder(managementNumber);
 
     if (!folderPath) {
       return NextResponse.json({ error: "フォルダが見つかりません" }, { status: 404 });
@@ -204,8 +208,8 @@ export async function GET(request: Request) {
   }
 
   // アクション: 写真フォルダ取得
-  if (action === "getPhotos" && projectNumber) {
-    const folderPath = findProjectFolder(projectNumber);
+  if (action === "getPhotos" && managementNumber) {
+    const folderPath = findProjectFolder(managementNumber);
 
     if (!folderPath) {
       return NextResponse.json({ error: "フォルダが見つかりません" }, { status: 404 });

@@ -587,6 +587,21 @@ async function initDb() {
     )
   `);
 
+  // Google Sheets 同期ログテーブル
+  await c.execute(`
+    CREATE TABLE IF NOT EXISTS sheets_sync_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      synced_at TEXT NOT NULL,
+      total_rows INTEGER NOT NULL,
+      updated_count INTEGER NOT NULL,
+      inserted_count INTEGER NOT NULL,
+      skipped_count INTEGER NOT NULL,
+      error_count INTEGER NOT NULL,
+      errors TEXT,
+      duration_ms INTEGER NOT NULL
+    )
+  `);
+
   initialized = true;
 }
 

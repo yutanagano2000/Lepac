@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder, PenTool } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder, PenTool, RefreshCw, Sheet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const tools = [
   {
@@ -61,6 +64,127 @@ const tools = [
   },
 ] as const;
 
+interface SyncStatus {
+  syncedAt: string;
+  totalRows: number;
+  updatedCount: number;
+  insertedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  durationMs: number;
+}
+
+function SheetsSyncCard() {
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<SyncStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sync/sheets");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status) setLastSync(data.status);
+      }
+    } catch {
+      // ステータス取得失敗は無視
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sync/sheets", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "同期に失敗しました");
+      } else {
+        setLastSync({
+          syncedAt: new Date().toISOString(),
+          totalRows: data.result.totalRows,
+          updatedCount: data.result.updatedCount,
+          insertedCount: data.result.insertedCount,
+          skippedCount: data.result.skippedCount,
+          errorCount: data.result.errorCount,
+          durationMs: data.result.durationMs,
+        });
+      }
+    } catch {
+      setError("ネットワークエラーが発生しました");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleString("ja-JP", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Sheet className="h-5 w-5" />
+          Googleシート同期
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          スプレッドシートからDBへ案件データを同期
+        </p>
+
+        <Button
+          onClick={handleSync}
+          disabled={syncing}
+          size="sm"
+          className="w-full"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "同期中..." : "今すぐ同期"}
+        </Button>
+
+        {error && (
+          <p className="text-xs text-destructive">{error}</p>
+        )}
+
+        {lastSync && (
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <p>最終同期: {formatDate(lastSync.syncedAt)}</p>
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="secondary">{lastSync.totalRows}行</Badge>
+              {lastSync.insertedCount > 0 && (
+                <Badge variant="default">+{lastSync.insertedCount}件</Badge>
+              )}
+              {lastSync.updatedCount > 0 && (
+                <Badge variant="outline">{lastSync.updatedCount}更新</Badge>
+              )}
+              {lastSync.errorCount > 0 && (
+                <Badge variant="destructive">{lastSync.errorCount}エラー</Badge>
+              )}
+            </div>
+            <p>{(lastSync.durationMs / 1000).toFixed(1)}秒</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ToolsPage() {
   return (
     <div className="min-h-screen bg-background px-4 sm:px-6">
@@ -94,6 +218,7 @@ export default function ToolsPage() {
                 </Link>
               );
             })}
+            <SheetsSyncCard />
           </div>
         </div>
       </div>
