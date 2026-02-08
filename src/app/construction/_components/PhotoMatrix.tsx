@@ -16,15 +16,9 @@ import {
   Clock,
   Trash2,
   Image as ImageIcon,
+  ChevronRight,
+  Building2,
 } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -34,10 +28,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 
 // カテゴリ定義（Lepac/Vantage共通）
@@ -64,9 +70,20 @@ type Project = {
   client: string | null;
 };
 
+type PhotoDetail = {
+  id: number;
+  fileName: string;
+  fileUrl: string;
+  contractorName: string | null;
+  note: string | null;
+  takenAt: string | null;
+  createdAt: string;
+};
+
 type PhotoInfo = {
   count: number;
   latestAt: string | null;
+  latestPhotos: PhotoDetail[];
 };
 
 type PhotoMatrix = Record<number, Record<string, PhotoInfo>>;
@@ -171,7 +188,6 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
         setCellPhotos((prev) => [newPhoto, ...prev]);
         setUploadFile(null);
         setUploadNote("");
-        // マトリクスを更新
         fetchData();
       }
     } catch (error) {
@@ -200,13 +216,40 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
     }
   };
 
+  // プロジェクトの進捗を計算
+  const getProjectProgress = (projectId: number) => {
+    let completed = 0;
+    let missing = 0;
+
+    PHOTO_CATEGORIES.forEach((cat, idx) => {
+      const info = photoMatrix[projectId]?.[cat.id];
+      if (info && info.count > 0) {
+        completed++;
+      } else {
+        // 前の工程が完了しているかチェック
+        const prevCompleted = idx === 0 || PHOTO_CATEGORIES.slice(0, idx).every((c) => {
+          const prevInfo = photoMatrix[projectId]?.[c.id];
+          return prevInfo && prevInfo.count > 0;
+        });
+        if (prevCompleted) {
+          missing++;
+        }
+      }
+    });
+
+    return {
+      completed,
+      total: PHOTO_CATEGORIES.length,
+      percent: (completed / PHOTO_CATEGORIES.length) * 100,
+      missing,
+    };
+  };
+
   // セルの状態を判定
   const getCellStatus = (projectId: number, categoryId: string, categoryIndex: number) => {
     const info = photoMatrix[projectId]?.[categoryId];
     const hasPhotos = info && info.count > 0;
 
-    // 完工写真以外で、前の工程が完了していない場合は「未到達」
-    // ただし、着工前は常に表示
     if (categoryIndex > 0) {
       const prevCategories = PHOTO_CATEGORIES.slice(0, categoryIndex);
       const allPrevCompleted = prevCategories.every((c) => {
@@ -219,7 +262,6 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
     }
 
     if (hasPhotos) {
-      // 最新の写真が今日の場合は「新着」
       if (info.latestAt) {
         const today = new Date().toISOString().split("T")[0];
         const photoDate = info.latestAt.split("T")[0];
@@ -236,7 +278,6 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
   // フィルタリング
   const filteredProjects = showMissingOnly
     ? projects.filter((p) => {
-        // いずれかのカテゴリで写真が不足している
         return PHOTO_CATEGORIES.some((c, i) => {
           const status = getCellStatus(p.id, c.id, i);
           return status === "missing";
@@ -274,151 +315,384 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
       </div>
 
       {/* 凡例 */}
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-            <Check className="w-3 h-3 text-green-600" />
+      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
+        <span className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <Check className="w-4 h-4 text-green-600" />
           </span>
           撮影済
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-            <Camera className="w-3 h-3 text-blue-600" />
+        <span className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <Camera className="w-4 h-4 text-blue-600" />
           </span>
           新着
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-            <AlertCircle className="w-3 h-3 text-amber-600" />
+        <span className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <AlertCircle className="w-4 h-4 text-red-600" />
           </span>
           不足
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded bg-muted flex items-center justify-center">
-            <Minus className="w-3 h-3 text-muted-foreground" />
+        <span className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded bg-muted flex items-center justify-center">
+            <Minus className="w-4 h-4 text-muted-foreground" />
           </span>
           未到達
         </span>
       </div>
 
-      {/* マトリクステーブル */}
-      <div className="rounded-md border overflow-hidden">
-        <div className="flex">
-          {/* 固定列（左側） */}
-          <div className="shrink-0 border-r bg-background z-10">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-[140px] whitespace-nowrap font-medium">現場</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap font-medium">市町村</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProjects.map((project) => (
-                  <TableRow key={project.id} className="h-[44px]">
-                    <TableCell className="whitespace-nowrap font-medium">
-                      <Link
-                        href={`/projects/${project.id}`}
-                        className="text-blue-600 hover:underline dark:text-blue-400 inline-flex items-center gap-1"
-                      >
-                        {project.siteName || project.managementNumber}
-                        <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {project.cityName || project.prefecture || "-"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredProjects.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
-                      {monthDisplay}の案件がありません
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* スクロール可能列（右側） */}
-          <ScrollArea className="flex-1">
-            <div className="min-w-[800px]">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    {PHOTO_CATEGORIES.map((cat) => (
-                      <TableHead
-                        key={cat.id}
-                        className="w-[70px] text-center whitespace-nowrap font-medium"
-                      >
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className={cn("w-2 h-2 rounded-full", cat.color)} />
-                          <span className="text-xs">{cat.shortLabel}</span>
-                        </div>
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProjects.map((project) => (
-                    <TableRow key={project.id} className="h-[44px]">
-                      {PHOTO_CATEGORIES.map((cat, idx) => {
-                        const status = getCellStatus(project.id, cat.id, idx);
-                        const info = photoMatrix[project.id]?.[cat.id];
-
-                        return (
-                          <TableCell
-                            key={cat.id}
-                            className="text-center p-1"
-                          >
-                            <button
-                              onClick={() => handleCellClick(project, cat)}
-                              className={cn(
-                                "w-10 h-8 rounded flex items-center justify-center transition-colors cursor-pointer",
-                                status === "completed" && "bg-green-100 dark:bg-green-900/30 hover:bg-green-200",
-                                status === "new" && "bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 ring-2 ring-blue-400",
-                                status === "missing" && "bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200",
-                                status === "unreached" && "bg-muted hover:bg-muted/80"
-                              )}
-                            >
-                              {status === "completed" && (
-                                <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                                  {info?.count}
-                                </span>
-                              )}
-                              {status === "new" && (
-                                <span className="flex items-center gap-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
-                                  {info?.count}
-                                  <Camera className="w-3 h-3" />
-                                </span>
-                              )}
-                              {status === "missing" && (
-                                <AlertCircle className="w-4 h-4 text-amber-600" />
-                              )}
-                              {status === "unreached" && (
-                                <Minus className="w-4 h-4 text-muted-foreground" />
-                              )}
-                            </button>
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                  {filteredProjects.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8">
-                        &nbsp;
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+      {/* カード型レイアウト - 1列で垂直積み上げ */}
+      {filteredProjects.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <ImageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="text-lg">{monthDisplay}の案件がありません</p>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {filteredProjects.map((project) => {
+            const progress = getProjectProgress(project.id);
+
+            // 送信履歴を収集（各カテゴリの最新写真から）
+            const recentUploads = PHOTO_CATEGORIES
+              .map((cat) => {
+                const info = photoMatrix[project.id]?.[cat.id];
+                if (info && info.latestPhotos && info.latestPhotos.length > 0) {
+                  const photo = info.latestPhotos[0];
+                  return {
+                    category: cat,
+                    photo,
+                    // モックデータ: 登録者名を追加（実際のAPIでは別途取得）
+                    uploaderName: photo.contractorName ? `${photo.contractorName} 担当者` : "管理者",
+                  };
+                }
+                return null;
+              })
+              .filter(Boolean)
+              .sort((a, b) => {
+                const dateA = new Date(a!.photo.createdAt).getTime();
+                const dateB = new Date(b!.photo.createdAt).getTime();
+                return dateB - dateA;
+              })
+              .slice(0, 5); // 最新5件まで表示
+
+            return (
+              <Card key={project.id} className="overflow-hidden">
+                {/* ヘッダー部分 */}
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between gap-4">
+                    {/* 左: 現場情報 */}
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="min-w-0">
+                        <CardTitle className="text-xl">
+                          {project.siteName || project.managementNumber}
+                        </CardTitle>
+                        <CardDescription className="flex items-center gap-4 mt-1 text-sm">
+                          {project.prefecture && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-4 w-4" />
+                              {project.prefecture}
+                              {project.cityName && ` ${project.cityName}`}
+                            </span>
+                          )}
+                          {project.client && (
+                            <span className="flex items-center gap-1">
+                              <Building2 className="h-4 w-4" />
+                              {project.client}
+                            </span>
+                          )}
+                        </CardDescription>
+                      </div>
+                    </div>
+
+                    {/* 右: 進捗と詳細ボタン */}
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl font-bold">{Math.round(progress.percent)}%</span>
+                          {progress.missing > 0 && (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                              {progress.missing}件不足
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {progress.completed}/{progress.total} 完了
+                        </p>
+                      </div>
+                      <Link href={`/construction/${project.id}`}>
+                        <Button variant="outline" size="lg">
+                          詳細
+                          <ChevronRight className="h-5 w-5 ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* 進捗バー */}
+                  <Progress value={progress.percent} className="h-2 mt-3" />
+                </CardHeader>
+
+                <CardContent className="pt-0 space-y-4">
+                  {/* カテゴリグリッド - 横1列10カラム・正方形セル */}
+                  <div className="grid grid-cols-10 gap-2">
+                    {PHOTO_CATEGORIES.map((cat, idx) => {
+                      const status = getCellStatus(project.id, cat.id, idx);
+                      const info = photoMatrix[project.id]?.[cat.id];
+                      const hasPhotos = info && info.latestPhotos && info.latestPhotos.length > 0;
+                      const contractorName = info?.latestPhotos?.[0]?.contractorName;
+                      const latestPhoto = info?.latestPhotos?.[0];
+                      const registrationDate = latestPhoto
+                        ? new Date(latestPhoto.createdAt)
+                        : null;
+
+                      const cellContent = (
+                        <button
+                          onClick={() => handleCellClick(project, cat)}
+                          className={cn(
+                            "w-full aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border text-center p-1.5",
+                            status === "completed" && "bg-green-50 dark:bg-green-900/20 hover:bg-green-100 border-green-200 dark:border-green-800",
+                            status === "new" && "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 border-blue-300 dark:border-blue-700 ring-2 ring-blue-400",
+                            status === "missing" && "bg-red-50 dark:bg-red-900/20 hover:bg-red-100 border-red-300 dark:border-red-800",
+                            status === "unreached" && "bg-muted/50 hover:bg-muted border-transparent"
+                          )}
+                        >
+                          {/* カテゴリ名 */}
+                          <span className="text-[11px] font-medium text-muted-foreground leading-tight">
+                            {cat.shortLabel}
+                          </span>
+
+                          {/* ステータス表示 */}
+                          {status === "completed" && (
+                            <>
+                              {/* 登録日を大きく表示 */}
+                              {registrationDate && (
+                                <div className="text-green-700 dark:text-green-400">
+                                  <span className="text-xl font-bold leading-none">
+                                    {registrationDate.getMonth() + 1}/{registrationDate.getDate()}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-0.5">
+                                <Check className="w-3.5 h-3.5 text-green-600" />
+                                <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                                  {info?.count}枚
+                                </span>
+                              </div>
+                              {contractorName && (
+                                <span className="text-[9px] text-green-600 dark:text-green-500 truncate max-w-full leading-tight">
+                                  {contractorName}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {status === "new" && (
+                            <>
+                              {/* 登録日を大きく表示 */}
+                              {registrationDate && (
+                                <div className="text-blue-700 dark:text-blue-400">
+                                  <span className="text-xl font-bold leading-none">
+                                    {registrationDate.getMonth() + 1}/{registrationDate.getDate()}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-0.5">
+                                <Camera className="w-3.5 h-3.5 text-blue-600" />
+                                <span className="text-sm font-bold text-blue-700 dark:text-blue-400">
+                                  {info?.count}枚
+                                </span>
+                              </div>
+                              <Badge className="bg-blue-600 text-white text-[9px] px-1 py-0">NEW</Badge>
+                            </>
+                          )}
+                          {status === "missing" && (
+                            <>
+                              <AlertCircle className="w-6 h-6 text-red-600" />
+                              <span className="text-sm font-bold text-red-700 dark:text-red-400">
+                                不足
+                              </span>
+                            </>
+                          )}
+                          {status === "unreached" && (
+                            <>
+                              <Minus className="w-5 h-5 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">—</span>
+                            </>
+                          )}
+                        </button>
+                      );
+
+                      // ホバープレビュー付きセル（大きいプレビュー）
+                      if (hasPhotos) {
+                        return (
+                          <HoverCard key={cat.id} openDelay={150} closeDelay={100}>
+                            <HoverCardTrigger asChild>
+                              {cellContent}
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-96 p-4" side="top" align="center">
+                              <div className="space-y-3">
+                                {/* ヘッダー */}
+                                <div className="flex items-center gap-2 pb-2 border-b">
+                                  <span className={cn("w-3 h-3 rounded-full", cat.color)} />
+                                  <span className="font-medium">{cat.label}</span>
+                                  <Badge variant="secondary" className="ml-auto">
+                                    {info.count}枚
+                                  </Badge>
+                                </div>
+
+                                {/* 写真プレビュー - 大きく、全体が見える */}
+                                <div className="space-y-2">
+                                  {info.latestPhotos.slice(0, 2).map((photo) => (
+                                    <div key={photo.id} className="rounded-lg overflow-hidden border bg-muted/30">
+                                      <img
+                                        src={photo.fileUrl}
+                                        alt={photo.fileName}
+                                        className="w-full h-auto max-h-48 object-contain bg-black/5"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* 最新写真の詳細 */}
+                                {info.latestPhotos[0] && (
+                                  <div className="text-sm text-muted-foreground space-y-1.5 pt-2 border-t">
+                                    {info.latestPhotos[0].contractorName && (
+                                      <div className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4" />
+                                        <span className="font-medium text-foreground">
+                                          {info.latestPhotos[0].contractorName}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <User className="h-4 w-4" />
+                                      <span className="text-foreground">
+                                        {info.latestPhotos[0].contractorName ? `${info.latestPhotos[0].contractorName} 担当者` : "管理者"}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="h-4 w-4" />
+                                      {new Date(info.latestPhotos[0].createdAt).toLocaleDateString("ja-JP", {
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                      に登録
+                                    </div>
+                                    {info.latestPhotos[0].note && (
+                                      <p className="text-foreground bg-muted p-2 rounded mt-2">
+                                        {info.latestPhotos[0].note}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                <p className="text-xs text-center text-muted-foreground pt-2">
+                                  クリックで全件表示
+                                </p>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        );
+                      }
+
+                      return <div key={cat.id}>{cellContent}</div>;
+                    })}
+                  </div>
+
+                  {/* 送信履歴セクション */}
+                  {recentUploads.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        最近の送信履歴
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                        {recentUploads.map((upload) => {
+                          if (!upload) return null;
+                          const { category, photo, uploaderName } = upload;
+                          const uploadDate = new Date(photo.createdAt);
+                          const isToday = uploadDate.toDateString() === new Date().toDateString();
+
+                          return (
+                            <div
+                              key={`${category.id}-${photo.id}`}
+                              className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border hover:bg-muted/50 transition-colors"
+                            >
+                              {/* サムネイル */}
+                              <div className="shrink-0 w-14 h-14 rounded-md overflow-hidden border bg-muted">
+                                <img
+                                  src={photo.fileUrl}
+                                  alt={photo.fileName}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+
+                              {/* 情報 */}
+                              <div className="flex-1 min-w-0 space-y-1">
+                                {/* カテゴリ */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className={cn("w-2 h-2 rounded-full shrink-0", category.color)} />
+                                  <span className="text-sm font-medium truncate">{category.label}</span>
+                                  {isToday && (
+                                    <Badge className="bg-blue-600 text-white text-[10px] px-1 py-0 shrink-0">
+                                      今日
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                {/* 会社・担当者 */}
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Building2 className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">
+                                    {photo.contractorName || "自社"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{uploaderName}</span>
+                                </div>
+
+                                {/* 日時 */}
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  <span>
+                                    {uploadDate.toLocaleDateString("ja-JP", {
+                                      month: "numeric",
+                                      day: "numeric",
+                                    })}
+                                    {" "}
+                                    {uploadDate.toLocaleTimeString("ja-JP", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 履歴がない場合 */}
+                  {recentUploads.length === 0 && (
+                    <div className="border-t pt-4">
+                      <div className="text-center py-4 text-muted-foreground bg-muted/20 rounded-lg">
+                        <Camera className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">まだ写真が送信されていません</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* 写真詳細モーダル */}
       <Dialog open={!!selectedCell} onOpenChange={() => setSelectedCell(null)}>

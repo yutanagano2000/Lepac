@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { constructionPhotos, projects, CONSTRUCTION_PHOTO_CATEGORIES } from "@/db/schema";
-import { eq, sql, and, inArray } from "drizzle-orm";
+import { eq, sql, and, inArray, desc } from "drizzle-orm";
 import { requireOrganization } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
@@ -67,9 +67,40 @@ export async function GET(request: Request) {
       .where(inArray(constructionPhotos.projectId, projectIds))
       .groupBy(constructionPhotos.projectId, constructionPhotos.category);
 
+    // 各プロジェクト×カテゴリの最新写真2枚を取得（ホバープレビュー用）
+    const latestPhotos = await db
+      .select({
+        id: constructionPhotos.id,
+        projectId: constructionPhotos.projectId,
+        category: constructionPhotos.category,
+        fileName: constructionPhotos.fileName,
+        fileUrl: constructionPhotos.fileUrl,
+        contractorName: constructionPhotos.contractorName,
+        note: constructionPhotos.note,
+        takenAt: constructionPhotos.takenAt,
+        createdAt: constructionPhotos.createdAt,
+      })
+      .from(constructionPhotos)
+      .where(inArray(constructionPhotos.projectId, projectIds))
+      .orderBy(desc(constructionPhotos.createdAt));
+
     // マトリクス形式に変換
-    // { projectId: { category: { count, latestAt } } }
-    const photoMatrix: Record<number, Record<string, { count: number; latestAt: string | null }>> = {};
+    // { projectId: { category: { count, latestAt, latestPhotos } } }
+    type PhotoDetail = {
+      id: number;
+      fileName: string;
+      fileUrl: string;
+      contractorName: string | null;
+      note: string | null;
+      takenAt: string | null;
+      createdAt: string;
+    };
+    type CellInfo = {
+      count: number;
+      latestAt: string | null;
+      latestPhotos: PhotoDetail[];
+    };
+    const photoMatrix: Record<number, Record<string, CellInfo>> = {};
 
     for (const row of photoCounts) {
       if (!photoMatrix[row.projectId]) {
@@ -78,7 +109,24 @@ export async function GET(request: Request) {
       photoMatrix[row.projectId][row.category] = {
         count: Number(row.count),
         latestAt: row.latestAt,
+        latestPhotos: [],
       };
+    }
+
+    // 最新写真をマトリクスに追加（各セル最大2枚）
+    for (const photo of latestPhotos) {
+      const cell = photoMatrix[photo.projectId]?.[photo.category];
+      if (cell && cell.latestPhotos.length < 2) {
+        cell.latestPhotos.push({
+          id: photo.id,
+          fileName: photo.fileName,
+          fileUrl: photo.fileUrl,
+          contractorName: photo.contractorName,
+          note: photo.note,
+          takenAt: photo.takenAt,
+          createdAt: photo.createdAt,
+        });
+      }
     }
 
     return NextResponse.json({
