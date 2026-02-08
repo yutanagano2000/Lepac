@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   LayoutDashboard,
   Plus,
+  User,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
@@ -45,9 +48,17 @@ export type TodoWithProject = {
   managementNumber: string | null;
 };
 
+// 組織内ユーザー
+type OrganizationUser = {
+  id: number;
+  name: string | null;
+  username: string;
+};
+
 interface HomeTodosViewProps {
   initialTodos: TodoWithProject[];
   showCreateForm?: boolean; // プレーンTODO作成フォームを表示するか（TODO画面のみ）
+  currentUserId?: number | null; // 現在ログイン中のユーザーID
 }
 
 function getDueDateInfo(dueDateStr: string) {
@@ -65,10 +76,11 @@ function getDueDateInfo(dueDateStr: string) {
   return { group: "later" as const, label: `あと${diffDays}日`, diffDays };
 }
 
-export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodosViewProps) {
+export function HomeTodosView({ initialTodos, showCreateForm = false, currentUserId }: HomeTodosViewProps) {
   const [todos, setTodos] = useState<TodoWithProject[]>(initialTodos);
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [userFilter, setUserFilter] = useState<"all" | "mine">("all");
 
   // プレーンTODO作成フォーム用のstate
   const [newTodoContent, setNewTodoContent] = useState("");
@@ -76,6 +88,20 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
   const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [newTodoAssigneeId, setNewTodoAssigneeId] = useState<string>("__self__"); // 担当者ID（"__self__"は自分を意味する）
+
+  // 組織内ユーザー一覧
+  const [orgUsers, setOrgUsers] = useState<OrganizationUser[]>([]);
+
+  // 組織内ユーザー一覧を取得
+  useEffect(() => {
+    if (showCreateForm) {
+      fetch("/api/users", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => setOrgUsers(data))
+        .catch((err) => console.error("ユーザー一覧の取得に失敗しました:", err));
+    }
+  }, [showCreateForm]);
 
   // 削除確認ダイアログ用
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -85,11 +111,21 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
   // 日本時間で現在日時を取得
   const nowJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
 
-  const fetchTodos = () => {
-    fetch("/api/todos", { cache: "no-store" })
+  const fetchTodos = (filter?: "all" | "mine") => {
+    const filterToUse = filter ?? userFilter;
+    const url = filterToUse === "mine" && currentUserId
+      ? `/api/todos?userId=${currentUserId}`
+      : "/api/todos";
+    fetch(url, { cache: "no-store" })
       .then((res) => res.json())
       .then(setTodos)
       .catch((err) => console.error("TODO一覧の取得に失敗しました:", err));
+  };
+
+  // userFilter変更時にデータを再取得
+  const handleUserFilterChange = (filter: "all" | "mine") => {
+    setUserFilter(filter);
+    fetchTodos(filter);
   };
 
   const openDeleteDialog = (todoId: number) => {
@@ -166,17 +202,25 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
     if (!newTodoContent.trim() || !newTodoDueDate) return;
     setIsCreating(true);
     try {
+      // 担当者情報を取得（"__self__"は自分を意味する）
+      const assignee = newTodoAssigneeId && newTodoAssigneeId !== "__self__"
+        ? orgUsers.find((u) => u.id === parseInt(newTodoAssigneeId, 10))
+        : null;
+
       await fetch("/api/todos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: newTodoContent.trim(),
           dueDate: newTodoDueDate,
+          assigneeId: assignee?.id ?? null,
+          assigneeName: assignee?.name ?? assignee?.username ?? null,
         }),
       });
       setNewTodoContent("");
       setNewTodoDueDate("");
       setNewTodoSelectedDate(undefined);
+      setNewTodoAssigneeId("__self__");
       fetchTodos();
     } catch (err) {
       console.error("TODO作成に失敗しました:", err);
@@ -272,18 +316,35 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
                   <Input
                     placeholder="TODOの内容を入力"
                     value={newTodoContent}
                     onChange={(e) => setNewTodoContent(e.target.value)}
-                    className="flex-1"
+                    className="flex-1 min-w-[200px]"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                         handleCreatePlainTodo();
                       }
                     }}
                   />
+                  {/* 担当者選択 */}
+                  <Select value={newTodoAssigneeId} onValueChange={setNewTodoAssigneeId}>
+                    <SelectTrigger className="w-full sm:w-[160px]">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <SelectValue placeholder="担当者" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__self__">自分</SelectItem>
+                      {orgUsers.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.name || u.username}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -330,29 +391,48 @@ export function HomeTodosView({ initialTodos, showCreateForm = false }: HomeTodo
           )}
 
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="内容で検索"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+          <div className="flex flex-col gap-3">
+            {/* User Filter Tabs */}
+            {currentUserId && (
+              <Tabs value={userFilter} onValueChange={(v) => handleUserFilterChange(v as "all" | "mine")}>
+                <TabsList>
+                  <TabsTrigger value="all" className="gap-1.5">
+                    <Users className="h-4 w-4" />
+                    全員のTODO
+                  </TabsTrigger>
+                  <TabsTrigger value="mine" className="gap-1.5">
+                    <User className="h-4 w-4" />
+                    自分のTODO
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+
+            {/* Search and Project Filter */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="内容で検索"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={projectFilter} onValueChange={setProjectFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="案件で絞り込み" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべての案件</SelectItem>
+                  {projectOptions.map((mn) => (
+                    <SelectItem key={mn} value={mn}>
+                      {mn}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={projectFilter} onValueChange={setProjectFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="案件で絞り込み" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">すべての案件</SelectItem>
-                {projectOptions.map((mn) => (
-                  <SelectItem key={mn} value={mn}>
-                    {mn}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* TODO Grid */}

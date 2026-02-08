@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trash2, ArrowRight } from "lucide-react";
+import { Trash2, ArrowRight, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDateJp } from "@/lib/timeline";
 import { parseTodoMessages } from "@/lib/utils";
@@ -57,8 +57,9 @@ export function TodoItem({ todo, onReopen, onDelete }: TodoItemProps) {
           </span>
         )}
         {todo.userName && (
-          <span className="text-xs text-muted-foreground">
-            · {todo.userName}
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">
+            <User className="h-3 w-3" />
+            {todo.userName}
           </span>
         )}
       </div>

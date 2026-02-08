@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
-import { eq, asc, sql } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { calculateTimeline } from "@/lib/timeline";
 import ProjectsView from "./ProjectsView";
 
@@ -22,14 +22,18 @@ export default async function ProjectsPage() {
     .orderBy(asc(projects.managementNumber))
     .limit(PAGE_SIZE);
 
-  // 超過判定: Map で O(n) ルックアップ
+  // 超過判定: 対象案件のみ取得（全件スキャンを回避）
   const projectIds = pageProjects.map((p) => p.id);
   const progressByProject = new Map<number, typeof progress.$inferSelect[]>();
 
   if (projectIds.length > 0) {
-    const allProgress = await db.select().from(progress);
-    for (const p of allProgress) {
-      if (!projectIds.includes(p.projectId)) continue;
+    // IN句で対象案件のProgressのみ取得
+    const relevantProgress = await db
+      .select()
+      .from(progress)
+      .where(sql`${progress.projectId} IN (${sql.join(projectIds.map(id => sql`${id}`), sql`, `)})`);
+
+    for (const p of relevantProgress) {
       const arr = progressByProject.get(p.projectId) || [];
       arr.push(p);
       progressByProject.set(p.projectId, arr);

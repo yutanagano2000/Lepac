@@ -8,13 +8,23 @@ import { logTodoCreate } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   // 認証・組織チェック
   const authResult = await requireOrganization();
   if (!authResult.success) {
     return authResult.response;
   }
   const { organizationId } = authResult;
+
+  // クエリパラメータからuserIdフィルタを取得
+  const { searchParams } = new URL(request.url);
+  const filterUserId = searchParams.get("userId");
+
+  // 条件を構築
+  const conditions = [eq(todos.organizationId, organizationId)];
+  if (filterUserId) {
+    conditions.push(eq(todos.userId, parseInt(filterUserId, 10)));
+  }
 
   const rows = await db
     .select({
@@ -31,7 +41,7 @@ export async function GET() {
     })
     .from(todos)
     .leftJoin(projects, eq(todos.projectId, projects.id))
-    .where(eq(todos.organizationId, organizationId))
+    .where(and(...conditions))
     .orderBy(asc(todos.dueDate));
   return NextResponse.json(rows);
 }
@@ -50,11 +60,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(validation.error, { status: 400 });
   }
 
-  const { content, dueDate, projectId } = validation.data;
+  const { content, dueDate, projectId, assigneeId, assigneeName } = validation.data;
 
-  // セッションからユーザー情報を取得
-  const userId = getUserId(user);
-  const userName = user.name || user.username || null;
+  // 担当者が指定されていればその情報を使用、なければ作成者を担当者とする
+  const creatorId = getUserId(user);
+  const creatorName = user.name || user.username || null;
+
+  // 担当者IDと名前を決定
+  const todoUserId = assigneeId ?? creatorId;
+  const todoUserName = assigneeName ?? creatorName;
 
   try {
     const [result] = await db
@@ -65,8 +79,8 @@ export async function POST(request: NextRequest) {
         content: content.trim(),
         dueDate,
         createdAt: new Date().toISOString(),
-        userId,
-        userName,
+        userId: todoUserId,
+        userName: todoUserName,
       })
       .returning();
 

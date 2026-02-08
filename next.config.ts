@@ -35,9 +35,9 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.plot.ly",
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com",
-      "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://cyberjapandata.gsi.go.jp https://*.supabase.co https://*.public.blob.vercel-storage.com",
+      "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://cyberjapandata.gsi.go.jp https://cyberjapandata2.gsi.go.jp https://*.supabase.co https://*.public.blob.vercel-storage.com",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.turso.io https://*.supabase.co https://cyberjapandata.gsi.go.jp https://nominatim.openstreetmap.org https://msearch.gsi.go.jp https://*.public.blob.vercel-storage.com",
+      "connect-src 'self' https://*.turso.io https://*.supabase.co https://cyberjapandata.gsi.go.jp https://cyberjapandata2.gsi.go.jp https://nominatim.openstreetmap.org https://msearch.gsi.go.jp https://*.public.blob.vercel-storage.com",
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",
@@ -57,6 +57,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Turbopackを使用（Next.js 16デフォルト）
+  // Cesiumアセットは prebuild スクリプトでコピー
+  turbopack: {},
 };
 
 export default nextConfig;

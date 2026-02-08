@@ -1,15 +1,8 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SlopeDistributionChart } from "./SlopeDistributionChart";
 import type { SlopeStats } from "@/lib/slope-analysis";
-
-const BAR_COLORS: Record<string, string> = {
-  green: "bg-green-500",
-  yellow: "bg-yellow-400",
-  orange: "bg-orange-500",
-  red: "bg-red-500",
-  darkred: "bg-red-900",
-};
 
 export function SlopeStatsCard({
   stats,
@@ -54,30 +47,13 @@ export function SlopeStatsCard({
           </div>
         </div>
 
-        {/* 傾斜分布バー */}
+        {/* 傾斜分布ヒストグラム */}
         {stats.distribution.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground mb-2">
-              傾斜分類分布（計測点: {totalPoints}点）
+              傾斜分類分布（計測点: {totalPoints.toLocaleString()}点）
             </p>
-            <div className="space-y-1.5">
-              {stats.distribution.map((d) => (
-                <div key={d.label} className="flex items-center gap-2 text-xs">
-                  <span className="w-16 text-right text-muted-foreground">
-                    {d.label}
-                  </span>
-                  <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${BAR_COLORS[d.color] || "bg-gray-400"}`}
-                      style={{ width: `${Math.max(d.percent, 1)}%` }}
-                    />
-                  </div>
-                  <span className="w-12 text-right font-mono">
-                    {d.percent}%
-                  </span>
-                </div>
-              ))}
-            </div>
+            <SlopeDistributionChart distribution={stats.distribution} />
           </div>
         )}
       </CardContent>

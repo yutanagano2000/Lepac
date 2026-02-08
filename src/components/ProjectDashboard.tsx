@@ -63,6 +63,9 @@ export function ProjectDashboard({ project, progressList }: ProjectDashboardProp
     if (!interconnectionDate) return null;
 
     const target = new Date(interconnectionDate);
+    // 無効な日付の場合はnullを返す
+    if (isNaN(target.getTime())) return null;
+
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     target.setHours(0, 0, 0, 0);

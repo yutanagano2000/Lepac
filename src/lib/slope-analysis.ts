@@ -22,9 +22,16 @@ export interface SlopeStats {
   stdDegrees: number;
   minElevation: number;
   maxElevation: number;
+  avgElevation: number;
   elevationRange: number;
   /** 分類別の面積割合（%） */
   distribution: { label: string; color: string; percent: number }[];
+  /** 便利なエイリアス（DB保存用） */
+  avgSlope: number;
+  maxSlope: number;
+  minSlope: number;
+  flatPercent: number;
+  steepPercent: number;
 }
 
 export interface CrossSectionPoint {
@@ -106,8 +113,14 @@ export function computeStats(
       stdDegrees: 0,
       minElevation: 0,
       maxElevation: 0,
+      avgElevation: 0,
       elevationRange: 0,
       distribution: [],
+      avgSlope: 0,
+      maxSlope: 0,
+      minSlope: 0,
+      flatPercent: 0,
+      steepPercent: 0,
     };
   }
 
@@ -129,6 +142,9 @@ export function computeStats(
   }
   const minElev = elevations.length > 0 ? Math.min(...elevations) : 0;
   const maxElev = elevations.length > 0 ? Math.max(...elevations) : 0;
+  const avgElev = elevations.length > 0
+    ? elevations.reduce((a, b) => a + b, 0) / elevations.length
+    : 0;
 
   // 分類別分布
   const classCount: Record<string, { label: string; color: string; count: number }> = {};
@@ -151,6 +167,11 @@ export function computeStats(
     percent: Math.round((c.count / total) * 1000) / 10,
   }));
 
+  // 平坦・急傾斜の割合を計算
+  const flatPct = distribution.find((d) => d.label === "平坦")?.percent ?? 0;
+  const steepPct = (distribution.find((d) => d.label === "急")?.percent ?? 0) +
+    (distribution.find((d) => d.label === "非常に急")?.percent ?? 0);
+
   return {
     meanDegrees: Math.round(mean * 100) / 100,
     maxDegrees: Math.round(max * 100) / 100,
@@ -158,8 +179,15 @@ export function computeStats(
     stdDegrees: Math.round(std * 100) / 100,
     minElevation: Math.round(minElev * 10) / 10,
     maxElevation: Math.round(maxElev * 10) / 10,
+    avgElevation: Math.round(avgElev * 10) / 10,
     elevationRange: Math.round((maxElev - minElev) * 10) / 10,
     distribution,
+    // エイリアス（DB保存・UI表示用）
+    avgSlope: Math.round(mean * 100) / 100,
+    maxSlope: Math.round(max * 100) / 100,
+    minSlope: Math.round(min * 100) / 100,
+    flatPercent: flatPct,
+    steepPercent: steepPct,
   };
 }
 

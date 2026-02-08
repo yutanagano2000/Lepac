@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Loader2, Check, FolderInput, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -455,57 +455,60 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
               <DialogTrigger asChild>
                 <Button size="sm"><Plus className="h-4 w-4" /> 新規登録</Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>案件を新規登録</DialogTitle></DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="managementNumber">管理番号</Label>
-                    <Input id="managementNumber" value={form.managementNumber} onChange={(e) => setForm({ ...form, managementNumber: e.target.value })} placeholder="例: P-001" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="manager">担当</Label>
-                    <Select value={form.manager || undefined} onValueChange={(value) => setForm({ ...form, manager: value })}>
-                      <SelectTrigger id="manager" className="w-full"><SelectValue placeholder="選択してください" /></SelectTrigger>
-                      <SelectContent>{MANAGER_OPTIONS.map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="client">販売先</Label>
-                    <Input id="client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="例: 〇〇不動産" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="projectNumber">案件番号</Label>
-                    <Input id="projectNumber" value={form.projectNumber} onChange={(e) => setForm({ ...form, projectNumber: e.target.value })} placeholder="例: 2026-0001" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>完成月</Label>
-                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" className="w-full justify-start text-left font-normal">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {form.completionMonth ? formatCompletionMonth(form.completionMonth) : "選択してください"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-64 p-3">
-                        <div className="flex items-center justify-between mb-3">
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-                          <span className="font-medium">{calendarYear}年</span>
-                          <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear + 1)}><ChevronRight className="h-4 w-4" /></Button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {MONTHS.map((month, index) => (<Button key={month} type="button" variant="ghost" size="sm" className="h-9" onClick={() => selectMonth(index)}>{month}</Button>))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>キャンセル</Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />登録中...</> : "登録"}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
+              {/* 遅延マウント: open時のみDialogContentをレンダリング */}
+              {open && (
+                <DialogContent>
+                  <DialogHeader><DialogTitle>案件を新規登録</DialogTitle></DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="managementNumber">管理番号</Label>
+                      <Input id="managementNumber" value={form.managementNumber} onChange={(e) => setForm({ ...form, managementNumber: e.target.value })} placeholder="例: P-001" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manager">担当</Label>
+                      <Select value={form.manager || undefined} onValueChange={(value) => setForm({ ...form, manager: value })}>
+                        <SelectTrigger id="manager" className="w-full"><SelectValue placeholder="選択してください" /></SelectTrigger>
+                        <SelectContent>{MANAGER_OPTIONS.map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="client">販売先</Label>
+                      <Input id="client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="例: 〇〇不動産" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="projectNumber">案件番号</Label>
+                      <Input id="projectNumber" value={form.projectNumber} onChange={(e) => setForm({ ...form, projectNumber: e.target.value })} placeholder="例: 2026-0001" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>完成月</Label>
+                      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="outline" className="w-full justify-start text-left font-normal">
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {form.completionMonth ? formatCompletionMonth(form.completionMonth) : "選択してください"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-3">
+                          <div className="flex items-center justify-between mb-3">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+                            <span className="font-medium">{calendarYear}年</span>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear + 1)}><ChevronRight className="h-4 w-4" /></Button>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {MONTHS.map((month, index) => (<Button key={month} type="button" variant="ghost" size="sm" className="h-9" onClick={() => selectMonth(index)}>{month}</Button>))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>キャンセル</Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />登録中...</> : "登録"}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              )}
             </Dialog>
 
             <Button size="sm" variant="outline" onClick={() => { setImportOpen(true); fetchImportableFolders(); }}>
@@ -513,61 +516,63 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
             </Button>
           </div>
 
-          {/* インポートダイアログ */}
-          <Dialog open={importOpen} onOpenChange={setImportOpen}>
-            <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle>フォルダから案件を取込</DialogTitle></DialogHeader>
-              <div className="space-y-4">
-                {importLoading ? (
-                  <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><span className="ml-2 text-muted-foreground">読み込み中...</span></div>
-                ) : importableFolders.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground"><CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" /><p>すべての案件が登録済みです</p></div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>未登録の案件フォルダ: {importableFolders.length}件</span>
-                      <Button variant="ghost" size="sm" onClick={() => {
-                        if (selectedFolders.size === importableFolders.length) setSelectedFolders(new Set());
-                        else setSelectedFolders(new Set(importableFolders.map(f => f.folderName)));
-                      }}>{selectedFolders.size === importableFolders.length ? "全解除" : "全選択"}</Button>
-                    </div>
-                    <ScrollArea className="h-[300px] border rounded-lg">
-                      <div className="p-2 space-y-1">
-                        {importableFolders.map((folder) => (
-                          <label key={folder.folderName} className={cn("flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors", selectedFolders.has(folder.folderName) ? "bg-primary/10 border border-primary" : "hover:bg-muted border border-transparent")}>
-                            <Checkbox checked={selectedFolders.has(folder.folderName)} onCheckedChange={(checked) => {
-                              const newSet = new Set(selectedFolders);
-                              if (checked) newSet.add(folder.folderName); else newSet.delete(folder.folderName);
-                              setSelectedFolders(newSet);
-                            }} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs shrink-0">{folder.managementNumber}</Badge>
-                                <span className="text-sm font-medium">{folder.manager}</span>
-                                <span className="text-sm text-muted-foreground">{folder.projectNumber}</span>
-                              </div>
-                            </div>
-                          </label>
-                        ))}
+          {/* インポートダイアログ（遅延マウント） */}
+          {importOpen && (
+            <Dialog open={importOpen} onOpenChange={setImportOpen}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader><DialogTitle>フォルダから案件を取込</DialogTitle></DialogHeader>
+                <div className="space-y-4">
+                  {importLoading ? (
+                    <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /><span className="ml-2 text-muted-foreground">読み込み中...</span></div>
+                  ) : importableFolders.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground"><CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" /><p>すべての案件が登録済みです</p></div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>未登録の案件フォルダ: {importableFolders.length}件</span>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          if (selectedFolders.size === importableFolders.length) setSelectedFolders(new Set());
+                          else setSelectedFolders(new Set(importableFolders.map(f => f.folderName)));
+                        }}>{selectedFolders.size === importableFolders.length ? "全解除" : "全選択"}</Button>
                       </div>
-                    </ScrollArea>
-                  </>
-                )}
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setImportOpen(false)}>キャンセル</Button>
-                  <Button onClick={handleImport} disabled={selectedFolders.size === 0 || importSubmitting}>
-                    {importSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />取込中...</> : `${selectedFolders.size}件を取込`}
-                  </Button>
+                      <ScrollArea className="h-[300px] border rounded-lg">
+                        <div className="p-2 space-y-1">
+                          {importableFolders.map((folder) => (
+                            <label key={folder.folderName} className={cn("flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors", selectedFolders.has(folder.folderName) ? "bg-primary/10 border border-primary" : "hover:bg-muted border border-transparent")}>
+                              <Checkbox checked={selectedFolders.has(folder.folderName)} onCheckedChange={(checked) => {
+                                const newSet = new Set(selectedFolders);
+                                if (checked) newSet.add(folder.folderName); else newSet.delete(folder.folderName);
+                                setSelectedFolders(newSet);
+                              }} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs shrink-0">{folder.managementNumber}</Badge>
+                                  <span className="text-sm font-medium">{folder.manager}</span>
+                                  <span className="text-sm text-muted-foreground">{folder.projectNumber}</span>
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setImportOpen(false)}>キャンセル</Button>
+                    <Button onClick={handleImport} disabled={selectedFolders.size === 0 || importSubmitting}>
+                      {importSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />取込中...</> : `${selectedFolders.size}件を取込`}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          )}
 
-          {/* 編集ダイアログ */}
-          <Dialog open={editOpen} onOpenChange={setEditOpen}>
-            <DialogContent>
-              <DialogHeader><DialogTitle>案件を編集</DialogTitle></DialogHeader>
-              {editingProject && (
+          {/* 編集ダイアログ（遅延マウント） */}
+          {editOpen && editingProject && (
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+              <DialogContent>
+                <DialogHeader><DialogTitle>案件を編集</DialogTitle></DialogHeader>
                 <form onSubmit={handleEditSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="edit-managementNumber">管理番号</Label>
@@ -617,25 +622,27 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                     <Button type="submit">保存</Button>
                   </div>
                 </form>
-              )}
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          )}
 
-          {/* 削除確認ダイアログ */}
-          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>案件を削除</AlertDialogTitle>
-                <AlertDialogDescription>
-                  「{deletingProject?.managementNumber}」を削除しますか？<br />関連する進捗もすべて削除されます。
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">削除</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {/* 削除確認ダイアログ（遅延マウント） */}
+          {deleteOpen && deletingProject && (
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>案件を削除</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    「{deletingProject.managementNumber}」を削除しますか？<br />関連する進捗もすべて削除されます。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">削除</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
 
           {/* 編集モードヘルプ */}
           {isEditMode && (
@@ -689,6 +696,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                             key={project.id}
                             className={cn("h-12", !isEditMode && "cursor-pointer hover:bg-muted/50")}
                             onClick={() => { if (!isEditMode) router.push(`/projects/${project.id}`); }}
+                            onMouseEnter={() => { if (!isEditMode) router.prefetch(`/projects/${project.id}`); }}
                           >
                             <TableCell className="font-medium text-sm py-2 px-2 bg-background">
                               {renderEditableCell(project, "managementNumber", "flex items-center gap-1")}
@@ -729,7 +737,11 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                           </TableRow>
                         ) : (
                           projects.map((project) => (
-                            <TableRow key={project.id} className="h-12 hover:bg-muted/50">
+                            <TableRow
+                              key={project.id}
+                              className="h-12 hover:bg-muted/50"
+                              onMouseEnter={() => { if (!isEditMode) router.prefetch(`/projects/${project.id}`); }}
+                            >
                               {TABLE_COLUMNS.slice(FIXED_COLUMNS_COUNT).map((col) => (
                                 <TableCell key={col.key} className="text-sm py-2 px-2 whitespace-nowrap">
                                   {renderEditableCell(project, col.key)}

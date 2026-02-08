@@ -159,6 +159,37 @@ export const createProjectSchema = z.object({
   address: optionalString,
   coordinates: optionalString,
   legalStatuses: optionalString,
+  // 地権者情報（複数対応）
+  landowner1: optionalString,
+  landowner2: optionalString,
+  landowner3: optionalString,
+  landowner1Kana: optionalString,
+  landowner2Kana: optionalString,
+  landowner3Kana: optionalString,
+  landownerAddress1: optionalString,
+  landownerAddress2: optionalString,
+  landownerAddress3: optionalString,
+  inheritanceStatus1: optionalString,
+  inheritanceStatus2: optionalString,
+  inheritanceStatus3: optionalString,
+  correctionRegistration1: optionalString,
+  correctionRegistration2: optionalString,
+  correctionRegistration3: optionalString,
+  mortgageStatus1: optionalString,
+  mortgageStatus2: optionalString,
+  mortgageStatus3: optionalString,
+  // 地目・面積（複数対応）
+  landCategory1: optionalString,
+  landCategory2: optionalString,
+  landCategory3: optionalString,
+  landArea1: optionalString,
+  landArea2: optionalString,
+  landArea3: optionalString,
+  // 環境データ
+  verticalSnowLoad: optionalString,
+  windSpeed: optionalString,
+  // 外部連携
+  dococabiLink: optionalString,
 }).strict();
 
 // プロジェクト更新スキーマ（すべてオプショナル）
@@ -169,6 +200,8 @@ export const createTodoSchema = z.object({
   content: nonEmptyString,
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付はYYYY-MM-DD形式で入力してください"),
   projectId: z.number().int().positive().optional().nullable(),
+  assigneeId: z.number().int().positive().optional().nullable(), // 担当者ID
+  assigneeName: z.string().max(100).optional().nullable(), // 担当者名
 });
 
 // TODO更新スキーマ

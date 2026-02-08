@@ -1,22 +1,23 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { Loader2, Mountain, Search, TriangleAlert, MapPin } from "lucide-react";
+import { Suspense, useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { Loader2, Mountain, Search, TriangleAlert, MapPin, Save, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { parseCoordinateString } from "@/lib/coordinates";
-import { SlopeResultCard } from "@/components/survey/SlopeResultCard";
-import { SurveyMap } from "@/components/survey/SurveyMap";
 import { PolygonDrawMap } from "@/components/survey/PolygonDrawMap";
 import { Surface3D } from "@/components/survey/Surface3D";
 import { CrossSectionChart } from "@/components/survey/CrossSectionChart";
 import { SlopeStatsCard } from "@/components/survey/SlopeStatsCard";
 import { PolygonToolbar } from "@/components/survey/PolygonToolbar";
+import { SlopeLegend } from "@/components/survey/SlopeLegend";
+import { ExportDialog } from "@/components/survey/ExportDialog";
+import { FullscreenSurface } from "@/components/survey/FullscreenSurface";
+import { AnalysisProgress } from "@/components/survey/AnalysisProgress";
 import type { DrawMode } from "@/components/survey/PolygonToolbar";
-import type { SlopeResult } from "@/lib/slope";
-import type { SlopeStats, CrossSectionPoint } from "@/lib/slope-analysis";
+import { extractCrossSection, type SlopeStats, type CrossSectionPoint } from "@/lib/slope-analysis";
 
 // ─── ポリゴン解析の結果型 ────────────────────────────
 interface GridAnalysisResult {
@@ -32,19 +33,29 @@ interface GridAnalysisResult {
   slopeMatrix: (number | null)[][];
   stats: SlopeStats;
   crossSection: CrossSectionPoint[] | null;
+  autoCrossSectionLine: [number, number][] | null;
 }
 
-export default function SurveyPage() {
-  // ─── 座標入力タブ ──────────────────────────────────
-  const [coordInput, setCoordInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SlopeResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const GRID_INTERVAL = 2; // 2m固定グリッド
 
-  // ─── ポリゴン解析タブ ──────────────────────────────
+export default function SurveyPage() {
+  return (
+    <Suspense fallback={
+      <div className="mx-auto max-w-6xl p-4 flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <SurveyPageContent />
+    </Suspense>
+  );
+}
+
+function SurveyPageContent() {
+  const searchParams = useSearchParams();
+
+  // ─── ポリゴン解析 ──────────────────────────────────
   const [polygon, setPolygon] = useState<[number, number][]>([]);
   const [crossSectionLine, setCrossSectionLine] = useState<[number, number][]>([]);
-  const [gridInterval, setGridInterval] = useState(5);
   const [gridLoading, setGridLoading] = useState(false);
   const [gridResult, setGridResult] = useState<GridAnalysisResult | null>(null);
   const [gridError, setGridError] = useState<string | null>(null);
@@ -52,49 +63,43 @@ export default function SurveyPage() {
   const [jumpTarget, setJumpTarget] = useState<[number, number] | null>(null);
   const jumpCountRef = useRef(0);
   const [drawMode, setDrawMode] = useState<DrawMode>(null);
+  const [projectInfo, setProjectInfo] = useState<{ id: string; name: string } | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [resetTrigger, setResetTrigger] = useState(0);
 
-  // ─── 座標入力タブのハンドラ ─────────────────────────
-  const handleMeasure = async () => {
-    setError(null);
-    setResult(null);
+  // ─── エクスポート用 Ref ───────────────────────────────
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const surfaceContainerRef = useRef<HTMLDivElement>(null);
 
-    const parsed = parseCoordinateString(coordInput);
-    if (!parsed) {
-      setError("座標を正しく入力してください（例: 34.3963, 132.4596）");
-      return;
-    }
+  // ─── カウントダウン管理 ────────────────────────────────
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : null));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
-    const lat = parseFloat(parsed.lat);
-    const lon = parseFloat(parsed.lon);
+  // ─── クエリパラメータから座標を取得して自動ジャンプ ───
+  useEffect(() => {
+    const lat = searchParams.get("lat");
+    const lon = searchParams.get("lon");
+    const projectId = searchParams.get("projectId");
+    const projectName = searchParams.get("projectName");
 
-    if (isNaN(lat) || isNaN(lon)) {
-      setError("座標の数値が不正です");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/slope", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat, lon }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "計測に失敗しました");
-        return;
+    if (lat && lon) {
+      const latNum = parseFloat(lat);
+      const lonNum = parseFloat(lon);
+      if (!isNaN(latNum) && !isNaN(lonNum)) {
+        setJumpTarget([latNum, lonNum]);
+        setJumpCoordInput(`${lat}, ${lon}`);
       }
-      setResult(data as SlopeResult);
-    } catch (e: any) {
-      setError(e.message || "通信エラーが発生しました");
-    } finally {
-      setLoading(false);
     }
-  };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) handleMeasure();
-  };
+    if (projectId && projectName) {
+      setProjectInfo({ id: projectId, name: decodeURIComponent(projectName) });
+    }
+  }, [searchParams]);
 
   // ─── 座標ジャンプ ──────────────────────────────────
   const handleJump = () => {
@@ -121,38 +126,82 @@ export default function SurveyPage() {
     setCrossSectionLine([]);
   }, []);
 
-  const handleCrossSectionLine = useCallback(
-    (coords: [number, number][]) => {
-      setCrossSectionLine(coords);
-      // 既に解析済みなら断面だけ再計算
-      if (gridResult && coords.length >= 2) {
-        rerunWithCrossSection(coords);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gridResult, polygon, gridInterval]
-  );
+  // ─── ポリゴンリセット ─────────────────────────────
+  const handleReset = useCallback(() => {
+    setPolygon([]);
+    setCrossSectionLine([]);
+    setGridResult(null);
+    setGridError(null);
+    setDrawMode(null);
+    setSaveStatus(null);
+    // 選択地点もリセット
+    setJumpTarget(null);
+    setJumpCoordInput("");
+    // 地図上のポリゴンもリセット
+    setResetTrigger((prev) => prev + 1);
+  }, []);
 
-  const rerunWithCrossSection = async (line: [number, number][]) => {
-    if (polygon.length < 4) return;
+  // ─── 解析結果保存 ─────────────────────────────────
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error" | null>(null);
+
+  const handleSave = async () => {
+    if (!gridResult || !projectInfo) return;
+
+    setSaveStatus("saving");
     try {
-      const res = await fetch("/api/slope-grid", {
+      const res = await fetch("/api/slope-analyses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          projectId: parseInt(projectInfo.id, 10),
           polygon,
-          interval: gridInterval,
-          crossSectionLine: line,
+          gridInterval: GRID_INTERVAL,
+          totalPoints: gridResult.gridInfo.totalPoints,
+          avgSlope: gridResult.stats.avgSlope,
+          maxSlope: gridResult.stats.maxSlope,
+          minSlope: gridResult.stats.minSlope,
+          flatPercent: gridResult.stats.flatPercent,
+          steepPercent: gridResult.stats.steepPercent,
+          avgElevation: gridResult.stats.avgElevation,
+          maxElevation: gridResult.stats.maxElevation,
+          minElevation: gridResult.stats.minElevation,
+          elevationMatrix: gridResult.elevationMatrix,
+          slopeMatrix: gridResult.slopeMatrix,
+          crossSection: gridResult.crossSection,
         }),
       });
-      const data = await res.json();
+
       if (res.ok) {
-        setGridResult(data as GridAnalysisResult);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus(null), 3000);
+      } else {
+        setSaveStatus("error");
       }
     } catch {
-      // 断面再取得のエラーは無視
+      setSaveStatus("error");
     }
   };
+
+  const handleCrossSectionLine = useCallback(
+    (coords: [number, number][]) => {
+      setCrossSectionLine(coords);
+      // 既に解析済みなら断面をローカルで再計算（API不要）
+      if (gridResult && coords.length >= 2) {
+        const newCrossSection = extractCrossSection(
+          gridResult.elevationMatrix,
+          gridResult.gridInfo.originLat,
+          gridResult.gridInfo.originLon,
+          gridResult.gridInfo.interval,
+          coords,
+          50
+        );
+        setGridResult((prev) =>
+          prev ? { ...prev, crossSection: newCrossSection } : null
+        );
+      }
+    },
+    [gridResult]
+  );
 
   const handleAnalyze = async () => {
     if (polygon.length < 4) {
@@ -164,13 +213,25 @@ export default function SurveyPage() {
     setGridResult(null);
     setGridLoading(true);
 
+    // 推定秒数を計算（2mグリッドで30x30m = 225点、100点あたり約3秒）
+    // ポリゴンのバウンディングボックスから概算
+    const lats = polygon.map((p) => p[0]);
+    const lons = polygon.map((p) => p[1]);
+    const latRange = Math.max(...lats) - Math.min(...lats);
+    const lonRange = Math.max(...lons) - Math.min(...lons);
+    const estWidth = lonRange * 111000 * Math.cos((Math.min(...lats) * Math.PI) / 180);
+    const estHeight = latRange * 111000;
+    const estPoints = Math.ceil((estWidth / GRID_INTERVAL) * (estHeight / GRID_INTERVAL));
+    const estSeconds = Math.max(3, Math.ceil(estPoints / 30)); // 30点/秒の概算
+    setCountdown(estSeconds);
+
     try {
       const res = await fetch("/api/slope-grid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           polygon,
-          interval: gridInterval,
+          interval: GRID_INTERVAL,
           crossSectionLine:
             crossSectionLine.length >= 2 ? crossSectionLine : undefined,
         }),
@@ -188,6 +249,7 @@ export default function SurveyPage() {
       setGridError(e.message || "通信エラーが発生しました");
     } finally {
       setGridLoading(false);
+      setCountdown(null);
     }
   };
 
@@ -199,64 +261,8 @@ export default function SurveyPage() {
         <h1 className="text-2xl font-bold">現地調査（傾斜判定）</h1>
       </div>
 
-      <Tabs defaultValue="point" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="point">座標入力</TabsTrigger>
-          <TabsTrigger value="polygon">ポリゴン解析</TabsTrigger>
-        </TabsList>
-
-        {/* ═══ 座標入力タブ ═══ */}
-        <TabsContent value="point" className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              placeholder="座標を入力（例: 34.3963, 132.4596）"
-              value={coordInput}
-              onChange={(e) => setCoordInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1"
-            />
-            <Button
-              onClick={handleMeasure}
-              disabled={loading || !coordInput.trim()}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              ) : (
-                <Search className="h-4 w-4 mr-1" />
-              )}
-              計測
-            </Button>
-          </div>
-
-          {error && (
-            <Card className="border-destructive">
-              <CardContent className="pt-4">
-                <p className="text-sm text-destructive">{error}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {result && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <SlopeResultCard result={result} />
-              <Card className="overflow-hidden">
-                <div className="h-[400px]">
-                  <SurveyMap
-                    center={[
-                      result.points.find((p) => p.label === "center")!.lat,
-                      result.points.find((p) => p.label === "center")!.lon,
-                    ]}
-                    points={result.points}
-                  />
-                </div>
-              </Card>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══ ポリゴン解析タブ ═══ */}
-        <TabsContent value="polygon" className="space-y-4">
-          {/* 座標ジャンプ */}
+      <div className="space-y-4">
+        {/* 座標ジャンプ */}
           <div className="flex gap-2">
             <Input
               placeholder="座標を入力して地図をジャンプ（例: 34.3963, 132.4596）"
@@ -277,22 +283,6 @@ export default function SurveyPage() {
 
           {/* 操作バー */}
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-muted-foreground whitespace-nowrap">
-                グリッド間隔
-              </label>
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={gridInterval}
-                onChange={(e) =>
-                  setGridInterval(Math.max(1, Math.min(50, Number(e.target.value) || 5)))
-                }
-                className="w-20"
-              />
-              <span className="text-sm text-muted-foreground">m</span>
-            </div>
             <Button
               onClick={handleAnalyze}
               disabled={gridLoading || polygon.length < 4}
@@ -304,17 +294,41 @@ export default function SurveyPage() {
               )}
               解析
             </Button>
+            {gridResult && projectInfo && (
+              <Button
+                variant="outline"
+                onClick={handleSave}
+                disabled={saveStatus === "saving"}
+              >
+                {saveStatus === "saving" ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : saveStatus === "saved" ? (
+                  <CheckCircle2 className="h-4 w-4 mr-1 text-green-500" />
+                ) : (
+                  <Save className="h-4 w-4 mr-1" />
+                )}
+                {saveStatus === "saved" ? "保存完了" : "保存"}
+              </Button>
+            )}
+            {gridResult && (
+              <ExportDialog
+                stats={gridResult.stats}
+                totalPoints={gridResult.gridInfo.totalPoints}
+                crossSection={gridResult.crossSection}
+                mapContainerRef={mapContainerRef}
+                surfaceContainerRef={surfaceContainerRef}
+                projectName={projectInfo?.name}
+              />
+            )}
             {polygon.length >= 4 && (
               <span className="text-xs text-muted-foreground">
                 ポリゴン設定済み（{polygon.length - 1}頂点）
               </span>
             )}
-            {gridLoading && (
-              <span className="text-xs text-muted-foreground animate-pulse">
-                標高データを取得中...
-              </span>
-            )}
           </div>
+
+          {/* プログレス表示 */}
+          <AnalysisProgress countdown={countdown} isLoading={gridLoading} />
 
           {gridError && (
             <Card className="border-destructive">
@@ -327,7 +341,7 @@ export default function SurveyPage() {
 
           {/* 地図 + 3Dサーフェス */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="overflow-hidden relative">
+            <Card className="overflow-hidden relative" ref={mapContainerRef}>
               <div className="h-[450px]">
                 <PolygonDrawMap
                   onPolygonReady={handlePolygonReady}
@@ -336,6 +350,7 @@ export default function SurveyPage() {
                   analyzed={!!gridResult}
                   drawMode={drawMode}
                   onDrawModeChange={setDrawMode}
+                  resetTrigger={resetTrigger}
                   slopeOverlay={
                     gridResult
                       ? {
@@ -346,20 +361,30 @@ export default function SurveyPage() {
                         }
                       : undefined
                   }
+                  crossSectionLineDisplay={
+                    crossSectionLine.length >= 2
+                      ? crossSectionLine
+                      : gridResult?.autoCrossSectionLine ?? null
+                  }
                 />
                 <PolygonToolbar
                   activeMode={drawMode}
                   onModeChange={setDrawMode}
+                  onReset={handleReset}
+                  hasPolygon={polygon.length >= 4}
                 />
+                {gridResult && (
+                  <SlopeLegend className="absolute bottom-2 right-2 z-[1000]" />
+                )}
               </div>
             </Card>
 
             {gridResult ? (
-              <Card className="overflow-hidden">
+              <Card className="overflow-hidden" ref={surfaceContainerRef}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">3D地形サーフェス</CardTitle>
+                  <CardTitle className="text-base">3D地形ビューワー</CardTitle>
                 </CardHeader>
-                <div className="h-[400px]">
+                <div className="h-[400px] relative">
                   <Surface3D
                     z={gridResult.elevationMatrix}
                     interval={gridResult.gridInfo.interval}
@@ -368,6 +393,25 @@ export default function SurveyPage() {
                       lon: gridResult.gridInfo.originLon,
                     }}
                     polygonCoords={polygon}
+                    crossSectionLine={
+                      crossSectionLine.length >= 2
+                        ? crossSectionLine
+                        : gridResult?.autoCrossSectionLine ?? null
+                    }
+                  />
+                  <FullscreenSurface
+                    z={gridResult.elevationMatrix}
+                    interval={gridResult.gridInfo.interval}
+                    gridOrigin={{
+                      lat: gridResult.gridInfo.originLat,
+                      lon: gridResult.gridInfo.originLon,
+                    }}
+                    polygonCoords={polygon}
+                    crossSectionLine={
+                      crossSectionLine.length >= 2
+                        ? crossSectionLine
+                        : gridResult?.autoCrossSectionLine ?? null
+                    }
                   />
                 </div>
               </Card>
@@ -402,8 +446,7 @@ export default function SurveyPage() {
               />
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }

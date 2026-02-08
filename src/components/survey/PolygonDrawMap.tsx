@@ -28,6 +28,8 @@ interface PolygonDrawMapProps {
   initialZoom?: number;
   drawMode?: DrawMode;
   onDrawModeChange?: (mode: DrawMode) => void;
+  resetTrigger?: number;
+  crossSectionLineDisplay?: [number, number][] | null; // 表示用断面ライン
 }
 
 export function PolygonDrawMap(props: PolygonDrawMapProps) {

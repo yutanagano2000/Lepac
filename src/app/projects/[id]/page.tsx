@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon, PenTool } from "lucide-react";
+import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon, PenTool, Mountain } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
 import {
@@ -52,6 +52,7 @@ import { PROGRESS_TITLES } from "./_constants";
 import { laws } from "./_constants";
 import type { LegalStatuses } from "./_types";
 import LegalSearchTab from "./_components/LegalSearchTab";
+import { ConstructionTab, CommentsTab } from "./_components";
 
 function formatYyyyMd(date: Date | undefined) {
   if (!date) return "";
@@ -90,28 +91,6 @@ export default function ProjectDetailPage() {
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
-  // 工事タブ用state
-  const [constructionProgressList, setConstructionProgressList] = useState<ConstructionProgress[]>([]);
-  const [constructionPhotos, setConstructionPhotos] = useState<ConstructionPhoto[]>([]);
-  const [isLoadingConstruction, setIsLoadingConstruction] = useState(false);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [photoUploadCategory, setPhotoUploadCategory] = useState<string>("");
-  const [photoContractorName, setPhotoContractorName] = useState("");
-  const [photoNote, setPhotoNote] = useState("");
-  // 工事タブ用 datepicker state
-  const [constructionAvailableDateOpen, setConstructionAvailableDateOpen] = useState(false);
-  const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
-  const [constructionStartScheduledOpen, setConstructionStartScheduledOpen] = useState(false);
-  const [constructionStartDateOpen, setConstructionStartDateOpen] = useState(false);
-  const [constructionEndScheduledOpen, setConstructionEndScheduledOpen] = useState(false);
-  const [constructionEndDateOpen, setConstructionEndDateOpen] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-  const [newComment, setNewComment] = useState("");
-  const [editingComment, setEditingComment] = useState<Comment | null>(null);
-  const [editCommentContent, setEditCommentContent] = useState("");
-  const [commentEditOpen, setCommentEditOpen] = useState(false);
-  const [commentDeleteOpen, setCommentDeleteOpen] = useState(false);
-  const [deletingComment, setDeletingComment] = useState<Comment | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [detailEditOpen, setDetailEditOpen] = useState(false);
   const [detailForm, setDetailForm] = useState({
@@ -249,25 +228,6 @@ export default function ProjectDetailPage() {
       .then(setTodos);
   };
 
-  // 工事進捗・写真取得
-  const fetchConstructionData = async () => {
-    setIsLoadingConstruction(true);
-    try {
-      const [progressRes, photosRes] = await Promise.all([
-        fetch(`/api/projects/${id}/construction-progress`),
-        fetch(`/api/projects/${id}/construction-photos`),
-      ]);
-      const progressData = await progressRes.json();
-      const photosData = await photosRes.json();
-      setConstructionProgressList(Array.isArray(progressData) ? progressData : []);
-      setConstructionPhotos(Array.isArray(photosData) ? photosData : []);
-    } catch (error) {
-      console.error("Failed to fetch construction data:", error);
-    } finally {
-      setIsLoadingConstruction(false);
-    }
-  };
-
   const fetchFiles = () => {
     fetch(`/api/projects/${id}/files`)
       .then((res) => res.json())
@@ -281,7 +241,7 @@ export default function ProjectDetailPage() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...project,
+        // 更新するフィールドのみ送信（...projectを展開するとidやorganizationId等も含まれてバリデーションエラーになる）
         address: detailForm.address,
         coordinates: normalizeCoordinateString(detailForm.coordinates) || detailForm.coordinates,
         landowner1: detailForm.landowner1,
@@ -413,121 +373,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleCommentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-    await fetch(`/api/projects/${id}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newComment }),
-    });
-    setNewComment("");
-    fetchComments();
-  };
-
-  const openCommentEditDialog = (comment: Comment) => {
-    setEditingComment(comment);
-    setEditCommentContent(comment.content);
-    setCommentEditOpen(true);
-  };
-
-  const handleCommentEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingComment || !editCommentContent.trim()) return;
-    await fetch(`/api/projects/${id}/comments`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        commentId: editingComment.id,
-        content: editCommentContent,
-      }),
-    });
-    setCommentEditOpen(false);
-    setEditingComment(null);
-    fetchComments();
-  };
-
-  const openCommentDeleteDialog = (comment: Comment) => {
-    setDeletingComment(comment);
-    setCommentDeleteOpen(true);
-  };
-
-  const handleCommentDelete = async () => {
-    if (!deletingComment) return;
-    await fetch(`/api/projects/${id}/comments?commentId=${deletingComment.id}`, {
-      method: "DELETE",
-    });
-    setCommentDeleteOpen(false);
-    setDeletingComment(null);
-    fetchComments();
-  };
-
-  // 工事進捗更新
-  const handleConstructionProgressUpdate = async (category: string, status: string, note?: string) => {
-    try {
-      await fetch(`/api/projects/${id}/construction-progress`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, status, note }),
-      });
-      fetchConstructionData();
-    } catch (error) {
-      console.error("Failed to update construction progress:", error);
-    }
-  };
-
-  // 工事写真アップロード
-  const handlePhotoUpload = async (file: File) => {
-    if (!photoUploadCategory) {
-      alert("写真カテゴリを選択してください");
-      return;
-    }
-    setUploadingPhoto(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("category", photoUploadCategory);
-      if (photoContractorName) formData.append("contractorName", photoContractorName);
-      if (photoNote) formData.append("note", photoNote);
-
-      const res = await fetch(`/api/projects/${id}/construction-photos`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        alert(error.error || "アップロードに失敗しました");
-        return;
-      }
-
-      // 成功後リセット
-      setPhotoUploadCategory("");
-      setPhotoContractorName("");
-      setPhotoNote("");
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      fetchConstructionData();
-    } catch (error) {
-      console.error("Failed to upload photo:", error);
-      alert("アップロードに失敗しました");
-    } finally {
-      setUploadingPhoto(false);
-    }
-  };
-
-  // 工事写真削除
-  const handlePhotoDelete = async (photoId: number) => {
-    if (!confirm("この写真を削除しますか？")) return;
-    try {
-      await fetch(`/api/projects/${id}/construction-photos/${photoId}`, {
-        method: "DELETE",
-      });
-      fetchConstructionData();
-    } catch (error) {
-      console.error("Failed to delete photo:", error);
-    }
-  };
-
   const handleTodoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTodoContent.trim() || !newTodoDueDate) return;
@@ -644,19 +489,29 @@ export default function ProjectDetailPage() {
   // Strict Modeでの二重呼び出しを防止
   const hasGeneratedRef = useRef(false);
 
+  // 初期データを統合APIで一括取得（7リクエスト→1リクエストに最適化）
   useEffect(() => {
-    fetchProject();
-    fetchComments();
-    fetchTodos();
-    fetchFiles();
-    fetchConstructionData();
+    const fetchBundle = async () => {
+      try {
+        const res = await fetch(`/api/projects/${id}/bundle`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setProject(data.project);
+        setProgressList(data.progress);
+        setComments(data.comments);
+        setTodos(data.todos);
+        setFiles(data.files);
+      } catch (error) {
+        console.error("Failed to fetch bundle:", error);
+      }
+    };
+
+    fetchBundle();
+
     // generate APIは1回だけ呼び出す（React Strict Modeでの二重実行防止）
     if (!hasGeneratedRef.current) {
       hasGeneratedRef.current = true;
       generateAndFetchProgress();
-    } else {
-      // 2回目以降は進捗の取得のみ
-      fetchProgress();
     }
   }, [id]);
 
@@ -1558,6 +1413,14 @@ export default function ProjectDetailPage() {
                               案内図エディタ
                             </Link>
                           </Button>
+                          <Button variant="outline" size="sm" asChild className="h-8">
+                            <Link
+                              href={`/survey?lat=${parseCoordinateString(project.coordinates)?.lat || ""}&lon=${parseCoordinateString(project.coordinates)?.lon || ""}&projectId=${project.id}&projectName=${encodeURIComponent(project.managementNumber)}`}
+                            >
+                              <Mountain className="h-3 w-3 mr-2" />
+                              現地調査
+                            </Link>
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -2027,424 +1890,22 @@ export default function ProjectDetailPage() {
               />
             </TabsContent>
 
-            <TabsContent value="construction" className="mt-6 space-y-6">
-              {/* 工事タブ */}
-              <Card>
-                <CardContent className="pt-6 space-y-6">
-                  {/* 基本日程 */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <HardHat className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="font-semibold">工事日程</h3>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>着工可能日</Label>
-                        <Popover open={constructionAvailableDateOpen} onOpenChange={setConstructionAvailableDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionAvailableDate && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {project?.constructionAvailableDate ? formatYyyyMd(new Date(project.constructionAvailableDate + "T00:00:00")) : "選択してください"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={project?.constructionAvailableDate ? new Date(project.constructionAvailableDate + "T00:00:00") : undefined}
-                              onSelect={async (d) => {
-                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
-                                await fetch(`/api/projects/${id}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ constructionAvailableDate: value }),
-                                });
-                                fetchProject();
-                                setConstructionAvailableDateOpen(false);
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>納品日</Label>
-                        <Popover open={deliveryDateOpen} onOpenChange={setDeliveryDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.deliveryDate && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {project?.deliveryDate ? formatYyyyMd(new Date(project.deliveryDate + "T00:00:00")) : "選択してください"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={project?.deliveryDate ? new Date(project.deliveryDate + "T00:00:00") : undefined}
-                              onSelect={async (d) => {
-                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
-                                await fetch(`/api/projects/${id}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ deliveryDate: value }),
-                                });
-                                fetchProject();
-                                setDeliveryDateOpen(false);
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>着工予定日</Label>
-                        <Popover open={constructionStartScheduledOpen} onOpenChange={setConstructionStartScheduledOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionStartScheduled && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {project?.constructionStartScheduled ? formatYyyyMd(new Date(project.constructionStartScheduled + "T00:00:00")) : "選択してください"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={project?.constructionStartScheduled ? new Date(project.constructionStartScheduled + "T00:00:00") : undefined}
-                              onSelect={async (d) => {
-                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
-                                await fetch(`/api/projects/${id}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ constructionStartScheduled: value }),
-                                });
-                                fetchProject();
-                                setConstructionStartScheduledOpen(false);
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>着工日</Label>
-                        <Popover open={constructionStartDateOpen} onOpenChange={setConstructionStartDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionStartDate && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {project?.constructionStartDate ? formatYyyyMd(new Date(project.constructionStartDate + "T00:00:00")) : "選択してください"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={project?.constructionStartDate ? new Date(project.constructionStartDate + "T00:00:00") : undefined}
-                              onSelect={async (d) => {
-                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
-                                await fetch(`/api/projects/${id}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ constructionStartDate: value }),
-                                });
-                                fetchProject();
-                                setConstructionStartDateOpen(false);
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>完工予定日</Label>
-                        <Popover open={constructionEndScheduledOpen} onOpenChange={setConstructionEndScheduledOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionEndScheduled && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {project?.constructionEndScheduled ? formatYyyyMd(new Date(project.constructionEndScheduled + "T00:00:00")) : "選択してください"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={project?.constructionEndScheduled ? new Date(project.constructionEndScheduled + "T00:00:00") : undefined}
-                              onSelect={async (d) => {
-                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
-                                await fetch(`/api/projects/${id}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ constructionEndScheduled: value }),
-                                });
-                                fetchProject();
-                                setConstructionEndScheduledOpen(false);
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>完工日</Label>
-                        <Popover open={constructionEndDateOpen} onOpenChange={setConstructionEndDateOpen}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !project?.constructionEndDate && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {project?.constructionEndDate ? formatYyyyMd(new Date(project.constructionEndDate + "T00:00:00")) : "選択してください"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={project?.constructionEndDate ? new Date(project.constructionEndDate + "T00:00:00") : undefined}
-                              onSelect={async (d) => {
-                                const value = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
-                                await fetch(`/api/projects/${id}`, {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ constructionEndDate: value }),
-                                });
-                                fetchProject();
-                                setConstructionEndDateOpen(false);
-                              }}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 工事進捗 */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <ListTodo className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="font-semibold">工事進捗</h3>
-                    </div>
-                    {isLoadingConstruction ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {CONSTRUCTION_PROGRESS_CATEGORIES.map((category) => {
-                          const progress = constructionProgressList.find(p => p.category === category);
-                          const currentStatus = progress?.status || "pending";
-                          return (
-                            <div key={category} className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
-                              <div className="flex-1">
-                                <span className="font-medium">{category}</span>
-                                {progress?.note && (
-                                  <p className="text-xs text-muted-foreground mt-1">{progress.note}</p>
-                                )}
-                              </div>
-                              <Select
-                                value={currentStatus}
-                                onValueChange={(value) => handleConstructionProgressUpdate(category, value)}
-                              >
-                                <SelectTrigger className={cn(
-                                  "w-32",
-                                  currentStatus === "completed" && "bg-green-100 dark:bg-green-900/30 border-green-300",
-                                  currentStatus === "in_progress" && "bg-amber-100 dark:bg-amber-900/30 border-amber-300"
-                                )}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pending">未着手</SelectItem>
-                                  <SelectItem value="in_progress">進行中</SelectItem>
-                                  <SelectItem value="completed">完了</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* 工事写真 */}
-              <Card>
-                <CardContent className="pt-6 space-y-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Camera className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="font-semibold">工事写真</h3>
-                  </div>
-
-                  {/* 写真アップロード */}
-                  <div className="p-4 border-2 border-dashed rounded-lg space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>写真カテゴリ *</Label>
-                        <Select value={photoUploadCategory} onValueChange={setPhotoUploadCategory}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="カテゴリを選択..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CONSTRUCTION_PHOTO_CATEGORIES.map((cat) => (
-                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>撮影業者名</Label>
-                        <Input
-                          value={photoContractorName}
-                          onChange={(e) => setPhotoContractorName(e.target.value)}
-                          placeholder="業者名を入力..."
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>メモ</Label>
-                      <Input
-                        value={photoNote}
-                        onChange={(e) => setPhotoNote(e.target.value)}
-                        placeholder="写真に関するメモ..."
-                      />
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handlePhotoUpload(file);
-                        }}
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() => photoInputRef.current?.click()}
-                        disabled={uploadingPhoto || !photoUploadCategory}
-                      >
-                        {uploadingPhoto ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Upload className="h-4 w-4 mr-2" />
-                        )}
-                        写真をアップロード
-                      </Button>
-                      {!photoUploadCategory && (
-                        <span className="text-xs text-muted-foreground">カテゴリを選択してください</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 写真一覧（カテゴリ別） */}
-                  {CONSTRUCTION_PHOTO_CATEGORIES.map((category) => {
-                    const categoryPhotos = constructionPhotos.filter(p => p.category === category);
-                    if (categoryPhotos.length === 0) return null;
-                    return (
-                      <div key={category} className="space-y-3">
-                        <h4 className="font-medium text-sm flex items-center gap-2">
-                          <ImageIcon className="h-4 w-4" />
-                          {category}
-                          <span className="text-muted-foreground">({categoryPhotos.length})</span>
-                        </h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          {categoryPhotos.map((photo) => (
-                            <div key={photo.id} className="relative group">
-                              <a href={photo.fileUrl} target="_blank" rel="noopener noreferrer">
-                                <img
-                                  src={photo.fileUrl}
-                                  alt={photo.fileName}
-                                  className="w-full h-32 object-cover rounded-lg border"
-                                />
-                              </a>
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handlePhotoDelete(photo.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <div className="mt-1 text-xs space-y-0.5">
-                                {photo.contractorName && (
-                                  <p className="text-muted-foreground">業者: {photo.contractorName}</p>
-                                )}
-                                <p className="text-muted-foreground truncate">{photo.fileName}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {constructionPhotos.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      工事写真はまだアップロードされていません
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+            <TabsContent value="construction" className="mt-6">
+              {project && (
+                <ConstructionTab
+                  project={project}
+                  projectId={id}
+                  onProjectUpdate={fetchProject}
+                />
+              )}
             </TabsContent>
 
-            <TabsContent value="comments" className="mt-6 space-y-6">
-              {/* コメントフィード */}
-              <div className="relative">
-                <div className="mb-4 flex items-center gap-2">
-                  <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                  <h2 className="font-semibold">コメント</h2>
-                </div>
-                {/* コメント投稿欄 */}
-                <form onSubmit={handleCommentSubmit} className="mb-4">
-                  <div className="flex gap-2">
-                    <Textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="コメントを入力..."
-                      rows={2}
-                      className="flex-1"
-                    />
-                    <Button type="submit" size="icon" disabled={!newComment.trim()}>
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </form>
-                {/* コメント一覧 */}
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">コメントはありません</p>
-                  ) : (
-                    comments.map((comment) => (
-                      <Card key={comment.id} className="bg-muted/50">
-                        <CardContent className="p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <p className="text-sm">{comment.content}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {formatDateJp(new Date(comment.createdAt))}
-                                {comment.userName && (
-                                  <span className="ml-2">· {comment.userName}</span>
-                                )}
-                              </p>
-                            </div>
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => openCommentEditDialog(comment)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={() => openCommentDeleteDialog(comment)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
-              </div>
+            <TabsContent value="comments" className="mt-6">
+              <CommentsTab
+                projectId={id}
+                comments={comments}
+                onCommentsChange={fetchComments}
+              />
             </TabsContent>
           </Tabs>
 
@@ -2828,55 +2289,6 @@ export default function ProjectDetailPage() {
               </form>
             </DialogContent>
           </Dialog>
-
-          {/* コメント編集ダイアログ */}
-          <Dialog open={commentEditOpen} onOpenChange={setCommentEditOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>コメントを編集</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCommentEditSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-comment-content">内容</Label>
-                  <Textarea
-                    id="edit-comment-content"
-                    value={editCommentContent}
-                    onChange={(e) => setEditCommentContent(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setCommentEditOpen(false)}>
-                    キャンセル
-                  </Button>
-                  <Button type="submit" disabled={!editCommentContent.trim()}>
-                    保存
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          {/* コメント削除確認ダイアログ */}
-          <AlertDialog open={commentDeleteOpen} onOpenChange={setCommentDeleteOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>コメントを削除</AlertDialogTitle>
-                <AlertDialogDescription>
-                  このコメントを削除しますか？
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleCommentDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  削除
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
           {/* TODO削除確認ダイアログ */}
           <AlertDialog open={todoDeleteOpen} onOpenChange={setTodoDeleteOpen}>

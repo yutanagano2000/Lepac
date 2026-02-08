@@ -72,14 +72,18 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .offset(offset);
 
-  // 超過判定: Map を使った O(n) ルックアップ
+  // 超過判定: 対象案件のみ取得（全件スキャンを回避）
   const projectIds = pageProjects.map((p) => p.id);
-  let progressByProject = new Map<number, typeof progress.$inferSelect[]>();
+  const progressByProject = new Map<number, typeof progress.$inferSelect[]>();
 
   if (projectIds.length > 0) {
-    const allProgress = await db.select().from(progress);
-    for (const p of allProgress) {
-      if (!projectIds.includes(p.projectId)) continue;
+    // IN句で対象案件のProgressのみ取得（O(n)→O(対象件数)に改善）
+    const relevantProgress = await db
+      .select()
+      .from(progress)
+      .where(sql`${progress.projectId} IN (${sql.join(projectIds.map(id => sql`${id}`), sql`, `)})`);
+
+    for (const p of relevantProgress) {
       const arr = progressByProject.get(p.projectId) || [];
       arr.push(p);
       progressByProject.set(p.projectId, arr);

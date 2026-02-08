@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
@@ -19,19 +19,15 @@ const Plot = dynamic(
 const VERTEX_LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const EARTH_RADIUS_M = 6371000;
 
-/** 鉛直倍率オプション */
-const EXAGGERATION_OPTIONS = [
-  { value: 1, label: "1x 実スケール" },
-  { value: 2, label: "2x" },
-  { value: 5, label: "5x" },
-  { value: 10, label: "10x" },
-];
+/** 鉛直倍率（固定値） */
+const EXAGGERATION = 2;
 
 interface Surface3DProps {
   z: (number | null)[][];
   interval: number;
   gridOrigin?: { lat: number; lon: number };
   polygonCoords?: [number, number][];
+  crossSectionLine?: [number, number][] | null;
 }
 
 function geoToSurface(
@@ -71,9 +67,7 @@ function geoToSurface(
   };
 }
 
-export function Surface3D({ z, interval, gridOrigin, polygonCoords }: Surface3DProps) {
-  const [exaggeration, setExaggeration] = useState(1);
-
+export function Surface3D({ z, interval, gridOrigin, polygonCoords, crossSectionLine }: Surface3DProps) {
   const rows = z.length;
   const cols = z[0]?.length ?? 0;
 
@@ -108,7 +102,7 @@ export function Surface3D({ z, interval, gridOrigin, polygonCoords }: Surface3DP
   const aspectRatio = {
     x: xRange / maxHorizontal || 0.01,
     y: yRange / maxHorizontal || 0.01,
-    z: Math.max((elevRange * exaggeration) / maxHorizontal, 0.01),
+    z: Math.max((elevRange * EXAGGERATION) / maxHorizontal, 0.01),
   };
 
   // ─── ポリゴン頂点マーカー ─────────────────────────
@@ -180,31 +174,76 @@ export function Surface3D({ z, interval, gridOrigin, polygonCoords }: Surface3DP
     showlegend: false,
   });
 
+  // ─── 断面ライン表示 ──────────────────────────────
+  if (crossSectionLine && crossSectionLine.length >= 2 && gridOrigin) {
+    const linePoints: { x: number; y: number; z: number }[] = [];
+
+    for (const coord of crossSectionLine) {
+      const pos = geoToSurface(
+        coord[0], coord[1],
+        gridOrigin.lat, gridOrigin.lon,
+        interval, rows, z
+      );
+      if (pos) {
+        linePoints.push(pos);
+      }
+    }
+
+    if (linePoints.length >= 2) {
+      // 断面ライン（オレンジの破線風）
+      extraTraces.push({
+        type: "scatter3d",
+        mode: "lines",
+        x: linePoints.map(p => p.x),
+        y: linePoints.map(p => p.y),
+        z: linePoints.map(p => p.z + 1), // 少し浮かせて表示
+        line: { color: "#f59e0b", width: 6 },
+        hoverinfo: "skip",
+        showlegend: false,
+      });
+
+      // 始点マーカー（高点・緑）
+      extraTraces.push({
+        type: "scatter3d",
+        mode: "markers+text",
+        x: [linePoints[0].x],
+        y: [linePoints[0].y],
+        z: [linePoints[0].z + 2],
+        text: ["高"],
+        textposition: "top center",
+        textfont: { size: 12, color: "#16a34a", family: "Arial Black, sans-serif" },
+        marker: { size: 10, color: "#16a34a", line: { color: "#fff", width: 2 } },
+        hovertemplate: `始点（高点）<br>標高: ${linePoints[0].z.toFixed(1)}m<extra></extra>`,
+        showlegend: false,
+      });
+
+      // 終点マーカー（低点・赤）
+      const endPoint = linePoints[linePoints.length - 1];
+      extraTraces.push({
+        type: "scatter3d",
+        mode: "markers+text",
+        x: [endPoint.x],
+        y: [endPoint.y],
+        z: [endPoint.z + 2],
+        text: ["低"],
+        textposition: "top center",
+        textfont: { size: 12, color: "#dc2626", family: "Arial Black, sans-serif" },
+        marker: { size: 10, color: "#dc2626", line: { color: "#fff", width: 2 } },
+        hovertemplate: `終点（低点）<br>標高: ${endPoint.z.toFixed(1)}m<extra></extra>`,
+        showlegend: false,
+      });
+    }
+  }
+
   return (
-    <div className="relative w-full h-full flex flex-col">
-      {/* 鉛直倍率コントロール */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b text-xs shrink-0">
-        <span className="text-muted-foreground whitespace-nowrap">鉛直倍率:</span>
-        {EXAGGERATION_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setExaggeration(opt.value)}
-            className={`px-2 py-0.5 rounded transition-colors ${
-              exaggeration === opt.value
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted hover:bg-muted/80 text-muted-foreground"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-        <span className="ml-auto text-muted-foreground">
-          高低差: {elevRange.toFixed(1)}m
-        </span>
+    <div className="relative w-full h-full">
+      {/* 高低差表示 */}
+      <div className="absolute top-2 left-2 z-10 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
+        高低差: {elevRange.toFixed(1)}m
       </div>
 
       {/* 3Dチャート */}
-      <div className="flex-1 min-h-0">
+      <div className="w-full h-full">
         <Plot
           data={[
             {
@@ -229,7 +268,7 @@ export function Surface3D({ z, interval, gridOrigin, polygonCoords }: Surface3DP
               yaxis: { title: { text: "" }, showticklabels: false },
               zaxis: { title: { text: "標高 (m)" } },
               camera: {
-                eye: { x: 0.2, y: -1.8, z: 1.2 },
+                eye: { x: 0.15, y: -1.2, z: 0.8 }, // より近くから表示
                 up: { x: 0, y: 0, z: 1 },
               },
             },
@@ -237,10 +276,9 @@ export function Surface3D({ z, interval, gridOrigin, polygonCoords }: Surface3DP
             showlegend: false,
           } as any}
           config={{
-            displayModeBar: true,
-            modeBarButtonsToRemove: ["toImage", "sendDataToCloud"],
-            displaylogo: false,
+            displayModeBar: false,
             responsive: true,
+            scrollZoom: true,
           }}
           useResizeHandler
           style={{ width: "100%", height: "100%" }}
