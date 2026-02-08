@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos, projects, progress, meetings, calendarEvents } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { createCalendarEventSchema, validateBody } from "@/lib/validations";
 import { requireOrganization, getUserId } from "@/lib/auth-guard";
 
-// カレンダー用のイベントを一括取得
-export async function GET() {
+// カレンダー用のイベントを一括取得（日付範囲フィルタ対応）
+export async function GET(request: Request) {
   // 認証・組織チェック
   const authResult = await requireOrganization();
   if (!authResult.success) {
@@ -14,19 +14,59 @@ export async function GET() {
   }
   const { organizationId } = authResult;
 
-  try {
-    // 並列でデータを取得（組織でフィルタリング）
-    const [allTodos, allProjects, allProgress, allMeetings, allCalendarEvents] = await Promise.all([
-      db.select().from(todos).where(eq(todos.organizationId, organizationId)),
-      db.select().from(projects).where(eq(projects.organizationId, organizationId)),
-      db.select().from(progress),
-      db.select().from(meetings).where(eq(meetings.organizationId, organizationId)),
-      db.select().from(calendarEvents).where(eq(calendarEvents.organizationId, organizationId)),
-    ]);
+  // 日付範囲パラメータを取得（デフォルト: 前後3ヶ月）
+  const { searchParams } = new URL(request.url);
+  const startParam = searchParams.get("start");
+  const endParam = searchParams.get("end");
 
-    // プロジェクトIDをキーにしたマップを作成
-    const projectMap = new Map(allProjects.map((p) => [p.id, p]));
-    const projectIds = new Set(allProjects.map((p) => p.id));
+  const now = new Date();
+  const defaultStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 4, 0);
+
+  const startDate = startParam || defaultStart.toISOString().split("T")[0];
+  const endDate = endParam || defaultEnd.toISOString().split("T")[0];
+
+  try {
+    // 組織のプロジェクトIDを先に取得
+    const orgProjects = await db
+      .select({ id: projects.id, managementNumber: projects.managementNumber })
+      .from(projects)
+      .where(eq(projects.organizationId, organizationId));
+
+    const projectMap = new Map(orgProjects.map((p) => [p.id, p]));
+    const projectIds = orgProjects.map((p) => p.id);
+
+    // 並列でデータを取得（日付範囲 + 組織フィルタ）
+    const [allTodos, allProgress, allMeetings, allCalendarEvents] = await Promise.all([
+      // TODO: 期日でフィルタ
+      db.select().from(todos).where(
+        and(
+          eq(todos.organizationId, organizationId),
+          gte(todos.dueDate, startDate),
+          lte(todos.dueDate, endDate)
+        )
+      ),
+      // 進捗: プロジェクトIDでフィルタ（組織間接フィルタ）
+      projectIds.length > 0
+        ? db.select().from(progress).where(inArray(progress.projectId, projectIds))
+        : Promise.resolve([]),
+      // 会議: 日付でフィルタ
+      db.select().from(meetings).where(
+        and(
+          eq(meetings.organizationId, organizationId),
+          gte(meetings.meetingDate, startDate),
+          lte(meetings.meetingDate, endDate)
+        )
+      ),
+      // カスタムイベント: 日付でフィルタ
+      db.select().from(calendarEvents).where(
+        and(
+          eq(calendarEvents.organizationId, organizationId),
+          gte(calendarEvents.eventDate, startDate),
+          lte(calendarEvents.eventDate, endDate)
+        )
+      ),
+    ]);
 
     // イベントを構築
     const events = [];
@@ -47,12 +87,14 @@ export async function GET() {
       });
     }
 
-    // 進捗イベント（組織に属するプロジェクトのもののみ）
+    // 進捗イベント（既にプロジェクトIDでフィルタ済み）
     for (const prog of allProgress) {
-      if (!projectIds.has(prog.projectId)) continue;
-
       const date = prog.completedAt || prog.createdAt;
       if (!date) continue;
+
+      // 日付範囲チェック
+      const dateOnly = date.split("T")[0];
+      if (dateOnly < startDate || dateOnly > endDate) continue;
 
       const project = projectMap.get(prog.projectId);
       events.push({

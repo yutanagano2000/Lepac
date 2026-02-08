@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
+import useSWR from "swr";
 import { Loader2 } from "lucide-react";
 
 const FullCalendarView = dynamic(
@@ -53,51 +54,60 @@ const getEventColor = (type: string, status?: string) => {
   }
 };
 
+// SWR fetcher
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+// 日付範囲を計算（現在月の前後3ヶ月）
+const getDateRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 4, 0);
+  return {
+    start: start.toISOString().split("T")[0],
+    end: end.toISOString().split("T")[0],
+  };
+};
+
 export default function CalendarPage() {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [dateRange] = useState(getDateRange);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // 一括取得APIを使用
-        const res = await fetch("/api/calendar/events");
-        if (!res.ok) throw new Error("Failed to fetch calendar events");
+  // SWRでキャッシュ付きデータ取得（5分間キャッシュ）
+  const { data, isLoading } = useSWR(
+    `/api/calendar/events?start=${dateRange.start}&end=${dateRange.end}`,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 300000, // 5分
+    }
+  );
 
-        const data = await res.json();
-        const calendarEvents: CalendarEvent[] = data.map((event: any) => {
-          const colors = getEventColor(event.type, event.status);
-          return {
-            id: event.id,
-            title: event.title,
-            start: event.start,
-            end: event.end,
-            allDay: true,
-            backgroundColor: colors.bg,
-            borderColor: colors.border,
-            textColor: colors.text,
-            extendedProps: {
-              type: event.type,
-              projectId: event.projectId,
-              projectName: event.projectName,
-              description: event.description,
-              status: event.status,
-              userName: event.userName,
-              category: event.category,
-            },
-          };
-        });
+  // イベントデータをメモ化
+  const events = useMemo(() => {
+    if (!data || !Array.isArray(data)) return [];
 
-        setEvents(calendarEvents);
-      } catch (error) {
-        console.error("データの取得に失敗しました:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+    return data.map((event: any) => {
+      const colors = getEventColor(event.type, event.status);
+      return {
+        id: event.id,
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        allDay: true,
+        backgroundColor: colors.bg,
+        borderColor: colors.border,
+        textColor: colors.text,
+        extendedProps: {
+          type: event.type,
+          projectId: event.projectId,
+          projectName: event.projectName,
+          description: event.description,
+          status: event.status,
+          userName: event.userName,
+          category: event.category,
+        },
+      };
+    });
+  }, [data]);
 
   return (
     <div className="min-h-screen bg-background">

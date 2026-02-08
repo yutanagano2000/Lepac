@@ -72,6 +72,7 @@
     "remark-gfm": "^4.0.1",
     "resium": "^1.19.3",
     "sharp": "^0.34.5",
+    "swr": "^2.4.0",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
