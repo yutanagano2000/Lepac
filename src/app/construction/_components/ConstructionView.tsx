@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { ExternalLink, ChevronLeft, ChevronRight, Camera } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -16,8 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { DatePicker } from "@/components/ui/date-picker";
-import { StatusSelect } from "@/components/ui/status-select";
 import { ProjectCreateDialog } from "@/components/ProjectCreateDialog";
+import PhotoMatrix from "./PhotoMatrix";
 
 type Project = {
   id: number;
@@ -217,7 +217,10 @@ export default function ConstructionView() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <TabsList className="w-fit">
                 <TabsTrigger value="orders">発注</TabsTrigger>
-                <TabsTrigger value="process">工程</TabsTrigger>
+                <TabsTrigger value="process" className="flex items-center gap-1.5">
+                  <Camera className="h-3.5 w-3.5" />
+                  工程
+                </TabsTrigger>
               </TabsList>
 
               <div className="flex items-center gap-2">
@@ -367,178 +370,9 @@ export default function ConstructionView() {
               </div>
             </TabsContent>
 
-            {/* 工程タブ */}
+            {/* 工程タブ - 写真マトリクス */}
             <TabsContent value="process">
-              <div className="rounded-md border overflow-hidden">
-                <div className="flex">
-                  {/* 固定列（左側） */}
-                  <div className="shrink-0 border-r bg-background z-10">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          <TableHead className="w-[120px] whitespace-nowrap font-medium">現場</TableHead>
-                          <TableHead className="w-[80px] whitespace-nowrap font-medium">都道府県</TableHead>
-                          <TableHead className="w-[100px] whitespace-nowrap font-medium">市名</TableHead>
-                          <TableHead className="w-[80px] whitespace-nowrap font-medium">完工月</TableHead>
-                          <TableHead className="w-[100px] whitespace-nowrap font-medium">案件番号</TableHead>
-                          <TableHead className="w-[100px] whitespace-nowrap font-medium">販売先</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredProjects.map((project) => (
-                          <TableRow key={project.id} className="h-[52px]">
-                            <TableCell className="whitespace-nowrap font-medium">
-                              <Link
-                                href={`/projects/${project.id}`}
-                                className="text-blue-600 hover:underline dark:text-blue-400 inline-flex items-center gap-1"
-                              >
-                                {project.siteName || project.managementNumber}
-                                <ExternalLink className="h-3 w-3" />
-                              </Link>
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">{project.prefecture || "-"}</TableCell>
-                            <TableCell className="whitespace-nowrap">{project.cityName || "-"}</TableCell>
-                            <TableCell className="whitespace-nowrap">{project.completionMonth || "-"}</TableCell>
-                            <TableCell className="whitespace-nowrap">{project.projectNumber || "-"}</TableCell>
-                            <TableCell className="whitespace-nowrap">{project.client || "-"}</TableCell>
-                          </TableRow>
-                        ))}
-                        {filteredProjects.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                              {monthDisplay}の案件がありません
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  {/* スクロール可能列（右側） */}
-                  <ScrollArea className="flex-1">
-                    <div className="min-w-[1600px]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            <TableHead className="w-[80px] whitespace-nowrap font-medium">パネル枚数</TableHead>
-                            <TableHead className="w-[100px] whitespace-nowrap font-medium">パネルレイアウト</TableHead>
-                            <TableHead className="w-[90px] whitespace-nowrap font-medium">載荷試験</TableHead>
-                            <TableHead className="w-[140px] whitespace-nowrap font-medium">載荷試験日</TableHead>
-                            <TableHead className="w-[90px] whitespace-nowrap font-medium">杭</TableHead>
-                            <TableHead className="w-[140px] whitespace-nowrap font-medium">杭日</TableHead>
-                            <TableHead className="w-[90px] whitespace-nowrap font-medium">架台・パネル</TableHead>
-                            <TableHead className="w-[140px] whitespace-nowrap font-medium">架台・パネル日</TableHead>
-                            <TableHead className="w-[90px] whitespace-nowrap font-medium">電気</TableHead>
-                            <TableHead className="w-[140px] whitespace-nowrap font-medium">電気日</TableHead>
-                            <TableHead className="w-[90px] whitespace-nowrap font-medium">フェンス</TableHead>
-                            <TableHead className="w-[140px] whitespace-nowrap font-medium">フェンス日</TableHead>
-                            <TableHead className="w-[140px] whitespace-nowrap font-medium">検写日</TableHead>
-                            <TableHead className="w-[200px] whitespace-nowrap font-medium">備考</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {filteredProjects.map((project) => (
-                            <TableRow key={project.id} className="h-[52px]">
-                              <TableCell className="whitespace-nowrap">{project.panelCount || "-"}</TableCell>
-                              <TableCell className="whitespace-nowrap">{project.panelLayout || "-"}</TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <StatusSelect
-                                  value={project.loadTestStatus}
-                                  onChange={(value) => updateProjectField(project.id, "loadTestStatus", value)}
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <DatePicker
-                                  value={project.loadTestDate}
-                                  onChange={(value) => updateProjectField(project.id, "loadTestDate", value)}
-                                  placeholder="-"
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <StatusSelect
-                                  value={project.pileStatus}
-                                  onChange={(value) => updateProjectField(project.id, "pileStatus", value)}
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <DatePicker
-                                  value={project.pileDate}
-                                  onChange={(value) => updateProjectField(project.id, "pileDate", value)}
-                                  placeholder="-"
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <StatusSelect
-                                  value={project.framePanelStatus}
-                                  onChange={(value) => updateProjectField(project.id, "framePanelStatus", value)}
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <DatePicker
-                                  value={project.framePanelDate}
-                                  onChange={(value) => updateProjectField(project.id, "framePanelDate", value)}
-                                  placeholder="-"
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <StatusSelect
-                                  value={project.electricalStatus}
-                                  onChange={(value) => updateProjectField(project.id, "electricalStatus", value)}
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <DatePicker
-                                  value={project.electricalDate}
-                                  onChange={(value) => updateProjectField(project.id, "electricalDate", value)}
-                                  placeholder="-"
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <StatusSelect
-                                  value={project.fenceStatus}
-                                  onChange={(value) => updateProjectField(project.id, "fenceStatus", value)}
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <DatePicker
-                                  value={project.fenceDate}
-                                  onChange={(value) => updateProjectField(project.id, "fenceDate", value)}
-                                  placeholder="-"
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap">
-                                <DatePicker
-                                  value={project.inspectionPhotoDate}
-                                  onChange={(value) => updateProjectField(project.id, "inspectionPhotoDate", value)}
-                                  placeholder="-"
-                                />
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={project.processRemarks || ""}>
-                                {project.processRemarks || "-"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {filteredProjects.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
-                                &nbsp;
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <ScrollBar orientation="horizontal" />
-                  </ScrollArea>
-                </div>
-              </div>
-
-              {/* 将来の写真機能についての注釈 */}
-              <div className="mt-4 p-4 rounded-md border border-dashed bg-muted/30">
-                <p className="text-sm text-muted-foreground">
-                  将来的にiOSから撮影された写真（載荷試験・杭などのエビデンス写真）を表示予定
-                </p>
-              </div>
+              <PhotoMatrix year={currentMonth.year} month={currentMonth.month} />
             </TabsContent>
           </Tabs>
         </div>
