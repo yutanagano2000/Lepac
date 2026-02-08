@@ -47,6 +47,8 @@ interface DrawingToolbarProps {
   onToggleOverlay: () => void;
   onRemoveOverlay: () => void;
   hasOverlay: boolean;
+  // 未保存変更
+  hasUnsavedChanges?: boolean;
 }
 
 const TILE_OPTIONS: { type: TileLayerType; label: string; icon: typeof Map }[] = [
@@ -78,6 +80,7 @@ export function DrawingToolbar({
   onToggleOverlay,
   onRemoveOverlay,
   hasOverlay,
+  hasUnsavedChanges,
 }: DrawingToolbarProps) {
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -335,14 +338,14 @@ export function DrawingToolbar({
       <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-lg p-1 flex flex-col gap-1">
         {onSave && (
           <Button
-            variant="ghost"
+            variant={hasUnsavedChanges ? "default" : "ghost"}
             size="sm"
-            className="h-8 px-2 text-xs"
+            className={`h-8 px-2 text-xs ${hasUnsavedChanges ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`}
             onClick={onSave}
             disabled={saving}
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-            保存
+            {hasUnsavedChanges ? "保存 ●" : "保存"}
           </Button>
         )}
         <Button

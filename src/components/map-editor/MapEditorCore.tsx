@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { DrawingToolbar } from "./DrawingToolbar";
+import { TextInputDialog, LeaderInputDialog } from "./InputDialog";
 import { TILE_LAYERS, createSitePinIcon, createLeaderBoxHtml, formatCoord } from "./constants";
 import type { TileLayerType } from "./constants";
 export type { TileLayerType } from "./constants";
@@ -18,6 +19,15 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
+
+// Hide leaflet-draw default toolbar via CSS
+const hideDrawToolbarStyle = `
+  .leaflet-draw-toolbar,
+  .leaflet-draw-actions,
+  .leaflet-draw.leaflet-control {
+    display: none !important;
+  }
+`;
 
 export default function MapEditorCore({
   projectId,
@@ -64,6 +74,29 @@ export default function MapEditorCore({
   const [overlayImage, setOverlayImage] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
   const [overlayVisible, setOverlayVisible] = useState(true);
+
+  // ダイアログ状態
+  const [textDialogOpen, setTextDialogOpen] = useState(false);
+  const [leaderDialogOpen, setLeaderDialogOpen] = useState(false);
+  const [pendingTextLatLng, setPendingTextLatLng] = useState<L.LatLng | null>(null);
+  const [pendingLeaderLatLngs, setPendingLeaderLatLngs] = useState<{ anchor: L.LatLng; box: L.LatLng } | null>(null);
+
+  // 編集ダイアログ状態
+  const [editTextDialogOpen, setEditTextDialogOpen] = useState(false);
+  const [editLeaderDialogOpen, setEditLeaderDialogOpen] = useState(false);
+  const [editingTextMarker, setEditingTextMarker] = useState<L.Marker | null>(null);
+  const [editingTextValue, setEditingTextValue] = useState("");
+  const [editingLeaderId, setEditingLeaderId] = useState<string | null>(null);
+  const [editingLeaderPostalCode, setEditingLeaderPostalCode] = useState("");
+  const [editingLeaderAddress, setEditingLeaderAddress] = useState("");
+
+  // 未保存変更の追跡
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // 変更を記録
+  const markAsChanged = useCallback(() => {
+    setHasUnsavedChanges(true);
+  }, []);
 
   // Update coordinate overlay text
   const updateCoordOverlay = useCallback((lat: number, lng: number) => {
@@ -117,14 +150,16 @@ export default function MapEditorCore({
       (pin as any).feature.properties.lng = pos.lng;
       (pin as any).feature.geometry.coordinates = [pos.lng, pos.lat];
       updateCoordOverlay(pos.lat, pos.lng);
+      markAsChanged();
     });
 
     featureGroup.addLayer(pin);
     sitePinRef.current = pin;
     updateCoordOverlay(latlng.lat, latlng.lng);
+    markAsChanged();
 
     return pin;
-  }, [updateCoordOverlay]);
+  }, [updateCoordOverlay, markAsChanged]);
 
   // Create leader annotation (anchor + line + box)
   const createLeaderAnnotation = useCallback((
@@ -186,6 +221,15 @@ export default function MapEditorCore({
       geometry: { type: "Point", coordinates: [boxLatLng.lng, boxLatLng.lat] },
     };
 
+    // ダブルクリックで編集
+    box.on("dblclick", (e: L.LeafletMouseEvent) => {
+      L.DomEvent.stopPropagation(e);
+      setEditingLeaderId(id);
+      setEditingLeaderPostalCode(postalCode);
+      setEditingLeaderAddress(address);
+      setEditLeaderDialogOpen(true);
+    });
+
     // Drag handler: update line endpoint when box is dragged
     box.on("drag", () => {
       const newPos = box.getLatLng();
@@ -195,6 +239,7 @@ export default function MapEditorCore({
       const newPos = box.getLatLng();
       (box as any).feature.geometry.coordinates = [newPos.lng, newPos.lat];
       (line as any).feature.geometry.coordinates[1] = [newPos.lng, newPos.lat];
+      markAsChanged();
     });
 
     featureGroup.addLayer(anchor);
@@ -202,9 +247,77 @@ export default function MapEditorCore({
     featureGroup.addLayer(box);
 
     leaderLinksRef.current.set(id, { anchor, line, box });
+    markAsChanged();
 
     return id;
-  }, []);
+  }, [markAsChanged]);
+
+  // 引き出し線の更新
+  const updateLeaderAnnotation = useCallback((id: string, postalCode: string, address: string) => {
+    const leaderData = leaderLinksRef.current.get(id);
+    if (!leaderData) return;
+
+    const { box } = leaderData;
+    const newIcon = L.divIcon({
+      className: "leader-box-icon",
+      html: createLeaderBoxHtml(postalCode, address),
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+    box.setIcon(newIcon);
+    (box as any).feature.properties.postalCode = postalCode;
+    (box as any).feature.properties.address = address;
+    markAsChanged();
+  }, [markAsChanged]);
+
+  // テキストマーカー作成
+  const createTextMarker = useCallback((map: L.Map, featureGroup: L.FeatureGroup, latlng: L.LatLng, label: string) => {
+    const marker = L.marker(latlng, {
+      icon: L.divIcon({
+        className: "map-text-label",
+        html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${label}</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      }),
+      draggable: true,
+    });
+    (marker as any).feature = {
+      type: "Feature",
+      properties: { label, isTextAnnotation: true },
+      geometry: { type: "Point", coordinates: [latlng.lng, latlng.lat] },
+    };
+
+    // ダブルクリックで編集
+    marker.on("dblclick", (e: L.LeafletMouseEvent) => {
+      L.DomEvent.stopPropagation(e);
+      setEditingTextMarker(marker);
+      setEditingTextValue((marker as any).feature.properties.label);
+      setEditTextDialogOpen(true);
+    });
+
+    marker.on("dragend", () => {
+      const pos = marker.getLatLng();
+      (marker as any).feature.geometry.coordinates = [pos.lng, pos.lat];
+      markAsChanged();
+    });
+
+    featureGroup.addLayer(marker);
+    markAsChanged();
+    return marker;
+  }, [markAsChanged]);
+
+  // テキストマーカー更新
+  const updateTextMarker = useCallback((marker: L.Marker, newLabel: string) => {
+    const newIcon = L.divIcon({
+      className: "map-text-label",
+      html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${newLabel}</div>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+    marker.setIcon(newIcon);
+    (marker as any).feature.properties.label = newLabel;
+    markAsChanged();
+  }, [markAsChanged]);
 
   // ─── 画像オーバーレイ: コーナーマーカー配置 ───
   const placeCornerMarkers = useCallback((map: L.Map, bounds: L.LatLngBounds) => {
@@ -314,9 +427,29 @@ export default function MapEditorCore({
     setOverlayVisible(true);
   }, []);
 
+  // 未保存変更の警告
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && onSave) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges, onSave]);
+
   // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
+
+    // Inject CSS to hide default leaflet-draw toolbar
+    const styleEl = document.createElement("style");
+    styleEl.textContent = hideDrawToolbarStyle;
+    document.head.appendChild(styleEl);
 
     const map = L.map(mapContainerRef.current, {
       center: initialCenter,
@@ -333,7 +466,7 @@ export default function MapEditorCore({
     tileLayerRef.current = tileLayer;
     featureGroupRef.current.addTo(map);
 
-    // Add draw control
+    // Add draw control (hidden via CSS, but needed for internal functionality)
     const drawControl = new L.Control.Draw({
       position: "topright",
       draw: {
@@ -364,6 +497,15 @@ export default function MapEditorCore({
     map.on(L.Draw.Event.CREATED, (e: any) => {
       const layer = e.layer;
       featureGroupRef.current.addLayer(layer);
+      markAsChanged();
+    });
+
+    map.on(L.Draw.Event.EDITED, () => {
+      markAsChanged();
+    });
+
+    map.on(L.Draw.Event.DELETED, () => {
+      markAsChanged();
     });
 
     // Create coordinate overlays if siteCoordinate exists
@@ -378,7 +520,7 @@ export default function MapEditorCore({
         // Collect leader components for linking after all layers are created
         const leaderAnchors: Map<string, L.CircleMarker> = new Map();
         const leaderLines: Map<string, L.Polyline> = new Map();
-        const leaderBoxes: Map<string, L.Marker> = new Map();
+        const leaderBoxes: Map<string, { marker: L.Marker; postalCode: string; address: string }> = new Map();
 
         L.geoJSON(geoJsonData, {
           pointToLayer: (feature, latlng) => {
@@ -395,6 +537,7 @@ export default function MapEditorCore({
                 (pin as any).feature.properties.lng = pos.lng;
                 (pin as any).feature.geometry.coordinates = [pos.lng, pos.lat];
                 updateCoordOverlay(pos.lat, pos.lng);
+                markAsChanged();
               });
               sitePinRef.current = pin;
               // Update coordinate overlay with restored pin position
@@ -433,25 +576,57 @@ export default function MapEditorCore({
                 draggable: true,
                 zIndexOffset: 500,
               });
-              if (aid) leaderBoxes.set(aid, box);
+
+              // ダブルクリックで編集
+              box.on("dblclick", (e: L.LeafletMouseEvent) => {
+                L.DomEvent.stopPropagation(e);
+                setEditingLeaderId(aid);
+                setEditingLeaderPostalCode(postalCode || "");
+                setEditingLeaderAddress(address || "");
+                setEditLeaderDialogOpen(true);
+              });
+
+              if (aid) leaderBoxes.set(aid, { marker: box, postalCode: postalCode || "", address: address || "" });
               return box;
             }
 
-            // Text annotation restoration (existing)
+            // Text annotation restoration
             if (feature.properties?.isTextAnnotation && feature.properties?.label) {
-              return L.marker(latlng, {
+              const marker = L.marker(latlng, {
                 icon: L.divIcon({
                   className: "map-text-label",
-                  html: `<div contenteditable="false" style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;">${feature.properties.label}</div>`,
+                  html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${feature.properties.label}</div>`,
                   iconSize: [0, 0],
                   iconAnchor: [0, 0],
                 }),
+                draggable: true,
               });
+
+              // ダブルクリックで編集
+              marker.on("dblclick", (e: L.LeafletMouseEvent) => {
+                L.DomEvent.stopPropagation(e);
+                setEditingTextMarker(marker);
+                setEditingTextValue((marker as any).feature?.properties?.label || feature.properties.label);
+                setEditTextDialogOpen(true);
+              });
+
+              marker.on("dragend", () => {
+                const pos = marker.getLatLng();
+                if ((marker as any).feature) {
+                  (marker as any).feature.geometry.coordinates = [pos.lng, pos.lat];
+                }
+                markAsChanged();
+              });
+
+              return marker;
             }
 
             return L.marker(latlng);
           },
           onEachFeature: (feature, layer) => {
+            // Attach feature to layer for GeoJSON export
+            (layer as any).feature = feature;
+
             // Leader line restoration
             if (feature.properties?.isLeaderLine) {
               const aid = feature.properties.annotationId;
@@ -478,8 +653,9 @@ export default function MapEditorCore({
         // Link leader components (anchor + line + box) for drag behavior
         for (const [aid, anchor] of leaderAnchors) {
           const line = leaderLines.get(aid);
-          const box = leaderBoxes.get(aid);
-          if (line && box) {
+          const boxData = leaderBoxes.get(aid);
+          if (line && boxData) {
+            const { marker: box } = boxData;
             const anchorLatLng = anchor.getLatLng();
             box.on("drag", () => {
               const newPos = box.getLatLng();
@@ -492,6 +668,7 @@ export default function MapEditorCore({
               if (lineFeature?.geometry?.coordinates) {
                 lineFeature.geometry.coordinates[1] = [newPos.lng, newPos.lat];
               }
+              markAsChanged();
             });
             leaderLinksRef.current.set(aid, { anchor, line, box });
           }
@@ -504,6 +681,8 @@ export default function MapEditorCore({
     // Place site pin if siteCoordinate exists and no pin was restored from GeoJSON
     if (siteCoordinate && !sitePinRef.current) {
       placeSitePin(map, L.latLng(siteCoordinate[0], siteCoordinate[1]), featureGroupRef.current);
+      // Reset hasUnsavedChanges since this is initial state
+      setHasUnsavedChanges(false);
     }
 
     mapRef.current = map;
@@ -511,6 +690,7 @@ export default function MapEditorCore({
     return () => {
       map.remove();
       mapRef.current = null;
+      styleEl.remove();
       // Clean up overlay refs
       coordTopRightRef.current = null;
       coordBottomRef.current = null;
@@ -543,40 +723,21 @@ export default function MapEditorCore({
           leaderAnchorRef.current = e.latlng;
           return;
         }
-        // Second click: set box position
+        // Second click: set box position, open dialog
         const anchorLatlng = leaderAnchorRef.current;
         const boxLatlng = e.latlng;
         leaderAnchorRef.current = null;
 
-        const postalCode = prompt("郵便番号を入力（例: 730-0001）:") || "";
-        const address = prompt("住所を入力:") || "";
-        if (!postalCode && !address) {
-          return;
-        }
-
-        createLeaderAnnotation(map, featureGroupRef.current, anchorLatlng, boxLatlng, postalCode, address);
+        setPendingLeaderLatLngs({ anchor: anchorLatlng, box: boxLatlng });
+        setLeaderDialogOpen(true);
         setIsLeaderMode(false);
         return;
       }
 
       // Text mode
       if (isTextMode) {
-        const label = prompt("テキストを入力:");
-        if (!label) return;
-        const marker = L.marker(e.latlng, {
-          icon: L.divIcon({
-            className: "map-text-label",
-            html: `<div contenteditable="false" style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;">${label}</div>`,
-            iconSize: [0, 0],
-            iconAnchor: [0, 0],
-          }),
-        });
-        (marker as any).feature = {
-          type: "Feature",
-          properties: { label, isTextAnnotation: true },
-          geometry: { type: "Point", coordinates: [e.latlng.lng, e.latlng.lat] },
-        };
-        featureGroupRef.current.addLayer(marker);
+        setPendingTextLatLng(e.latlng);
+        setTextDialogOpen(true);
         setIsTextMode(false);
       }
     };
@@ -585,7 +746,7 @@ export default function MapEditorCore({
     return () => {
       map.off("click", handler);
     };
-  }, [isTextMode, isLeaderMode, isSitePinMode, placeSitePin, createCoordOverlays, createLeaderAnnotation]);
+  }, [isTextMode, isLeaderMode, isSitePinMode, placeSitePin, createCoordOverlays]);
 
   // Update cursor for active mode
   useEffect(() => {
@@ -621,8 +782,9 @@ export default function MapEditorCore({
       }
       setCurrentCoord(null);
       handleRemoveOverlay();
+      markAsChanged();
     }
-  }, [handleRemoveOverlay]);
+  }, [handleRemoveOverlay, markAsChanged]);
 
   // Save handler
   const handleSave = useCallback(async () => {
@@ -639,6 +801,7 @@ export default function MapEditorCore({
         tileLayer: activeTile,
         name,
       });
+      setHasUnsavedChanges(false);
     } catch (e) {
       console.error("Save failed:", e);
       alert("保存に失敗しました");
@@ -683,6 +846,43 @@ export default function MapEditorCore({
     });
   }, []);
 
+  // ダイアログハンドラー
+  const handleTextSubmit = useCallback((text: string) => {
+    const map = mapRef.current;
+    if (!map || !pendingTextLatLng) return;
+    createTextMarker(map, featureGroupRef.current, pendingTextLatLng, text);
+    setPendingTextLatLng(null);
+  }, [pendingTextLatLng, createTextMarker]);
+
+  const handleLeaderSubmit = useCallback((postalCode: string, address: string) => {
+    const map = mapRef.current;
+    if (!map || !pendingLeaderLatLngs) return;
+    createLeaderAnnotation(
+      map,
+      featureGroupRef.current,
+      pendingLeaderLatLngs.anchor,
+      pendingLeaderLatLngs.box,
+      postalCode,
+      address
+    );
+    setPendingLeaderLatLngs(null);
+  }, [pendingLeaderLatLngs, createLeaderAnnotation]);
+
+  const handleEditTextSubmit = useCallback((text: string) => {
+    if (!editingTextMarker) return;
+    updateTextMarker(editingTextMarker, text);
+    setEditingTextMarker(null);
+    setEditingTextValue("");
+  }, [editingTextMarker, updateTextMarker]);
+
+  const handleEditLeaderSubmit = useCallback((postalCode: string, address: string) => {
+    if (!editingLeaderId) return;
+    updateLeaderAnnotation(editingLeaderId, postalCode, address);
+    setEditingLeaderId(null);
+    setEditingLeaderPostalCode("");
+    setEditingLeaderAddress("");
+  }, [editingLeaderId, updateLeaderAnnotation]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainerRef} className="w-full h-full" id="map-editor-container" />
@@ -709,6 +909,62 @@ export default function MapEditorCore({
         onToggleOverlay={handleToggleOverlay}
         onRemoveOverlay={handleRemoveOverlay}
         hasOverlay={!!overlayImage}
+        hasUnsavedChanges={hasUnsavedChanges}
+      />
+
+      {/* テキスト入力ダイアログ */}
+      <TextInputDialog
+        open={textDialogOpen}
+        onOpenChange={(open) => {
+          setTextDialogOpen(open);
+          if (!open) setPendingTextLatLng(null);
+        }}
+        onSubmit={handleTextSubmit}
+        title="テキストラベルを追加"
+        placeholder="ラベルを入力..."
+      />
+
+      {/* 引き出し線入力ダイアログ */}
+      <LeaderInputDialog
+        open={leaderDialogOpen}
+        onOpenChange={(open) => {
+          setLeaderDialogOpen(open);
+          if (!open) setPendingLeaderLatLngs(null);
+        }}
+        onSubmit={handleLeaderSubmit}
+      />
+
+      {/* テキスト編集ダイアログ */}
+      <TextInputDialog
+        open={editTextDialogOpen}
+        onOpenChange={(open) => {
+          setEditTextDialogOpen(open);
+          if (!open) {
+            setEditingTextMarker(null);
+            setEditingTextValue("");
+          }
+        }}
+        onSubmit={handleEditTextSubmit}
+        title="テキストラベルを編集"
+        placeholder="ラベルを入力..."
+        initialValue={editingTextValue}
+      />
+
+      {/* 引き出し線編集ダイアログ */}
+      <LeaderInputDialog
+        open={editLeaderDialogOpen}
+        onOpenChange={(open) => {
+          setEditLeaderDialogOpen(open);
+          if (!open) {
+            setEditingLeaderId(null);
+            setEditingLeaderPostalCode("");
+            setEditingLeaderAddress("");
+          }
+        }}
+        onSubmit={handleEditLeaderSubmit}
+        initialPostalCode={editingLeaderPostalCode}
+        initialAddress={editingLeaderAddress}
+        isEditing
       />
     </div>
   );

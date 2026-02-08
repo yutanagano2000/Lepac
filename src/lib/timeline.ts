@@ -227,7 +227,18 @@ export function calculateTimeline(
   completionMonth: string,
   includeNoushin: boolean = false
 ): TimelinePhase[] {
+  // completionMonthのバリデーション（YYYY-MM形式を期待）
+  if (!completionMonth || !/^\d{4}-\d{2}$/.test(completionMonth)) {
+    return []; // 不正な形式の場合は空配列を返す
+  }
+
   const [year, month] = completionMonth.split("-").map(Number);
+
+  // 年月の妥当性チェック
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    return [];
+  }
+
   const baseDate = new Date(year, month - 1, 15); // 完成月の15日を基準とする
 
   return PHASE_OFFSETS.filter((phase) => !("optional" in phase) || includeNoushin).map(

@@ -102,3 +102,54 @@ export async function POST(
     );
   }
 }
+
+// DELETE: アノテーション削除
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const projectId = Number(id);
+
+  if (isNaN(projectId)) {
+    return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
+
+  const authResult = await requireProjectAccess(projectId);
+  if (!authResult.success) {
+    return authResult.response;
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const annotationId = searchParams.get("annotationId");
+
+    if (!annotationId) {
+      return NextResponse.json(
+        { error: "annotationId query parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await db
+      .delete(mapAnnotations)
+      .where(eq(mapAnnotations.id, Number(annotationId)))
+      .returning();
+
+    if (deleted.length === 0) {
+      return NextResponse.json(
+        { error: "Annotation not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, deleted: deleted[0] });
+  } catch (error) {
+    console.error("Map annotation delete error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Failed to delete annotation: ${errorMessage}` },
+      { status: 500 }
+    );
+  }
+}

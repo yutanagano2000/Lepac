@@ -18,6 +18,15 @@ export async function captureMapAsPng(
           if (cl?.contains("leaflet-control-zoom")) {
             return false;
           }
+          // Exclude custom DrawingToolbar (positioned at top-left with z-[1000])
+          // Check if it's a direct child of the map container at top-left position
+          if (node.className?.includes("absolute") && node.className?.includes("top-3") && node.className?.includes("left-3")) {
+            return false;
+          }
+          // Also exclude leaflet controls container
+          if (cl?.contains("leaflet-control-container")) {
+            return false;
+          }
         }
         return true;
       },
