@@ -1,0 +1,289 @@
+/**
+ * page.tsx リファクタリング適用例
+ *
+ * このファイルは、抽出したコンポーネントとフックを使用した
+ * page.tsxの構造サンプルです。
+ *
+ * 実際の適用時は、既存のpage.tsxを段階的にこの構造に移行してください。
+ */
+
+"use client";
+
+import { useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
+// UI Components
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+// 共通フック
+import { useProjectDetail } from "@/hooks";
+
+// ローカルフック・コンポーネント
+import { useProjectActions } from "./_hooks";
+import {
+  TimelineSection,
+  ProgressAddDialog,
+  ProgressEditDialog,
+  TodoSection,
+  TodoDeleteDialog,
+  TodoCompleteDialog,
+  TodoAddMessageDialog,
+  TodoEditDialog,
+  CommentsTab,
+  CommentEditDialog,
+  CommentDeleteDialog,
+} from "./_components";
+import type { Progress, Todo, Comment } from "./_types";
+
+export default function ProjectDetailPageRefactored() {
+  const params = useParams();
+  const projectId = params.id as string;
+
+  // ========================================
+  // データフェッチ（useProjectDetail）
+  // ========================================
+  const {
+    project,
+    progressList,
+    comments,
+    todos,
+    files,
+    constructionProgressList,
+    constructionPhotos,
+    isLoading,
+    refetchProject,
+    refetchProgress,
+    refetchComments,
+    refetchTodos,
+    refetchConstructionData,
+  } = useProjectDetail({ projectId, autoGenerateProgress: true });
+
+  // ========================================
+  // CRUD操作（useProjectActions）
+  // ========================================
+  const actions = useProjectActions({
+    projectId,
+    onRefreshProject: refetchProject,
+    onRefreshProgress: refetchProgress,
+    onRefreshComments: refetchComments,
+    onRefreshTodos: refetchTodos,
+    onRefreshConstructionData: refetchConstructionData,
+  });
+
+  // ========================================
+  // UI状態管理
+  // ========================================
+  const [activeTab, setActiveTab] = useState("details");
+
+  // Progress Dialogs
+  const [progressAddOpen, setProgressAddOpen] = useState(false);
+  const [progressEditOpen, setProgressEditOpen] = useState(false);
+  const [editingProgress, setEditingProgress] = useState<Progress | null>(null);
+
+  // Todo Dialogs
+  const [todoEditOpen, setTodoEditOpen] = useState(false);
+  const [todoCompleteOpen, setTodoCompleteOpen] = useState(false);
+  const [todoDeleteOpen, setTodoDeleteOpen] = useState(false);
+  const [todoAddMessageOpen, setTodoAddMessageOpen] = useState(false);
+  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+
+  // Comment Dialogs
+  const [commentEditOpen, setCommentEditOpen] = useState(false);
+  const [commentDeleteOpen, setCommentDeleteOpen] = useState(false);
+  const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
+
+  // ========================================
+  // ハンドラ
+  // ========================================
+
+  const handleProgressEdit = (progress: Progress) => {
+    setEditingProgress(progress);
+    setProgressEditOpen(true);
+  };
+
+  const handleTodoEditOpen = (todo: Todo) => {
+    setSelectedTodo(todo);
+    setTodoEditOpen(true);
+  };
+
+  const handleTodoCompleteOpen = (todo: Todo) => {
+    setSelectedTodo(todo);
+    setTodoCompleteOpen(true);
+  };
+
+  const handleTodoDeleteOpen = (todo: Todo) => {
+    setSelectedTodo(todo);
+    setTodoDeleteOpen(true);
+  };
+
+  const handleTodoAddMessageOpen = (todo: Todo) => {
+    setSelectedTodo(todo);
+    setTodoAddMessageOpen(true);
+  };
+
+  const handleCommentEditOpen = (comment: Comment) => {
+    setSelectedComment(comment);
+    setCommentEditOpen(true);
+  };
+
+  const handleCommentDeleteOpen = (comment: Comment) => {
+    setSelectedComment(comment);
+    setCommentDeleteOpen(true);
+  };
+
+  // ========================================
+  // レンダリング
+  // ========================================
+
+  if (isLoading || !project) {
+    return <div className="p-6">読み込み中...</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-background px-6">
+      <div className="mx-auto max-w-7xl py-10">
+        <div className="space-y-6">
+          {/* ヘッダー */}
+          <div className="flex items-center gap-3">
+            <Button asChild variant="ghost" size="icon">
+              <Link href="/projects">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold">{project.managementNumber}</h1>
+              <p className="text-sm text-muted-foreground">
+                {project.client} / {project.projectNumber}
+              </p>
+            </div>
+          </div>
+
+          {/* タイムラインセクション */}
+          <TimelineSection
+            progressList={progressList}
+            addDialogOpen={progressAddOpen}
+            onAddDialogOpenChange={setProgressAddOpen}
+            onEdit={handleProgressEdit}
+            onMarkCompleted={actions.markProgressCompleted}
+            onMarkIncomplete={(id) =>
+              actions.updateProgress(id, {
+                title: progressList.find((p) => p.id === id)?.title || "",
+                description: progressList.find((p) => p.id === id)?.description || "",
+                date: new Date(progressList.find((p) => p.id === id)?.createdAt || ""),
+                status: "planned",
+              })
+            }
+          />
+
+          {/* TODOセクション */}
+          <TodoSection
+            todos={todos}
+            onAdd={actions.createTodo}
+            onEditOpen={handleTodoEditOpen}
+            onCompleteOpen={handleTodoCompleteOpen}
+            onDeleteOpen={handleTodoDeleteOpen}
+            onAddMessageOpen={handleTodoAddMessageOpen}
+            onReopen={(todo) => actions.reopenTodo(todo.id)}
+          />
+
+          {/* タブ UI */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="details">案件情報</TabsTrigger>
+              <TabsTrigger value="legal">法令</TabsTrigger>
+              <TabsTrigger value="construction">工事</TabsTrigger>
+              <TabsTrigger value="comments">コメント</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="mt-6">
+              {/* TODO: DetailsTab コンポーネント */}
+              <div>案件情報タブ（未実装）</div>
+            </TabsContent>
+
+            <TabsContent value="legal" className="mt-6">
+              {/* TODO: LegalSearchTab コンポーネント */}
+              <div>法令タブ（未実装）</div>
+            </TabsContent>
+
+            <TabsContent value="construction" className="mt-6">
+              {/* TODO: ConstructionTab コンポーネント */}
+              <div>工事タブ（未実装）</div>
+            </TabsContent>
+
+            <TabsContent value="comments" className="mt-6 space-y-6">
+              <CommentsTab
+                comments={comments}
+                onAdd={actions.createComment}
+                onEditOpen={handleCommentEditOpen}
+                onDeleteOpen={handleCommentDeleteOpen}
+              />
+            </TabsContent>
+          </Tabs>
+
+          {/* ========================================
+           * ダイアログ群
+           * ======================================== */}
+
+          {/* Progress Dialogs */}
+          <ProgressAddDialog
+            open={progressAddOpen}
+            onOpenChange={setProgressAddOpen}
+            onConfirm={actions.createProgress}
+          />
+          <ProgressEditDialog
+            open={progressEditOpen}
+            onOpenChange={setProgressEditOpen}
+            progress={editingProgress}
+            onConfirm={actions.updateProgress}
+            onDelete={actions.deleteProgress}
+          />
+
+          {/* Todo Dialogs */}
+          <TodoEditDialog
+            open={todoEditOpen}
+            onOpenChange={setTodoEditOpen}
+            todo={selectedTodo}
+            onConfirm={(id, content, dueDate) =>
+              actions.updateTodo(id, { content, dueDate })
+            }
+          />
+          <TodoCompleteDialog
+            open={todoCompleteOpen}
+            onOpenChange={setTodoCompleteOpen}
+            todo={selectedTodo}
+            onConfirm={(id, memo) => actions.completeTodo(id, memo)}
+          />
+          <TodoDeleteDialog
+            open={todoDeleteOpen}
+            onOpenChange={setTodoDeleteOpen}
+            todo={selectedTodo}
+            onConfirm={actions.deleteTodo}
+          />
+          <TodoAddMessageDialog
+            open={todoAddMessageOpen}
+            onOpenChange={setTodoAddMessageOpen}
+            todo={selectedTodo}
+            onConfirm={actions.addTodoMessage}
+          />
+
+          {/* Comment Dialogs */}
+          <CommentEditDialog
+            open={commentEditOpen}
+            onOpenChange={setCommentEditOpen}
+            comment={selectedComment}
+            onConfirm={actions.updateComment}
+          />
+          <CommentDeleteDialog
+            open={commentDeleteOpen}
+            onOpenChange={setCommentDeleteOpen}
+            comment={selectedComment}
+            onConfirm={actions.deleteComment}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
