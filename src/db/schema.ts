@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 
 // 法人（組織）テーブル
 export const organizations = sqliteTable("organizations", {
@@ -235,7 +235,11 @@ export const projects = sqliteTable("projects", {
   //   "confirmationMethod": "電話"|"メール"|"WEB",
   //   "confirmationDate": "YYYY-MM-DD", "confirmedBy": "担当者", "department": "担当部署" }, ... }
   legalStatuses: text("legal_statuses"),
-});
+}, (table) => ({
+  orgIdx: index("projects_org_idx").on(table.organizationId),
+  managerIdx: index("projects_manager_idx").on(table.manager),
+  prefectureIdx: index("projects_prefecture_idx").on(table.prefecture),
+}));
 
 // 進捗テーブル
 export const progress = sqliteTable("progress", {
@@ -246,7 +250,9 @@ export const progress = sqliteTable("progress", {
   status: text("status").notNull().default("planned"), // planned: 予定, completed: 完了
   createdAt: text("created_at").notNull(), // 予定日
   completedAt: text("completed_at"), // 完了日
-});
+}, (table) => ({
+  projectIdx: index("progress_project_idx").on(table.projectId),
+}));
 
 // コメント（ツイート）テーブル
 export const comments = sqliteTable("comments", {
@@ -256,7 +262,9 @@ export const comments = sqliteTable("comments", {
   createdAt: text("created_at").notNull(),
   userId: integer("user_id"), // 投稿者
   userName: text("user_name"), // 投稿者名（キャッシュ用）
-});
+}, (table) => ({
+  projectIdx: index("comments_project_idx").on(table.projectId),
+}));
 
 // TODOテーブル（案件ごと・期日付きリマインダー、ダッシュボード表示用）
 // projectIdがnullの場合は案件に紐づかないプレーンなTODO
@@ -271,7 +279,11 @@ export const todos = sqliteTable("todos", {
   completedMemo: text("completed_memo"), // 完了時のメモ
   userId: integer("user_id"), // 作成者
   userName: text("user_name"), // 作成者名（キャッシュ用）
-});
+}, (table) => ({
+  orgIdx: index("todos_org_idx").on(table.organizationId),
+  projectIdx: index("todos_project_idx").on(table.projectId),
+  dueDateIdx: index("todos_due_date_idx").on(table.dueDate),
+}));
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
@@ -291,7 +303,10 @@ export const meetings = sqliteTable("meetings", {
   category: text("category").notNull(), // 種別（社内 / 社外）
   content: text("content"), // 議事録本文（長文）
   agenda: text("agenda"), // 議題（今後検索用）
-});
+}, (table) => ({
+  orgIdx: index("meetings_org_idx").on(table.organizationId),
+  dateIdx: index("meetings_date_idx").on(table.meetingDate),
+}));
 
 export type Meeting = typeof meetings.$inferSelect;
 export type NewMeeting = typeof meetings.$inferInsert;
@@ -309,7 +324,9 @@ export const users = sqliteTable("users", {
   image: text("image"), // プロフィール画像URL
   // 法人テナント
   organizationId: integer("organization_id"), // 所属法人ID
-});
+}, (table) => ({
+  orgIdx: index("users_org_idx").on(table.organizationId),
+}));
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -325,7 +342,10 @@ export const projectFiles = sqliteTable("project_files", {
   fileSize: integer("file_size").notNull(), // バイト数
   category: text("category").default("other"), // registry_copy / cadastral_map / drawing / consent_form / other
   createdAt: text("created_at").notNull(),
-});
+}, (table) => ({
+  projectIdx: index("project_files_project_idx").on(table.projectId),
+  categoryIdx: index("project_files_category_idx").on(table.category),
+}));
 
 export type ProjectFile = typeof projectFiles.$inferSelect;
 export type NewProjectFile = typeof projectFiles.$inferInsert;
@@ -343,7 +363,10 @@ export const feedbacks = sqliteTable("feedbacks", {
   createdAt: text("created_at").notNull(),
   userId: integer("user_id"), // 投稿者ID
   userName: text("user_name"), // 投稿者名（キャッシュ用）
-});
+}, (table) => ({
+  orgIdx: index("feedbacks_org_idx").on(table.organizationId),
+  statusIdx: index("feedbacks_status_idx").on(table.status),
+}));
 
 export type Feedback = typeof feedbacks.$inferSelect;
 export type NewFeedback = typeof feedbacks.$inferInsert;
@@ -385,7 +408,10 @@ export const constructionProgress = sqliteTable("construction_progress", {
   completedAt: text("completed_at"), // 完了日時
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at"),
-});
+}, (table) => ({
+  projectIdx: index("construction_progress_project_idx").on(table.projectId),
+  statusIdx: index("construction_progress_status_idx").on(table.status),
+}));
 
 export type ConstructionProgress = typeof constructionProgress.$inferSelect;
 export type NewConstructionProgress = typeof constructionProgress.$inferInsert;
@@ -403,7 +429,10 @@ export const constructionPhotos = sqliteTable("construction_photos", {
   note: text("note"), // 写真に関するメモ
   takenAt: text("taken_at"), // 撮影日時
   createdAt: text("created_at").notNull(),
-});
+}, (table) => ({
+  projectIdx: index("construction_photos_project_idx").on(table.projectId),
+  categoryIdx: index("construction_photos_category_idx").on(table.category),
+}));
 
 export type ConstructionPhoto = typeof constructionPhotos.$inferSelect;
 export type NewConstructionPhoto = typeof constructionPhotos.$inferInsert;
@@ -420,7 +449,10 @@ export const calendarEvents = sqliteTable("calendar_events", {
   userId: integer("user_id"), // 作成者ID
   userName: text("user_name"), // 作成者名（キャッシュ用）
   createdAt: text("created_at").notNull(),
-});
+}, (table) => ({
+  orgIdx: index("calendar_events_org_idx").on(table.organizationId),
+  dateIdx: index("calendar_events_date_idx").on(table.eventDate),
+}));
 
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type NewCalendarEvent = typeof calendarEvents.$inferInsert;
@@ -439,7 +471,12 @@ export const auditLogs = sqliteTable("audit_logs", {
   ipAddress: text("ip_address"), // IPアドレス
   userAgent: text("user_agent"), // ユーザーエージェント
   createdAt: text("created_at").notNull(), // タイムスタンプ
-});
+}, (table) => ({
+  orgIdx: index("audit_logs_org_idx").on(table.organizationId),
+  userIdx: index("audit_logs_user_idx").on(table.userId),
+  createdAtIdx: index("audit_logs_created_at_idx").on(table.createdAt),
+  actionIdx: index("audit_logs_action_idx").on(table.action),
+}));
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
@@ -452,7 +489,9 @@ export const rateLimits = sqliteTable("rate_limits", {
   requestCount: integer("request_count").notNull().default(1),
   windowStart: text("window_start").notNull(), // ウィンドウ開始時刻
   createdAt: text("created_at").notNull(),
-});
+}, (table) => ({
+  identifierEndpointIdx: index("rate_limits_identifier_endpoint_idx").on(table.identifier, table.endpoint),
+}));
 
 export type RateLimit = typeof rateLimits.$inferSelect;
 export type NewRateLimit = typeof rateLimits.$inferInsert;
@@ -468,7 +507,9 @@ export const mapAnnotations = sqliteTable("map_annotations", {
   tileLayer: text("tile_layer").default("std"), // std | photo | pale
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at"),
-});
+}, (table) => ({
+  projectIdx: index("map_annotations_project_idx").on(table.projectId),
+}));
 
 export type MapAnnotation = typeof mapAnnotations.$inferSelect;
 export type NewMapAnnotation = typeof mapAnnotations.$inferInsert;
@@ -488,3 +529,35 @@ export const sheetsSyncLogs = sqliteTable("sheets_sync_logs", {
 
 export type SheetsSyncLog = typeof sheetsSyncLogs.$inferSelect;
 export type NewSheetsSyncLog = typeof sheetsSyncLogs.$inferInsert;
+
+// 傾斜解析結果テーブル
+export const slopeAnalyses = sqliteTable("slope_analyses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").notNull(),
+  organizationId: integer("organization_id").notNull(),
+  name: text("name").notNull().default("傾斜解析"),
+  polygon: text("polygon").notNull(), // GeoJSON Polygon座標 [[lat,lon],...]
+  gridInterval: integer("grid_interval").notNull().default(2),
+  totalPoints: integer("total_points").notNull(),
+  // 統計データ
+  avgSlope: real("avg_slope"),
+  maxSlope: real("max_slope"),
+  minSlope: real("min_slope"),
+  flatPercent: real("flat_percent"), // 平坦 (<3°) の割合
+  steepPercent: real("steep_percent"), // 急 (>15°) の割合
+  avgElevation: real("avg_elevation"),
+  maxElevation: real("max_elevation"),
+  minElevation: real("min_elevation"),
+  // 詳細データ（JSON）
+  elevationMatrix: text("elevation_matrix"), // JSON
+  slopeMatrix: text("slope_matrix"), // JSON
+  crossSection: text("cross_section"), // JSON
+  createdAt: text("created_at").notNull(),
+  createdBy: integer("created_by"),
+}, (table) => ({
+  projectIdx: index("slope_analyses_project_idx").on(table.projectId),
+  orgIdx: index("slope_analyses_org_idx").on(table.organizationId),
+}));
+
+export type SlopeAnalysis = typeof slopeAnalyses.$inferSelect;
+export type NewSlopeAnalysis = typeof slopeAnalyses.$inferInsert;
