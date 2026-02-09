@@ -4,10 +4,14 @@
  *
  * Vantage (iOS) から LINE SDK で取得したアクセストークンを検証し、
  * Lepac 用の JWT を発行する
+ *
+ * セキュリティ対策:
+ * - レート制限（ブルートフォース攻撃対策）
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { verifyLineToken, processLineAuth } from "@/lib/line-auth";
+import { rateLimitGuard } from "@/lib/rate-limit";
 
 // リクエスト型
 interface LineAuthRequest {
@@ -16,8 +20,22 @@ interface LineAuthRequest {
 }
 
 export async function POST(request: NextRequest) {
+  // レート制限チェック
+  const rateLimitError = await rateLimitGuard(request, "mobile-auth-line", "login");
+  if (rateLimitError) {
+    return rateLimitError;
+  }
+
   try {
-    const body: LineAuthRequest = await request.json();
+    let body: LineAuthRequest;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
 
     // バリデーション
     if (!body.accessToken) {

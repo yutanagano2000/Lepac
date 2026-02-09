@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Camera,
   Check,
   AlertCircle,
   Upload,
@@ -17,7 +16,6 @@ import {
   Building2,
   Image as ImageIcon,
   ExternalLink,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,59 +31,20 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-// カテゴリ定義
-const PHOTO_CATEGORIES = [
-  { id: "着工前", label: "着工前", color: "bg-amber-500" },
-  { id: "造成後", label: "造成後", color: "bg-lime-500" },
-  { id: "載荷試験", label: "載荷試験", color: "bg-indigo-500" },
-  { id: "杭打ち", label: "杭打ち", color: "bg-red-500" },
-  { id: "ケーブル埋設", label: "ケーブル埋設", color: "bg-purple-500" },
-  { id: "架台組立", label: "架台組立", color: "bg-blue-500" },
-  { id: "パネル", label: "パネル", color: "bg-emerald-500" },
-  { id: "電気", label: "電気", color: "bg-orange-500" },
-  { id: "フェンス", label: "フェンス", color: "bg-cyan-500" },
-  { id: "完工写真", label: "完工写真", color: "bg-green-500" },
-] as const;
-
-type Project = {
-  id: number;
-  managementNumber: string;
-  siteName: string | null;
-  cityName: string | null;
-  prefecture: string | null;
-  address: string | null;
-  client: string | null;
-  completionMonth: string | null;
-};
-
-type Photo = {
-  id: number;
-  projectId: number;
-  category: string;
-  fileName: string;
-  fileUrl: string;
-  fileType: string;
-  fileSize: number;
-  contractorName: string | null;
-  note: string | null;
-  takenAt: string | null;
-  createdAt: string;
-};
+import { useConstructionData, useConstructionActions, type Photo } from "./_hooks";
+import { PHOTO_CATEGORIES } from "./_constants";
 
 export default function ConstructionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { project, photos, setPhotos, isLoading, error, refetch } = useConstructionData(projectId);
+  const { uploadPhoto, deletePhoto } = useConstructionActions({ projectId, setPhotos });
 
   // アップロード状態
   const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
@@ -96,34 +55,6 @@ export default function ConstructionDetailPage() {
 
   // ライトボックス状態
   const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
-
-  // データ取得
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [projectRes, photosRes] = await Promise.all([
-        fetch(`/api/projects/${projectId}`),
-        fetch(`/api/projects/${projectId}/construction-photos`),
-      ]);
-
-      if (projectRes.ok) {
-        const projectData = await projectRes.json();
-        setProject(projectData);
-      }
-      if (photosRes.ok) {
-        const photosData = await photosRes.json();
-        setPhotos(photosData);
-      }
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   // URL.createObjectURLのクリーンアップ
   useEffect(() => {
@@ -159,28 +90,11 @@ export default function ConstructionDetailPage() {
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", uploadFile);
-      formData.append("category", uploadingCategory);
-      formData.append("note", uploadNote);
-
-      const res = await fetch(`/api/projects/${projectId}/construction-photos`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const newPhoto = await res.json();
-        setPhotos((prev) => [newPhoto, ...prev]);
-        setUploadFile(null);
-        setUploadNote("");
-        setUploadingCategory(null);
-      } else {
-        console.error("Upload failed: HTTP", res.status);
-        alert("写真のアップロードに失敗しました");
-      }
-    } catch (error) {
-      console.error("Upload failed:", error);
+      await uploadPhoto(uploadingCategory, uploadFile, uploadNote);
+      setUploadFile(null);
+      setUploadNote("");
+      setUploadingCategory(null);
+    } catch {
       alert("写真のアップロードに失敗しました");
     } finally {
       setUploading(false);
@@ -192,24 +106,14 @@ export default function ConstructionDetailPage() {
     if (!confirm("この写真を削除しますか？")) return;
 
     try {
-      const res = await fetch(
-        `/api/projects/${projectId}/construction-photos/${photoId}`,
-        { method: "DELETE" }
-      );
-      if (res.ok) {
-        setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-        setLightboxPhoto(null);
-      } else {
-        console.error("Delete failed: HTTP", res.status);
-        alert("写真の削除に失敗しました");
-      }
-    } catch (error) {
-      console.error("Delete failed:", error);
+      await deletePhoto(photoId);
+      setLightboxPhoto(null);
+    } catch {
       alert("写真の削除に失敗しました");
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -217,10 +121,14 @@ export default function ConstructionDetailPage() {
     );
   }
 
-  if (!project) {
+  if (error || !project) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">案件が見つかりません</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <AlertCircle className="h-8 w-8 text-destructive" />
+        <p className="text-muted-foreground">{error || "案件が見つかりません"}</p>
+        <Button variant="outline" onClick={refetch}>
+          再試行
+        </Button>
       </div>
     );
   }

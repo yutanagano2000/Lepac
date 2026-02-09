@@ -50,24 +50,66 @@ export function getSurroundingPoints(
   ];
 }
 
-/**
- * 5点の標高データから傾斜角・傾斜率・最急勾配方向を計算
- * distance: 中心と各方位点の距離 (m)
- */
-export function calculateSlope(
-  points: ElevationPoint[],
-  distance: number = 10
-): {
+/** 傾斜計算の結果型 */
+export interface SlopeCalculationResult {
   slopeDegrees: number;
   slopePercent: number;
   aspectDegrees: number;
   aspectDirection: string;
-} {
-  const center = points.find((p) => p.label === "center")!;
-  const north = points.find((p) => p.label === "north")!;
-  const south = points.find((p) => p.label === "south")!;
-  const east = points.find((p) => p.label === "east")!;
-  const west = points.find((p) => p.label === "west")!;
+}
+
+/** 傾斜計算エラー */
+export class SlopeCalculationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SlopeCalculationError";
+  }
+}
+
+/**
+ * 5点の標高データから傾斜角・傾斜率・最急勾配方向を計算
+ * @param points - 5点の標高データ（center, north, south, east, west）
+ * @param distance - 中心と各方位点の距離 (m)、デフォルト10m
+ * @returns 傾斜計算結果
+ * @throws SlopeCalculationError 必要なポイントが不足している場合
+ */
+export function calculateSlope(
+  points: ElevationPoint[],
+  distance: number = 10
+): SlopeCalculationResult {
+  // 入力検証
+  if (!Array.isArray(points) || points.length < 5) {
+    throw new SlopeCalculationError("5点の標高データが必要です");
+  }
+
+  if (distance <= 0 || !Number.isFinite(distance)) {
+    throw new SlopeCalculationError("距離は正の有限数である必要があります");
+  }
+
+  const center = points.find((p) => p.label === "center");
+  const north = points.find((p) => p.label === "north");
+  const south = points.find((p) => p.label === "south");
+  const east = points.find((p) => p.label === "east");
+  const west = points.find((p) => p.label === "west");
+
+  // 必要なポイントの存在確認
+  if (!center || !north || !south || !east || !west) {
+    const missing: string[] = [];
+    if (!center) missing.push("center");
+    if (!north) missing.push("north");
+    if (!south) missing.push("south");
+    if (!east) missing.push("east");
+    if (!west) missing.push("west");
+    throw new SlopeCalculationError(`不足しているポイント: ${missing.join(", ")}`);
+  }
+
+  // 標高値の検証
+  const allPoints = [center, north, south, east, west];
+  for (const point of allPoints) {
+    if (!Number.isFinite(point.elevation)) {
+      throw new SlopeCalculationError(`無効な標高値: ${point.label} = ${point.elevation}`);
+    }
+  }
 
   // 南北方向の勾配 (dz/dy): 北が正
   const dzdyNS = (north.elevation - south.elevation) / (2 * distance);
@@ -77,8 +119,7 @@ export function calculateSlope(
   // 最大傾斜の大きさ
   const maxGradient = Math.sqrt(dzdxEW * dzdxEW + dzdyNS * dzdyNS);
 
-  const slopeDegrees =
-    Math.atan(maxGradient) * (180 / Math.PI);
+  const slopeDegrees = Math.atan(maxGradient) * (180 / Math.PI);
   const slopePercent = maxGradient * 100;
 
   // 最急勾配方向（下り方向）: atan2(-dy, -dx) → 北を0°として時計回り
