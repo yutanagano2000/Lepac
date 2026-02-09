@@ -3,6 +3,10 @@
  * POST /api/mobile/auth/credentials
  *
  * ユーザー名とパスワードで認証し、JWTを発行
+ * セキュリティ対策:
+ * - レート制限（ブルートフォース攻撃対策）
+ * - タイミング攻撃対策（常に一定時間で応答）
+ * - 詳細なエラー情報を隠蔽
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -10,6 +14,7 @@ import { db } from "@/db";
 import { users, organizations } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { signMobileToken } from "@/lib/jwt";
+import { rateLimitGuard } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 
 interface CredentialsRequest {
@@ -17,9 +22,26 @@ interface CredentialsRequest {
   password: string;
 }
 
+// タイミング攻撃対策: ダミーのハッシュ比較用
+const DUMMY_HASH = "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYqQJUHG8T16";
+
 export async function POST(request: NextRequest) {
+  // レート制限チェック（ブルートフォース攻撃対策）
+  const rateLimitError = await rateLimitGuard(request, "mobile-auth-credentials", "login");
+  if (rateLimitError) {
+    return rateLimitError;
+  }
+
   try {
-    const body: CredentialsRequest = await request.json();
+    let body: CredentialsRequest;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
 
     // バリデーション
     if (!body.username || !body.password) {
@@ -29,19 +51,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 入力の長さ制限（DoS対策）
+    if (body.username.length > 100 || body.password.length > 200) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
     // 開発用admin認証（NODE_ENV=developmentの場合のみ有効）
+    // セキュリティ: 環境変数でさらに明示的に有効化が必要
     if (
       process.env.NODE_ENV === "development" &&
+      process.env.ENABLE_DEV_AUTH === "true" &&
       body.username === "admin" &&
       body.password === "admin123"
     ) {
-      console.log(`[Credentials Auth] Dev admin login`);
-
       // JWT発行（開発用admin）
       const token = await signMobileToken({
         userId: 999,
         username: "admin",
-        organizationId: null, // 組織未選択
+        organizationId: null,
         role: "admin",
       });
 
@@ -65,24 +95,13 @@ export async function POST(request: NextRequest) {
       .from(users)
       .where(eq(users.username, body.username));
 
-    if (!user) {
-      console.log(`[Credentials Auth] User not found`);
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
-    }
+    // タイミング攻撃対策: ユーザーが存在しなくてもハッシュ比較を実行
+    const passwordToCompare = user?.password || DUMMY_HASH;
+    const isValidPassword = await bcrypt.compare(body.password, passwordToCompare);
 
-    // パスワード検証
-    let isValidPassword = false;
-
-    if (user.password) {
-      // ハッシュ化されたパスワードと比較
-      isValidPassword = await bcrypt.compare(body.password, user.password);
-    }
-
-    if (!isValidPassword) {
-      console.log(`[Credentials Auth] Invalid password`);
+    // ユーザーが存在しないか、パスワードが不正
+    if (!user || !isValidPassword) {
+      // 詳細なエラー情報を隠蔽（ユーザー名の存在確認を防止）
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -93,7 +112,11 @@ export async function POST(request: NextRequest) {
     let organization = null;
     if (user.organizationId) {
       const [org] = await db
-        .select()
+        .select({
+          id: organizations.id,
+          name: organizations.name,
+          code: organizations.code,
+        })
         .from(organizations)
         .where(eq(organizations.id, user.organizationId));
       organization = org;
@@ -106,8 +129,6 @@ export async function POST(request: NextRequest) {
       organizationId: user.organizationId,
       role: user.role,
     });
-
-    console.log(`[Credentials Auth] Login successful (userId: ${user.id}, role: ${user.role})`);
 
     return NextResponse.json({
       token,

@@ -1,46 +1,35 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, Shield } from "lucide-react";
-
-interface Organization {
-  id: number;
-  name: string;
-  code: string;
-}
+import { useOrganizations, useOrganizationSelection } from "./_hooks";
 
 export default function SelectOrganizationPage() {
-  const { data: session, update } = useSession();
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
+  const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
-  const [isOther, setIsOther] = useState(false);
-  const [customOrgName, setCustomOrgName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [fetchLoading, setFetchLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const { organizations, isLoading: fetchLoading } = useOrganizations();
   const [visibleItems, setVisibleItems] = useState<number[]>([]);
 
-  const fetchOrganizations = useCallback(async () => {
-    try {
-      const res = await fetch("/api/organizations");
-      if (res.ok) {
-        const data = await res.json();
-        setOrganizations(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch organizations:", err);
-    } finally {
-      setFetchLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOrganizations();
-  }, [fetchOrganizations]);
+  const {
+    selectedOrgId,
+    isOther,
+    customOrgName,
+    isSubmitting,
+    error,
+    isValid,
+    handleSelectOrg,
+    handleSelectOther,
+    setCustomOrgName,
+    handleSubmit,
+  } = useOrganizationSelection({
+    onSuccess: () => {
+      window.location.href = "/";
+    },
+  });
 
   // スタガーアニメーション
   useEffect(() => {
@@ -56,76 +45,10 @@ export default function SelectOrganizationPage() {
     }
   }, [fetchLoading, organizations]);
 
-  const handleSelectOrg = (orgId: number) => {
-    setSelectedOrgId(orgId);
-    setIsOther(false);
-    setCustomOrgName("");
-  };
-
-  const handleSelectOther = () => {
-    setSelectedOrgId(null);
-    setIsOther(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    try {
-      let organizationId = selectedOrgId;
-
-      if (isOther && customOrgName.trim()) {
-        const createRes = await fetch("/api/organizations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: customOrgName.trim() }),
-        });
-
-        if (!createRes.ok) {
-          const errorData = await createRes.json().catch(() => ({}));
-          throw new Error(errorData.error || "組織の作成に失敗しました");
-        }
-
-        const newOrg = await createRes.json();
-        organizationId = newOrg.id;
-      }
-
-      if (!organizationId) {
-        setError("組織を選択してください");
-        setLoading(false);
-        return;
-      }
-
-      // ユーザーの組織IDを更新
-      const updateRes = await fetch("/api/user/organization", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId }),
-      });
-
-      if (!updateRes.ok) {
-        const errorData = await updateRes.json().catch(() => ({}));
-        throw new Error(errorData.error || "組織の設定に失敗しました");
-      }
-
-      // セッションを更新（エラーが出ても続行）
-      try {
-        await update();
-      } catch (e) {
-        console.warn("Session update warning:", e);
-      }
-
-      // 強制リロードでセッションを確実に反映
-      window.location.href = "/";
-    } catch (err) {
-      console.error("Organization update error:", err);
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
-      setLoading(false);
-    }
+    handleSubmit();
   };
-
-  const isValid = selectedOrgId !== null || (isOther && customOrgName.trim().length > 0);
 
   return (
     <div className="fixed inset-0 z-50 bg-white dark:bg-neutral-950 flex items-center justify-center p-4 transition-colors">
@@ -151,7 +74,7 @@ export default function SelectOrganizationPage() {
             <Loader2 className="h-5 w-5 animate-spin text-neutral-400 dark:text-neutral-500" />
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={onSubmit}>
             <div className="space-y-2">
               {/* 組織リスト */}
               {organizations.map((org, index) => (
@@ -235,7 +158,7 @@ export default function SelectOrganizationPage() {
                     placeholder="組織名を入力"
                     value={customOrgName}
                     onChange={(e) => setCustomOrgName(e.target.value)}
-                    disabled={loading}
+                    disabled={isSubmitting}
                     autoFocus
                     className="h-11 text-sm border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:border-neutral-900 dark:focus:border-neutral-100 focus:ring-0"
                   />
@@ -252,7 +175,7 @@ export default function SelectOrganizationPage() {
             <div className="mt-8">
               <Button
                 type="submit"
-                disabled={loading || !isValid}
+                disabled={isSubmitting || !isValid}
                 className={`
                   w-full h-11 text-sm font-medium rounded-lg
                   transition-all duration-150
@@ -262,7 +185,7 @@ export default function SelectOrganizationPage() {
                   }
                 `}
               >
-                {loading ? (
+                {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   "続ける"

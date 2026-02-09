@@ -4,6 +4,10 @@
  *
  * Vantage (iOS) から LINE OAuth 認証コードを受け取り、
  * サーバーサイドでアクセストークンに交換し、JWT を発行する
+ *
+ * セキュリティ対策:
+ * - レート制限（ブルートフォース攻撃対策）
+ * - redirectURIホワイトリスト検証（SSRF対策）
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,6 +17,7 @@ import {
   verifyLineToken,
   processLineAuth,
 } from "@/lib/line-auth";
+import { rateLimitGuard } from "@/lib/rate-limit";
 
 // リクエスト型
 interface CodeAuthRequest {
@@ -21,8 +26,22 @@ interface CodeAuthRequest {
 }
 
 export async function POST(request: NextRequest) {
+  // レート制限チェック
+  const rateLimitError = await rateLimitGuard(request, "mobile-auth-line-code", "login");
+  if (rateLimitError) {
+    return rateLimitError;
+  }
+
   try {
-    const body: CodeAuthRequest = await request.json();
+    let body: CodeAuthRequest;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
 
     // バリデーション
     if (!body.code) {

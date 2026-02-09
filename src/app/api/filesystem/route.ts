@@ -62,7 +62,7 @@ function findProjectFolder(managementNumber: string): string | null {
       }
     }
   } catch (error) {
-    console.error("フォルダ検索エラー:", error);
+    console.error("[Filesystem] フォルダ検索エラー:", error instanceof Error ? error.message : "Unknown error");
   }
 
   return null;
@@ -82,7 +82,8 @@ function countFiles(folderPath: string): { count: number; files: string[] } {
       .filter(e => e.isFile() && !e.name.startsWith(".") && e.name !== "desktop.ini")
       .map(e => e.name);
     return { count: files.length, files };
-  } catch {
+  } catch (error) {
+    console.error("[Filesystem] ファイルカウントエラー:", error instanceof Error ? error.message : "Unknown error");
     return { count: 0, files: [] };
   }
 }
@@ -135,8 +136,9 @@ function getFilesRecursive(
         result.push(...getFilesRecursive(fullPath, basePath, depth + 1, fileCount));
       }
     }
-  } catch {
-    // エラーは無視
+  } catch (error) {
+    // 再帰走査中のエラーは記録のみ（親フォルダの結果は返す）
+    console.error("[Filesystem] 再帰走査エラー:", folderPath, error instanceof Error ? error.message : "Unknown error");
   }
 
   return result;
