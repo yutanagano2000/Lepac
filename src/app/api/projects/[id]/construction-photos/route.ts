@@ -52,13 +52,21 @@ export async function GET(
     return authResult.response;
   }
 
-  const photos = await db
-    .select()
-    .from(constructionPhotos)
-    .where(eq(constructionPhotos.projectId, projectId))
-    .orderBy(desc(constructionPhotos.createdAt));
+  try {
+    const photos = await db
+      .select()
+      .from(constructionPhotos)
+      .where(eq(constructionPhotos.projectId, projectId))
+      .orderBy(desc(constructionPhotos.createdAt));
 
-  return NextResponse.json(photos);
+    return NextResponse.json(photos);
+  } catch (error) {
+    console.error("Get construction photos error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch photos" },
+      { status: 500 }
+    );
+  }
 }
 
 // 工事写真アップロード

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { parseValidId } from "@/lib/validation";
 
 type Project = {
   id: number;
@@ -33,20 +34,32 @@ export function useConstructionData(projectId: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // projectIdのバリデーション
+  const validatedId = parseValidId(projectId);
+
   const fetchData = useCallback(async () => {
+    // バリデーション失敗時は早期リターン
+    if (validatedId === null) {
+      setError("無効なプロジェクトIDです");
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       const [projectRes, photosRes] = await Promise.all([
-        fetch(`/api/projects/${projectId}`),
-        fetch(`/api/projects/${projectId}/construction-photos`),
+        fetch(`/api/projects/${validatedId}`),
+        fetch(`/api/projects/${validatedId}/construction-photos`),
       ]);
 
       if (!projectRes.ok) {
-        throw new Error("案件情報の取得に失敗しました");
+        const errorData = await projectRes.json().catch(() => ({}));
+        throw new Error(errorData.error || "案件情報の取得に失敗しました");
       }
       if (!photosRes.ok) {
-        throw new Error("写真の取得に失敗しました");
+        const errorData = await photosRes.json().catch(() => ({}));
+        throw new Error(errorData.error || "写真の取得に失敗しました");
       }
 
       const projectData = await projectRes.json();
@@ -61,7 +74,7 @@ export function useConstructionData(projectId: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [projectId]);
+  }, [validatedId]);
 
   useEffect(() => {
     fetchData();

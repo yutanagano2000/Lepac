@@ -100,9 +100,9 @@ export async function POST(
     }
   } catch (error) {
     console.error("Map annotation save error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    // セキュリティ: 内部エラー詳細をクライアントに公開しない
     return NextResponse.json(
-      { error: `Failed to save annotation: ${errorMessage}` },
+      { error: "アノテーションの保存に失敗しました" },
       { status: 500 }
     );
   }
@@ -161,9 +161,9 @@ export async function DELETE(
     return NextResponse.json({ success: true, deleted: deleted[0] });
   } catch (error) {
     console.error("Map annotation delete error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    // セキュリティ: 内部エラー詳細をクライアントに公開しない
     return NextResponse.json(
-      { error: `Failed to delete annotation: ${errorMessage}` },
+      { error: "アノテーションの削除に失敗しました" },
       { status: 500 }
     );
   }

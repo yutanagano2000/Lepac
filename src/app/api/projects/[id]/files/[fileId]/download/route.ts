@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { ApiError, createErrorResponse } from "@/lib/api-error";
 import { requireProjectAccess } from "@/lib/auth-guard";
+import { isPathSafe } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,10 @@ export async function GET(
     let filePath: string;
 
     if (isRelativePath) {
-      // 相対パスの場合: そのまま使用
+      // 相対パスの場合: パストラバーサル対策を適用
+      if (!isPathSafe(file.fileUrl)) {
+        throw ApiError.badRequest("不正なファイルパスです");
+      }
       filePath = file.fileUrl;
     } else {
       // フルURLの場合: パスを抽出（Supabase Storage想定）
@@ -91,6 +95,11 @@ export async function GET(
       }
 
       filePath = decodeURIComponent(pathMatch[1]);
+
+      // パストラバーサル対策
+      if (!isPathSafe(filePath)) {
+        throw ApiError.badRequest("不正なファイルパスです");
+      }
     }
 
     // 新しい署名付きURLを生成（1時間有効）

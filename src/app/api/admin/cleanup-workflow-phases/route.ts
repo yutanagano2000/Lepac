@@ -117,8 +117,10 @@ export async function GET(request: NextRequest) {
 
   // ページネーション（デフォルト100件、最大500件）
   const url = new URL(request.url);
-  const limit = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
-  const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+  const parsedLimit = parseInt(url.searchParams.get("limit") ?? "", 10);
+  const parsedOffset = parseInt(url.searchParams.get("offset") ?? "", 10);
+  const limit = Math.min(Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100, 500);
+  const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
 
   try {
     // サブクエリで組織内プロジェクトを指定（大規模inArray回避）

@@ -173,7 +173,7 @@ export async function GET(request: Request) {
       categories: CONSTRUCTION_PHOTO_CATEGORIES,
     });
   } catch (error) {
-    console.error("Photos summary error:", error);
+    console.error("Photos summary error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "Failed to fetch photos summary" }, { status: 500 });
   }
 }

@@ -33,13 +33,21 @@ export async function GET(
     return authResult.response;
   }
 
-  const progressList = await db
-    .select()
-    .from(constructionProgress)
-    .where(eq(constructionProgress.projectId, projectId))
-    .orderBy(desc(constructionProgress.createdAt));
+  try {
+    const progressList = await db
+      .select()
+      .from(constructionProgress)
+      .where(eq(constructionProgress.projectId, projectId))
+      .orderBy(desc(constructionProgress.createdAt));
 
-  return NextResponse.json(progressList);
+    return NextResponse.json(progressList);
+  } catch (error) {
+    console.error("Get construction progress error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch progress" },
+      { status: 500 }
+    );
+  }
 }
 
 // 工事進捗作成・更新

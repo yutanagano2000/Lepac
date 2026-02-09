@@ -24,8 +24,10 @@ export async function GET(request: NextRequest) {
   const conditions = [eq(todos.organizationId, organizationId)];
   if (filterUserId) {
     const parsedUserId = parseInt(filterUserId, 10);
-    // NaNチェック：不正なuserIdは無視して組織全体のTODOを返す
-    if (!isNaN(parsedUserId) && parsedUserId > 0) {
+    // セキュリティ: userIdは組織内のTODOフィルタリングに使用
+    // organizationIdによる絞り込みが先に適用されるため、
+    // 他組織のデータは取得できない（IDOR対策済み）
+    if (!isNaN(parsedUserId) && parsedUserId > 0 && parsedUserId <= Number.MAX_SAFE_INTEGER) {
       conditions.push(eq(todos.userId, parsedUserId));
     }
   }
@@ -70,9 +72,15 @@ export async function POST(request: NextRequest) {
   const creatorId = getUserId(user);
   const creatorName = user.name || user.username || null;
 
-  // 担当者IDと名前を決定
-  const todoUserId = assigneeId ?? creatorId;
-  const todoUserName = assigneeName ?? creatorName;
+  // セキュリティ: assigneeIdは組織内ユーザーの検証が理想だが、
+  // TODOは組織単位でフィルタリングされるため、
+  // 不正なassigneeIdでも組織外への情報漏洩リスクは低い
+  // 担当者IDと名前を決定（安全な範囲チェック付き）
+  const safeAssigneeId = assigneeId && assigneeId > 0 && assigneeId <= Number.MAX_SAFE_INTEGER
+    ? assigneeId
+    : null;
+  const todoUserId = safeAssigneeId ?? creatorId;
+  const todoUserName = safeAssigneeId ? (assigneeName ?? null) : creatorName;
 
   try {
     const [result] = await db
@@ -93,7 +101,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Failed to create todo:", error);
+    // 本番環境では詳細を隠す（情報漏洩対策）
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Failed to create todo:", error);
+    }
     return NextResponse.json({ error: "TODOの作成に失敗しました" }, { status: 500 });
   }
 }

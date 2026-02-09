@@ -53,10 +53,15 @@ export async function DELETE(
       }
     }
 
-    // DBから削除
+    // DBから削除（projectId条件を追加してセキュリティ確保）
     await db
       .delete(constructionPhotos)
-      .where(eq(constructionPhotos.id, photoIdNum));
+      .where(
+        and(
+          eq(constructionPhotos.id, photoIdNum),
+          eq(constructionPhotos.projectId, projectId)
+        )
+      );
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -3,11 +3,12 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { TodoItem } from "./TodoItem";
 import type { TodoWithProject } from "@/components/HomeTodosView";
+import type { LucideIcon } from "lucide-react";
 
 interface TodoSectionProps {
   title: string;
   description: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   items: TodoWithProject[];
   emptyMessage: string;
   badge?: React.ReactNode;

@@ -237,6 +237,12 @@ export async function GET(request: Request) {
   // アクション: 謄本フォルダ検索
   if (action === "searchTouhon") {
     const query = searchParams.get("query");
+
+    // クエリパラメータのバリデーション（DoS対策）
+    if (query && (query.length > 200 || /[<>{}|\\^`]/.test(query))) {
+      return NextResponse.json({ error: "無効な検索クエリです" }, { status: 400 });
+    }
+
     const touhonPath = path.join(CABINET_BASE_PATH, "■謄本");
 
     if (!fs.existsSync(touhonPath)) {
@@ -315,6 +321,7 @@ export async function GET(request: Request) {
         totalCount: folders.length,
       });
     } catch (error) {
+      console.error("[Filesystem] 全案件フォルダ一覧取得エラー:", error instanceof Error ? error.message : "Unknown error");
       return NextResponse.json({ error: "フォルダ一覧の取得に失敗しました" }, { status: 500 });
     }
   }

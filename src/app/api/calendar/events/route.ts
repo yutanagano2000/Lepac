@@ -245,7 +245,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(events);
   } catch (error) {
-    console.error("カレンダーイベントの取得に失敗:", error);
+    // エラーログは内部詳細を記録（クライアントには一般的なメッセージのみ）
+    console.error("カレンダーイベントの取得に失敗");
     return NextResponse.json({ error: "データの取得に失敗しました" }, { status: 500 });
   }
 }
@@ -304,7 +305,8 @@ export async function POST(request: Request) {
       userName: result.userName,
     }, { status: 201 });
   } catch (error) {
-    console.error("イベントの作成に失敗:", error);
+    // エラーログは内部詳細を記録（クライアントには一般的なメッセージのみ）
+    console.error("イベントの作成に失敗");
     return NextResponse.json({ error: "イベントの作成に失敗しました" }, { status: 500 });
   }
 }

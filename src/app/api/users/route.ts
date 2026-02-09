@@ -18,14 +18,22 @@ export async function GET() {
   }
   const { organizationId } = authResult;
 
-  const rows = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      username: users.username,
-    })
-    .from(users)
-    .where(eq(users.organizationId, organizationId));
+  try {
+    const rows = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+      })
+      .from(users)
+      .where(eq(users.organizationId, organizationId));
 
-  return NextResponse.json(rows);
+    return NextResponse.json(rows);
+  } catch (error) {
+    console.error("Failed to fetch users:", error);
+    return NextResponse.json(
+      { error: "ユーザー一覧の取得に失敗しました" },
+      { status: 500 }
+    );
+  }
 }

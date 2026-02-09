@@ -14,6 +14,7 @@ export async function GET() {
     const status = await getLastSyncStatus();
     return NextResponse.json({ status });
   } catch (err) {
+    console.error("Sync sheets GET error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "ステータス取得に失敗しました" },
       { status: 500 }
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (err) {
+    console.error("Sync sheets POST error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "同期処理に失敗しました" },
       { status: 500 }

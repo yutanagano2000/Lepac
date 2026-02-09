@@ -60,6 +60,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // projectId の型検証（整数かつ正の値）
+    if (typeof body.projectId !== "number" || !Number.isInteger(body.projectId) || body.projectId <= 0) {
+      return NextResponse.json(
+        { error: "projectId must be a positive integer" },
+        { status: 400 }
+      );
+    }
+
+    // fileSize の検証（上限100MB）
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    if (body.fileSize && (typeof body.fileSize !== "number" || body.fileSize < 0 || body.fileSize > MAX_FILE_SIZE)) {
+      return NextResponse.json(
+        { error: `fileSize must be a positive number not exceeding ${MAX_FILE_SIZE} bytes` },
+        { status: 400 }
+      );
+    }
+
     // fileUrl のセキュリティ検証（Supabase Storage URLのみ許可）
     if (!ALLOWED_FILE_URL_PATTERN.test(body.fileUrl)) {
       return NextResponse.json(

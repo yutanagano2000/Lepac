@@ -118,20 +118,25 @@ export default function MapPage() {
             <h2 className="text-base font-semibold text-foreground">
               住所または座標で開く
             </h2>
-            <a
-              href={googleMapsUrl ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => !googleMapsUrl && e.preventDefault()}
-              className={`flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors ${
-                googleEnabled
-                  ? "bg-card hover:bg-muted border-border cursor-pointer"
-                  : "opacity-40 cursor-not-allowed pointer-events-none border-border"
-              }`}
-            >
-              <span className="font-medium">Google Map</span>
-              <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </a>
+            {googleEnabled && googleMapsUrl ? (
+              <a
+                href={googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors bg-card hover:bg-muted border-border cursor-pointer"
+              >
+                <span className="font-medium">Google Map</span>
+                <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </a>
+            ) : (
+              <div
+                aria-disabled="true"
+                className="flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border opacity-40 cursor-not-allowed border-border"
+              >
+                <span className="font-medium">Google Map</span>
+                <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </div>
+            )}
           </div>
 
           {/* 座標で開く = MAPPLE・ハザード */}
@@ -140,34 +145,44 @@ export default function MapPage() {
               座標で開く
             </h2>
             <div className="grid gap-2 sm:grid-cols-2">
-              <a
-                href={mappleUrl ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => !mappleUrl && e.preventDefault()}
-                className={`flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors ${
-                  coordsOnlyEnabled
-                    ? "bg-card hover:bg-muted border-border cursor-pointer"
-                    : "opacity-40 cursor-not-allowed pointer-events-none border-border"
-                }`}
-              >
-                <span className="font-medium">MAPPLE</span>
-                <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </a>
-              <a
-                href={hazardMapUrl ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => !hazardMapUrl && e.preventDefault()}
-                className={`flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors ${
-                  coordsOnlyEnabled
-                    ? "bg-card hover:bg-muted border-border cursor-pointer"
-                    : "opacity-40 cursor-not-allowed pointer-events-none border-border"
-                }`}
-              >
-                <span className="font-medium">ハザード</span>
-                <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </a>
+              {coordsOnlyEnabled && mappleUrl ? (
+                <a
+                  href={mappleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors bg-card hover:bg-muted border-border cursor-pointer"
+                >
+                  <span className="font-medium">MAPPLE</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </a>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  className="flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border opacity-40 cursor-not-allowed border-border"
+                >
+                  <span className="font-medium">MAPPLE</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
+              )}
+              {coordsOnlyEnabled && hazardMapUrl ? (
+                <a
+                  href={hazardMapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors bg-card hover:bg-muted border-border cursor-pointer"
+                >
+                  <span className="font-medium">ハザード</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </a>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  className="flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border opacity-40 cursor-not-allowed border-border"
+                >
+                  <span className="font-medium">ハザード</span>
+                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
+              )}
             </div>
           </div>
 

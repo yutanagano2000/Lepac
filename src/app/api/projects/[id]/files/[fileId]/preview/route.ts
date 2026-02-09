@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { ApiError, createErrorResponse } from "@/lib/api-error";
 import { requireProjectAccess } from "@/lib/auth-guard";
+import { isPathSafe } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,12 @@ export async function GET(
     const isRelativePath = !file.fileUrl.startsWith("http");
 
     if (isRelativePath) {
-      // 相対パスの場合: 直接Supabase Storageからダウンロード
+      // 相対パスの場合: パストラバーサル対策を適用
+      if (!isPathSafe(file.fileUrl)) {
+        throw ApiError.badRequest("不正なファイルパスです");
+      }
+
+      // 直接Supabase Storageからダウンロード
       const { data, error } = await getSupabaseAdmin().storage
         .from(STORAGE_BUCKET)
         .download(file.fileUrl);
@@ -65,7 +71,12 @@ export async function GET(
       arrayBuffer = await data.arrayBuffer();
     } else {
       // フルURLの場合: URLをパースして適切に処理
-      const urlObj = new URL(file.fileUrl);
+      let urlObj: URL;
+      try {
+        urlObj = new URL(file.fileUrl);
+      } catch {
+        throw ApiError.badRequest("不正なファイルURLです");
+      }
       // signed URLまたはpublic URLの両方に対応
       const bucketPattern = new RegExp(
         `\\/storage\\/v1\\/object\\/(?:sign|public)\\/${STORAGE_BUCKET}\\/(.+)$`
@@ -103,6 +114,12 @@ export async function GET(
       } else {
         // Supabase Storageの場合
         const filePath = decodeURIComponent(pathMatch[1]);
+
+        // パストラバーサル対策
+        if (!isPathSafe(filePath)) {
+          throw ApiError.badRequest("不正なファイルパスです");
+        }
+
         const { data, error } = await getSupabaseAdmin().storage
           .from(STORAGE_BUCKET)
           .download(filePath);

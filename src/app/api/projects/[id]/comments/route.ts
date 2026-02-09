@@ -98,6 +98,9 @@ export async function PATCH(
   }
 
   const commentId = Number(body.commentId);
+  if (isNaN(commentId)) {
+    return NextResponse.json({ error: "Invalid comment ID" }, { status: 400 });
+  }
 
   // コメントの存在確認と所有者チェック
   const [existingComment] = await db
@@ -150,6 +153,9 @@ export async function DELETE(
   }
 
   const commentId = Number(commentIdParam);
+  if (isNaN(commentId)) {
+    return NextResponse.json({ error: "Invalid comment ID" }, { status: 400 });
+  }
 
   // コメントの存在確認と所有者チェック
   const [existingComment] = await db

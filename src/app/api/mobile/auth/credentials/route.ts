@@ -149,7 +149,11 @@ export async function POST(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error("[Credentials Auth API] Error:", error);
+    // セキュリティ: errorオブジェクトの詳細をログに出力しない（機密情報漏洩防止）
+    console.error("[Credentials Auth API] Authentication error occurred");
+    if (process.env.NODE_ENV === "development") {
+      console.error("[DEV]", error instanceof Error ? error.message : "Unknown error");
+    }
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

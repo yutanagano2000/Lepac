@@ -54,7 +54,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, project: updated });
   } catch (error) {
-    console.error("Failed to update project:", error);
+    console.error("Failed to update project:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "工事情報の更新に失敗しました" }, { status: 500 });
   }
 }

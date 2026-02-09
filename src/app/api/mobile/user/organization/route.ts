@@ -37,10 +37,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // バリデーション
-    if (!body.organizationId || typeof body.organizationId !== "number") {
+    // バリデーション（正の整数かつ安全な整数範囲内）
+    if (
+      !body.organizationId ||
+      typeof body.organizationId !== "number" ||
+      !Number.isInteger(body.organizationId) ||
+      body.organizationId <= 0 ||
+      body.organizationId > Number.MAX_SAFE_INTEGER
+    ) {
       return NextResponse.json(
-        { error: "organizationId is required and must be a number" },
+        { error: "organizationId must be a positive integer" },
         { status: 400 }
       );
     }
@@ -98,6 +104,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
+      );
+    }
+
+    // 組織変更権限チェック
+    // - 管理者（admin）は任意の組織に切り替え可能
+    // - 一般ユーザーは初回設定（organizationId が null）の場合のみ設定可能
+    if (existingUser.role !== "admin" && existingUser.organizationId !== null) {
+      return NextResponse.json(
+        { error: "Organization change not allowed. Contact administrator." },
+        { status: 403 }
       );
     }
 

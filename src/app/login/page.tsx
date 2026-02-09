@@ -34,7 +34,6 @@ export default function LoginPage() {
       } else {
         // 組織選択画面へリダイレクト（既に選択済みの場合はauthorizedコールバックでホームへ）
         router.push("/onboarding/select-organization");
-        router.refresh();
       }
     } catch {
       setError("ログイン中にエラーが発生しました");
@@ -126,7 +125,7 @@ export default function LoginPage() {
               />
             </div>
             {error && (
-              <p className="text-sm text-destructive font-medium">{error}</p>
+              <p role="alert" aria-live="polite" className="text-sm text-destructive font-medium">{error}</p>
             )}
             <Button type="submit" className="w-full" disabled={loading || lineLoading}>
               {loading ? (

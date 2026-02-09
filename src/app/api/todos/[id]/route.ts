@@ -31,12 +31,14 @@ export async function PATCH(
   }
 
   const { content, dueDate, completedAt, completedMemo } = validation.data;
-  const updates: Record<string, string | null | undefined> = {};
+
+  // 型安全なupdatesオブジェクト構築（undefinedは除外、nullは許可）
+  const updates: Record<string, string | null> = {};
 
   if (content !== undefined) updates.content = content.trim();
-  if (dueDate !== undefined) updates.dueDate = dueDate;
-  if (completedAt !== undefined) updates.completedAt = completedAt;
-  if (completedMemo !== undefined) updates.completedMemo = completedMemo;
+  if (dueDate !== undefined) updates.dueDate = dueDate ?? null;
+  if (completedAt !== undefined) updates.completedAt = completedAt ?? null;
+  if (completedMemo !== undefined) updates.completedMemo = completedMemo ?? null;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
@@ -59,7 +61,10 @@ export async function PATCH(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Failed to update todo:", error);
+    // 本番環境では詳細を隠す（情報漏洩対策）
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Failed to update todo:", error);
+    }
     return NextResponse.json({ error: "TODOの更新に失敗しました" }, { status: 500 });
   }
 }
@@ -102,7 +107,10 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to delete todo:", error);
+    // 本番環境では詳細を隠す（情報漏洩対策）
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Failed to delete todo:", error);
+    }
     return NextResponse.json({ error: "TODOの削除に失敗しました" }, { status: 500 });
   }
 }

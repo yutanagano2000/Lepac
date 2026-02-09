@@ -25,6 +25,34 @@ interface CodeAuthRequest {
   redirectUri: string;
 }
 
+// 入力検証用の定数
+const MAX_CODE_LENGTH = 512;
+const MAX_REDIRECT_URI_LENGTH = 2048;
+const CODE_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * 入力文字列をサニタイズ・検証
+ */
+function validateAuthCode(code: unknown): string | null {
+  if (typeof code !== "string") return null;
+  const trimmed = code.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_CODE_LENGTH) return null;
+  if (!CODE_PATTERN.test(trimmed)) return null;
+  return trimmed;
+}
+
+function validateRedirectUri(uri: unknown): string | null {
+  if (typeof uri !== "string") return null;
+  const trimmed = uri.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_REDIRECT_URI_LENGTH) return null;
+  try {
+    new URL(trimmed);
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   // レート制限チェック
   const rateLimitError = await rateLimitGuard(request, "mobile-auth-line-code", "login");
@@ -43,31 +71,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // バリデーション
-    if (!body.code) {
+    // バリデーション（サニタイズ含む）
+    const code = validateAuthCode(body.code);
+    if (!code) {
       return NextResponse.json(
-        { error: "code is required" },
+        { error: "Invalid or missing code" },
         { status: 400 }
       );
     }
 
-    if (!body.redirectUri) {
+    const redirectUri = validateRedirectUri(body.redirectUri);
+    if (!redirectUri) {
       return NextResponse.json(
-        { error: "redirectUri is required" },
+        { error: "Invalid or missing redirectUri" },
         { status: 400 }
       );
     }
 
     // redirectURIのホワイトリスト検証（SSRF対策）
-    if (!isValidRedirectUri(body.redirectUri)) {
+    if (!isValidRedirectUri(redirectUri)) {
       return NextResponse.json(
-        { error: "Invalid redirect URI" },
+        { error: "Unauthorized redirect URI" },
         { status: 400 }
       );
     }
 
-    // 1. 認証コードをアクセストークンに交換
-    const tokenResponse = await exchangeCodeForToken(body.code, body.redirectUri);
+    // 1. 認証コードをアクセストークンに交換（サニタイズ済みの値を使用）
+    const tokenResponse = await exchangeCodeForToken(code, redirectUri);
     if (!tokenResponse) {
       return NextResponse.json(
         { error: "Failed to exchange authorization code" },
@@ -89,9 +119,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[LINE Auth] Error:", error);
+    // エラーログには詳細を記録するが、クライアントには一般的なメッセージのみ返す
+    console.error("[LINE Auth Code] Error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Authentication failed" },
       { status: 500 }
     );
   }

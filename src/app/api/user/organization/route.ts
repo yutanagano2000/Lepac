@@ -39,6 +39,11 @@ export async function PUT(request: Request) {
 
   const { organizationId } = validation.data;
 
+  const userId = parseInt(session.user.id, 10);
+  if (Number.isNaN(userId)) {
+    return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+  }
+
   try {
     // 組織の存在確認
     const [org] = await db
@@ -50,19 +55,26 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
-    // ユーザーの組織IDを更新
-    const userId = parseInt(session.user.id, 10);
-    if (Number.isNaN(userId)) {
-      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
-    }
+    // 現在のユーザー情報を取得して、組織変更をログ
+    const [currentUser] = await db
+      .select({ organizationId: users.organizationId })
+      .from(users)
+      .where(eq(users.id, userId));
 
+    // 組織変更の監査ログ（セキュリティ監視用）
+    console.log(
+      `[AUDIT] User ${userId} changing organization: ${currentUser?.organizationId ?? "none"} -> ${organizationId}`
+    );
+
+    // ユーザーの組織IDを更新
     await db
       .update(users)
       .set({ organizationId })
       .where(eq(users.id, userId));
 
     return NextResponse.json({ success: true, organizationId });
-  } catch {
+  } catch (error) {
+    console.error("Failed to update organization:", error);
     return NextResponse.json({ error: "組織の更新に失敗しました" }, { status: 500 });
   }
 }
