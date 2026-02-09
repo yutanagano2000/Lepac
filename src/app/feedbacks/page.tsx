@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import {
   ThumbsUp,
@@ -13,7 +13,8 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
-  User
+  User,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,22 +45,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { Feedback } from "@/db/schema";
-
-interface ReplyMessage {
-  message: string;
-  createdAt: string;
-  userId?: number | null;
-  userName?: string | null;
-}
-
-function parseReplies(repliesStr: string | null): ReplyMessage[] {
-  if (!repliesStr) return [];
-  try {
-    return JSON.parse(repliesStr);
-  } catch {
-    return [];
-  }
-}
+import { useFeedbacksData, useFeedbacksActions, parseReplies } from "./_hooks";
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -102,86 +88,22 @@ const STATUS_CONFIG = {
 
 export default function FeedbacksPage() {
   const { data: session } = useSession();
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const { feedbacks, isLoading, error, refetch } = useFeedbacksData();
+
+  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const userName = session?.user?.name || session?.user?.username || null;
+
+  const { handleLike, handleStatusChange, handleReply, handleDelete } = useFeedbacksActions({
+    onRefresh: refetch,
+    userId,
+    userName,
+  });
+
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [replyContent, setReplyContent] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
-
-  const fetchFeedbacks = async () => {
-    const res = await fetch("/api/feedbacks");
-    if (res.ok) {
-      const data = await res.json();
-      setFeedbacks(data);
-    }
-  };
-
-  useEffect(() => {
-    fetchFeedbacks();
-  }, []);
-
-  const handleLike = async (id: number) => {
-    try {
-      const res = await fetch(`/api/feedbacks/${id}/like`, { method: "POST" });
-      if (res.ok) {
-        fetchFeedbacks();
-      }
-    } catch {
-      // エラーは静かに無視（UXを損なわない）
-    }
-  };
-
-  const handleStatusChange = async (id: number, status: string) => {
-    try {
-      const res = await fetch(`/api/feedbacks/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        fetchFeedbacks();
-      }
-    } catch {
-      // エラーは静かに無視
-    }
-  };
-
-  const handleReply = async (feedback: Feedback) => {
-    if (!replyContent.trim()) return;
-
-    // セッションからユーザー情報を取得
-    const userId = session?.user?.id ? parseInt(session.user.id) : null;
-    const userName = session?.user?.name || session?.user?.username || null;
-
-    const currentReplies = parseReplies(feedback.replies);
-    const newReplies = [
-      ...currentReplies,
-      {
-        message: replyContent.trim(),
-        createdAt: new Date().toISOString(),
-        userId,
-        userName,
-      },
-    ];
-
-    await fetch(`/api/feedbacks/${feedback.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ replies: JSON.stringify(newReplies) }),
-    });
-
-    setReplyContent("");
-    setReplyingId(null);
-    fetchFeedbacks();
-  };
-
-  const handleDelete = async () => {
-    if (deleteId === null) return;
-    await fetch(`/api/feedbacks/${deleteId}`, { method: "DELETE" });
-    setDeleteId(null);
-    fetchFeedbacks();
-  };
 
   const toggleExpand = (id: number) => {
     const newSet = new Set(expandedIds);
@@ -193,18 +115,67 @@ export default function FeedbacksPage() {
     setExpandedIds(newSet);
   };
 
-  const filteredFeedbacks = feedbacks.filter((f) => {
-    if (statusFilter === "all") return true;
-    return f.status === statusFilter;
-  });
+  const filteredFeedbacks = useMemo(() => {
+    return feedbacks.filter((f) => {
+      if (statusFilter === "all") return true;
+      return f.status === statusFilter;
+    });
+  }, [feedbacks, statusFilter]);
 
-  const statusCounts = {
+  const statusCounts = useMemo(() => ({
     all: feedbacks.length,
     pending: feedbacks.filter((f) => f.status === "pending").length,
     in_progress: feedbacks.filter((f) => f.status === "in_progress").length,
     completed: feedbacks.filter((f) => f.status === "completed").length,
     rejected: feedbacks.filter((f) => f.status === "rejected").length,
+  }), [feedbacks]);
+
+  const onReplySubmit = async () => {
+    const feedback = feedbacks.find((f) => f.id === replyingId);
+    if (feedback) {
+      try {
+        await handleReply(feedback, replyContent);
+        setReplyContent("");
+        setReplyingId(null);
+      } catch {
+        // エラーはフック内でログ出力済み
+      }
+    }
   };
+
+  const onDeleteConfirm = async () => {
+    if (deleteId === null) return;
+    try {
+      await handleDelete(deleteId);
+      setDeleteId(null);
+    } catch {
+      // エラーはフック内でログ出力済み
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+        <Card className="border-destructive">
+          <CardContent className="py-8 flex flex-col items-center gap-4">
+            <AlertCircle className="h-8 w-8 text-destructive" />
+            <p className="text-sm text-destructive">{error}</p>
+            <Button variant="outline" onClick={refetch}>
+              再試行
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4 sm:space-y-6">
@@ -452,10 +423,7 @@ export default function FeedbacksPage() {
                 キャンセル
               </Button>
               <Button
-                onClick={() => {
-                  const feedback = feedbacks.find((f) => f.id === replyingId);
-                  if (feedback) handleReply(feedback);
-                }}
+                onClick={onReplySubmit}
                 disabled={!replyContent.trim()}
               >
                 追加
@@ -477,7 +445,7 @@ export default function FeedbacksPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={onDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               削除
