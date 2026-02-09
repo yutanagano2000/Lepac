@@ -302,6 +302,24 @@ export const updateConstructionProgressSchema = z.object({
   completedAt: isoDateString,
 });
 
+// 進捗作成スキーマ
+export const createProgressSchema = z.object({
+  title: nonEmptyString,
+  description: optionalString,
+  status: z.enum(["planned", "in_progress", "completed"]).default("planned"),
+  createdAt: isoDateString.optional(),
+});
+
+// 進捗更新スキーマ（部分更新をサポート）
+export const updateProgressSchema = z.object({
+  progressId: z.number().int().positive("進捗IDが必要です"),
+  title: nonEmptyString.optional(),
+  description: optionalString,
+  status: z.enum(["planned", "in_progress", "completed"]).optional(),
+  createdAt: isoDateString.optional(),
+  completedAt: isoDateString.optional().nullable(),
+});
+
 // ファイルアップロードバリデーション
 export const fileUploadSchema = z.object({
   category: z.enum(["registry_copy", "cadastral_map", "drawing", "consent_form", "other"]),
