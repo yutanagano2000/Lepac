@@ -86,8 +86,10 @@ export function ProjectFiles({ projectId, initialFiles = [] }: ProjectFilesProps
   const fetchFiles = useCallback(async () => {
     const res = await fetch(`/api/projects/${projectId}/files`);
     if (res.ok) {
-      const data = await res.json();
-      setFiles(data);
+      const json = await res.json();
+      // APIがpaginatedレスポンス {data, pagination} を返す場合に対応
+      const filesData = Array.isArray(json) ? json : (json.data ?? []);
+      setFiles(filesData);
     }
   }, [projectId]);
 

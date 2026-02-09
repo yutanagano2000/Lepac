@@ -168,6 +168,14 @@ export default function ProjectDetailPage() {
     }, 300);
   }, []);
 
+  // フリガナタイムアウトのクリーンアップ（メモリリーク防止）
+  useEffect(() => {
+    const timeouts = furiganaTimeoutRef.current;
+    return () => {
+      Object.values(timeouts).forEach(clearTimeout);
+    };
+  }, []);
+
   const [open, setOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [form, setForm] = useState<{
@@ -204,82 +212,110 @@ export default function ProjectDetailPage() {
   const [editCompletedCalendarOpen, setEditCompletedCalendarOpen] = useState(false);
   const [editDateText, setEditDateText] = useState("");
 
-  const fetchProject = () => {
-    fetch(`/api/projects/${id}`)
-      .then((res) => res.json())
-      .then(setProject);
+  const fetchProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}`);
+      if (!res.ok) throw new Error("Failed to fetch project");
+      setProject(await res.json());
+    } catch (error) {
+      console.error("fetchProject error:", error);
+    }
   };
 
-  const fetchProgress = () => {
-    fetch(`/api/projects/${id}/progress`)
-      .then((res) => res.json())
-      .then(setProgressList);
+  const fetchProgress = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/progress`);
+      if (!res.ok) throw new Error("Failed to fetch progress");
+      setProgressList(await res.json());
+    } catch (error) {
+      console.error("fetchProgress error:", error);
+    }
   };
 
-  const fetchComments = () => {
-    fetch(`/api/projects/${id}/comments`)
-      .then((res) => res.json())
-      .then(setComments);
+  const fetchComments = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/comments`);
+      if (!res.ok) throw new Error("Failed to fetch comments");
+      setComments(await res.json());
+    } catch (error) {
+      console.error("fetchComments error:", error);
+    }
   };
 
-  const fetchTodos = () => {
-    fetch(`/api/projects/${id}/todos`)
-      .then((res) => res.json())
-      .then(setTodos);
+  const fetchTodos = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/todos`);
+      if (!res.ok) throw new Error("Failed to fetch todos");
+      setTodos(await res.json());
+    } catch (error) {
+      console.error("fetchTodos error:", error);
+    }
   };
 
-  const fetchFiles = () => {
-    fetch(`/api/projects/${id}/files`)
-      .then((res) => res.json())
-      .then(setFiles);
+  const fetchFiles = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}/files`);
+      if (!res.ok) throw new Error("Failed to fetch files");
+      const json = await res.json();
+      // APIがpaginatedレスポンス {data, pagination} を返す場合に対応
+      const filesData = Array.isArray(json) ? json : (json.data ?? []);
+      setFiles(filesData);
+    } catch (error) {
+      console.error("fetchFiles error:", error);
+    }
   };
 
   const handleDetailUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!project) return;
-    await fetch(`/api/projects/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // 更新するフィールドのみ送信（...projectを展開するとidやorganizationId等も含まれてバリデーションエラーになる）
-        address: detailForm.address,
-        coordinates: normalizeCoordinateString(detailForm.coordinates) || detailForm.coordinates,
-        landowner1: detailForm.landowner1,
-        landowner2: detailForm.landowner2,
-        landowner3: detailForm.landowner3,
-        // 地権者フリガナ
-        landowner1Kana: detailForm.landowner1Kana,
-        landowner2Kana: detailForm.landowner2Kana,
-        landowner3Kana: detailForm.landowner3Kana,
-        // 地権者追加情報
-        landownerAddress1: detailForm.landownerAddress1,
-        landownerAddress2: detailForm.landownerAddress2,
-        landownerAddress3: detailForm.landownerAddress3,
-        inheritanceStatus1: detailForm.inheritanceStatus1,
-        inheritanceStatus2: detailForm.inheritanceStatus2,
-        inheritanceStatus3: detailForm.inheritanceStatus3,
-        correctionRegistration1: detailForm.correctionRegistration1,
-        correctionRegistration2: detailForm.correctionRegistration2,
-        correctionRegistration3: detailForm.correctionRegistration3,
-        mortgageStatus1: detailForm.mortgageStatus1,
-        mortgageStatus2: detailForm.mortgageStatus2,
-        mortgageStatus3: detailForm.mortgageStatus3,
-        // 地目・面積
-        landCategory1: detailForm.landCategory1,
-        landCategory2: detailForm.landCategory2,
-        landCategory3: detailForm.landCategory3,
-        landArea1: detailForm.landArea1,
-        landArea2: detailForm.landArea2,
-        landArea3: detailForm.landArea3,
-        // 環境データ
-        verticalSnowLoad: detailForm.verticalSnowLoad,
-        windSpeed: detailForm.windSpeed,
-        // 外部連携
-        dococabiLink: detailForm.dococabiLink,
-      }),
-    });
-    setDetailEditOpen(false);
-    fetchProject();
+    try {
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // 更新するフィールドのみ送信（...projectを展開するとidやorganizationId等も含まれてバリデーションエラーになる）
+          address: detailForm.address,
+          coordinates: normalizeCoordinateString(detailForm.coordinates) || detailForm.coordinates,
+          landowner1: detailForm.landowner1,
+          landowner2: detailForm.landowner2,
+          landowner3: detailForm.landowner3,
+          // 地権者フリガナ
+          landowner1Kana: detailForm.landowner1Kana,
+          landowner2Kana: detailForm.landowner2Kana,
+          landowner3Kana: detailForm.landowner3Kana,
+          // 地権者追加情報
+          landownerAddress1: detailForm.landownerAddress1,
+          landownerAddress2: detailForm.landownerAddress2,
+          landownerAddress3: detailForm.landownerAddress3,
+          inheritanceStatus1: detailForm.inheritanceStatus1,
+          inheritanceStatus2: detailForm.inheritanceStatus2,
+          inheritanceStatus3: detailForm.inheritanceStatus3,
+          correctionRegistration1: detailForm.correctionRegistration1,
+          correctionRegistration2: detailForm.correctionRegistration2,
+          correctionRegistration3: detailForm.correctionRegistration3,
+          mortgageStatus1: detailForm.mortgageStatus1,
+          mortgageStatus2: detailForm.mortgageStatus2,
+          mortgageStatus3: detailForm.mortgageStatus3,
+          // 地目・面積
+          landCategory1: detailForm.landCategory1,
+          landCategory2: detailForm.landCategory2,
+          landCategory3: detailForm.landCategory3,
+          landArea1: detailForm.landArea1,
+          landArea2: detailForm.landArea2,
+          landArea3: detailForm.landArea3,
+          // 環境データ
+          verticalSnowLoad: detailForm.verticalSnowLoad,
+          windSpeed: detailForm.windSpeed,
+          // 外部連携
+          dococabiLink: detailForm.dococabiLink,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update project details");
+      setDetailEditOpen(false);
+      fetchProject();
+    } catch (error) {
+      console.error("handleDetailUpdate error:", error);
+    }
   };
 
   const openDetailEditDialog = () => {
@@ -388,8 +424,13 @@ export default function ProjectDetailPage() {
   };
 
   const handleTodoDelete = async (todoId: number) => {
-    await fetch(`/api/todos/${todoId}`, { method: "DELETE" });
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${todoId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete todo");
+      fetchTodos();
+    } catch (error) {
+      console.error("handleTodoDelete error:", error);
+    }
   };
 
   const openTodoDeleteDialog = (todo: Todo) => {
@@ -408,14 +449,19 @@ export default function ProjectDetailPage() {
   const handleTodoEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTodo || !editTodoContent.trim() || !editTodoDueDate) return;
-    await fetch(`/api/todos/${editingTodo.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: editTodoContent.trim(), dueDate: editTodoDueDate }),
-    });
-    setTodoEditOpen(false);
-    setEditingTodo(null);
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${editingTodo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editTodoContent.trim(), dueDate: editTodoDueDate }),
+      });
+      if (!res.ok) throw new Error("Failed to update todo");
+      setTodoEditOpen(false);
+      setEditingTodo(null);
+      fetchTodos();
+    } catch (error) {
+      console.error("handleTodoEditSubmit error:", error);
+    }
   };
 
   const openTodoCompleteDialog = (todo: Todo) => {
@@ -431,28 +477,38 @@ export default function ProjectDetailPage() {
     const completedMemo = completeTodoMemo.trim()
       ? addTodoMessage(null, completeTodoMemo.trim())
       : null;
-    await fetch(`/api/todos/${completingTodo.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        completedAt: new Date().toISOString(),
-        completedMemo,
-      }),
-    });
-    setTodoCompleteOpen(false);
-    setCompletingTodo(null);
-    setCompleteTodoMemo("");
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${completingTodo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          completedAt: new Date().toISOString(),
+          completedMemo,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to complete todo");
+      setTodoCompleteOpen(false);
+      setCompletingTodo(null);
+      setCompleteTodoMemo("");
+      fetchTodos();
+    } catch (error) {
+      console.error("handleTodoCompleteSubmit error:", error);
+    }
   };
 
   const handleTodoReopen = async (todo: Todo) => {
     // 再開時はメッセージを保持（completedAtのみクリア）
-    await fetch(`/api/todos/${todo.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completedAt: null }),
-    });
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${todo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedAt: null }),
+      });
+      if (!res.ok) throw new Error("Failed to reopen todo");
+      fetchTodos();
+    } catch (error) {
+      console.error("handleTodoReopen error:", error);
+    }
   };
 
   // 完了済みTODOにメッセージを追加
@@ -469,21 +525,31 @@ export default function ProjectDetailPage() {
       addingMessageTodo.completedMemo,
       newTodoMessage.trim()
     );
-    await fetch(`/api/todos/${addingMessageTodo.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completedMemo: updatedMemo }),
-    });
-    setTodoAddMessageOpen(false);
-    setAddingMessageTodo(null);
-    setNewTodoMessage("");
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${addingMessageTodo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedMemo: updatedMemo }),
+      });
+      if (!res.ok) throw new Error("Failed to add message");
+      setTodoAddMessageOpen(false);
+      setAddingMessageTodo(null);
+      setNewTodoMessage("");
+      fetchTodos();
+    } catch (error) {
+      console.error("handleAddMessageSubmit error:", error);
+    }
   };
 
   // タイムラインを自動生成してから進捗を取得
   const generateAndFetchProgress = async () => {
-    await fetch(`/api/projects/${id}/progress/generate`, { method: "POST" });
-    fetchProgress();
+    try {
+      const res = await fetch(`/api/projects/${id}/progress/generate`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate progress");
+      fetchProgress();
+    } catch (error) {
+      console.error("generateAndFetchProgress error:", error);
+    }
   };
 
   // Strict Modeでの二重呼び出しを防止
@@ -518,46 +584,61 @@ export default function ProjectDetailPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.date) return;
-    await fetch(`/api/projects/${id}/progress`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: form.title,
-        description: form.description,
-        status: form.status,
-        createdAt: form.date.toISOString(),
-      }),
-    });
-    setForm({ title: "", description: "", date: undefined, status: "planned" });
-    setDateText("");
-    setOpen(false);
-    fetchProgress();
+    try {
+      const res = await fetch(`/api/projects/${id}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          status: form.status,
+          createdAt: form.date.toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to add progress");
+      setForm({ title: "", description: "", date: undefined, status: "planned" });
+      setDateText("");
+      setOpen(false);
+      fetchProgress();
+    } catch (error) {
+      console.error("handleSubmit error:", error);
+    }
   };
 
   const markAsCompleted = async (progressId: number) => {
-    await fetch(`/api/projects/${id}/progress`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        progressId, 
-        status: "completed",
-        completedAt: new Date().toISOString(),
-      }),
-    });
-    fetchProgress();
+    try {
+      const res = await fetch(`/api/projects/${id}/progress`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          progressId,
+          status: "completed",
+          completedAt: new Date().toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to mark as completed");
+      fetchProgress();
+    } catch (error) {
+      console.error("markAsCompleted error:", error);
+    }
   };
 
   const markAsIncomplete = async (progressId: number) => {
-    await fetch(`/api/projects/${id}/progress`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        progressId, 
-        status: "planned",
-        completedAt: null,
-      }),
-    });
-    fetchProgress();
+    try {
+      const res = await fetch(`/api/projects/${id}/progress`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          progressId,
+          status: "planned",
+          completedAt: null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to mark as incomplete");
+      fetchProgress();
+    } catch (error) {
+      console.error("markAsIncomplete error:", error);
+    }
   };
 
   const openEditDialog = (p: Progress) => {
@@ -579,32 +660,42 @@ export default function ProjectDetailPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProgress || !editForm.date) return;
-    await fetch(`/api/projects/${id}/progress`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        progressId: editingProgress.id,
-        title: editForm.title,
-        description: editForm.description,
-        status: editForm.status,
-        createdAt: editForm.date.toISOString(),
-        completedAt: editForm.completedAt ? editForm.completedAt.toISOString() : null,
-      }),
-    });
-    setEditOpen(false);
-    setEditingProgress(null);
-    fetchProgress();
+    try {
+      const res = await fetch(`/api/projects/${id}/progress`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          progressId: editingProgress.id,
+          title: editForm.title,
+          description: editForm.description,
+          status: editForm.status,
+          createdAt: editForm.date.toISOString(),
+          completedAt: editForm.completedAt ? editForm.completedAt.toISOString() : null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to edit progress");
+      setEditOpen(false);
+      setEditingProgress(null);
+      fetchProgress();
+    } catch (error) {
+      console.error("handleEditSubmit error:", error);
+    }
   };
 
   const handleDelete = async () => {
     if (!editingProgress) return;
     if (!confirm("この進捗を削除しますか？")) return;
-    await fetch(`/api/projects/${id}/progress?progressId=${editingProgress.id}`, {
-      method: "DELETE",
-    });
-    setEditOpen(false);
-    setEditingProgress(null);
-    fetchProgress();
+    try {
+      const res = await fetch(`/api/projects/${id}/progress?progressId=${editingProgress.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete progress");
+      setEditOpen(false);
+      setEditingProgress(null);
+      fetchProgress();
+    } catch (error) {
+      console.error("handleDelete error:", error);
+    }
   };
 
   const formatDate = (dateString: string) => {
