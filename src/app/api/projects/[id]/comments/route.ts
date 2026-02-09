@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { comments } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { createCommentSchema, validateBody } from "@/lib/validations";
 import { requireProjectAccess, getUserId } from "@/lib/auth-guard";
 
@@ -82,6 +82,8 @@ export async function PATCH(
   if (!authResult.success) {
     return authResult.response;
   }
+  const { user } = authResult;
+  const currentUserId = getUserId(user);
 
   // Parse body manually for this endpoint as it has a different structure
   let body: { commentId?: number; content?: string };
@@ -95,16 +97,30 @@ export async function PATCH(
     return NextResponse.json({ error: "commentId and content are required" }, { status: 400 });
   }
 
+  const commentId = Number(body.commentId);
+
+  // コメントの存在確認と所有者チェック
+  const [existingComment] = await db
+    .select()
+    .from(comments)
+    .where(and(eq(comments.id, commentId), eq(comments.projectId, projectId)));
+
+  if (!existingComment) {
+    return NextResponse.json({ error: "コメントが見つかりません" }, { status: 404 });
+  }
+
+  // コメントの所有者のみ編集可能
+  if (existingComment.userId !== currentUserId) {
+    return NextResponse.json({ error: "このコメントを編集する権限がありません" }, { status: 403 });
+  }
+
   try {
     const [result] = await db
       .update(comments)
       .set({ content: body.content.trim() })
-      .where(eq(comments.id, Number(body.commentId)))
+      .where(eq(comments.id, commentId))
       .returning();
 
-    if (!result) {
-      return NextResponse.json({ error: "コメントが見つかりません" }, { status: 404 });
-    }
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to update comment:", error);
@@ -124,15 +140,34 @@ export async function DELETE(
   if (!authResult.success) {
     return authResult.response;
   }
+  const { user } = authResult;
+  const currentUserId = getUserId(user);
 
   const { searchParams } = new URL(request.url);
-  const commentId = searchParams.get("commentId");
-  if (!commentId) {
+  const commentIdParam = searchParams.get("commentId");
+  if (!commentIdParam) {
     return NextResponse.json({ error: "commentId is required" }, { status: 400 });
   }
 
+  const commentId = Number(commentIdParam);
+
+  // コメントの存在確認と所有者チェック
+  const [existingComment] = await db
+    .select()
+    .from(comments)
+    .where(and(eq(comments.id, commentId), eq(comments.projectId, projectId)));
+
+  if (!existingComment) {
+    return NextResponse.json({ error: "コメントが見つかりません" }, { status: 404 });
+  }
+
+  // コメントの所有者のみ削除可能
+  if (existingComment.userId !== currentUserId) {
+    return NextResponse.json({ error: "このコメントを削除する権限がありません" }, { status: 403 });
+  }
+
   try {
-    await db.delete(comments).where(eq(comments.id, Number(commentId)));
+    await db.delete(comments).where(eq(comments.id, commentId));
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete comment:", error);

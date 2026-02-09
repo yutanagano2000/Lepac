@@ -35,8 +35,13 @@ export function DatePickerField({
     const dateValue = d
       ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
       : null;
-    await onChange(dateValue);
-    setOpen(false);
+    try {
+      await onChange(dateValue);
+    } catch (error) {
+      console.error("DatePickerField: onChange failed", error);
+    } finally {
+      setOpen(false);
+    }
   };
 
   const selectedDate = value ? new Date(value + "T00:00:00") : undefined;

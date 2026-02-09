@@ -25,16 +25,25 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") || "50", 10)));
-  const searchQuery = url.searchParams.get("q")?.trim() || "";
+  const rawSearchQuery = url.searchParams.get("q")?.trim() || "";
   const sortDir = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
   const offset = (page - 1) * limit;
+
+  // 検索クエリの長さ制限（DoS対策）
+  const MAX_SEARCH_LENGTH = 100;
+  const searchQuery = rawSearchQuery.slice(0, MAX_SEARCH_LENGTH);
 
   // WHERE条件を構築
   const orgFilter = eq(projects.organizationId, organizationId);
   let whereClause;
 
   if (searchQuery) {
-    const pattern = `%${searchQuery}%`;
+    // LIKE演算子の特殊文字をエスケープ
+    const escapedQuery = searchQuery
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
+    const pattern = `%${escapedQuery}%`;
     whereClause = and(
       orgFilter,
       or(
@@ -98,7 +107,14 @@ export async function GET(request: NextRequest) {
     if (projectProgress.length > 0) {
       hasOverdue = projectProgress.some((p) => {
         if (p.status === "completed") return false;
-        const dueDate = new Date(p.createdAt);
+        // createdAtは予定日（スキーマコメント参照）として使用
+        // ローカル日付としてパースしてUTC問題を回避
+        const dateStr = p.createdAt.split("T")[0];
+        const parts = dateStr.split("-");
+        if (parts.length !== 3) return false;
+        const [y, m, d] = parts.map(Number);
+        if (isNaN(y) || isNaN(m) || isNaN(d)) return false;
+        const dueDate = new Date(y, m - 1, d);
         return dueDate.getTime() < now.getTime();
       });
     } else if (project.completionMonth) {

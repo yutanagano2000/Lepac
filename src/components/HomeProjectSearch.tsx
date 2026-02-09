@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, ArrowRight, FolderKanban, MessageSquare } from "lucide-react";
+import { Search, ArrowRight, FolderKanban, MessageSquare, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 const PROJECT_SEARCH_RECENT_KEY = "geo_checker_recent_project_searches";
@@ -34,6 +34,27 @@ function addRecentSearch(query: string): string[] {
     // ignore
   }
   return next;
+}
+
+// 型ガード関数
+function isProjectForSearch(data: unknown): data is ProjectForSearch {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "id" in data &&
+    typeof (data as ProjectForSearch).id === "number" &&
+    "managementNumber" in data &&
+    typeof (data as ProjectForSearch).managementNumber === "string"
+  );
+}
+
+function isMeetingForSearch(data: unknown): data is MeetingForSearch {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "id" in data &&
+    typeof (data as MeetingForSearch).id === "number"
+  );
 }
 
 type ProjectForSearch = {
@@ -69,6 +90,7 @@ export function HomeProjectSearch({ size = "default" }: HomeProjectSearchProps) 
   const [isOpen, setIsOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isLarge = size === "large";
@@ -99,17 +121,61 @@ export function HomeProjectSearch({ size = "default" }: HomeProjectSearchProps) 
   };
 
   useEffect(() => {
-    fetch("/api/projects?limit=200", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : data.projects;
-        setProjects(Array.isArray(list) ? list : []);
-      })
-      .catch((err) => console.error("案件一覧の取得に失敗しました:", err));
-    fetch("/api/meetings", { cache: "no-store" })
-      .then((res) => res.json())
-      .then(setMeetings)
-      .catch((err) => console.error("会議一覧の取得に失敗しました:", err));
+    const abortController = new AbortController();
+
+    const fetchData = async () => {
+      setFetchError(null);
+      try {
+        const [projectsRes, meetingsRes] = await Promise.all([
+          fetch("/api/projects?limit=200", {
+            cache: "no-store",
+            signal: abortController.signal
+          }),
+          fetch("/api/meetings", {
+            cache: "no-store",
+            signal: abortController.signal
+          }),
+        ]);
+
+        if (!projectsRes.ok) {
+          throw new Error(`案件取得エラー: ${projectsRes.status}`);
+        }
+        if (!meetingsRes.ok) {
+          throw new Error(`会議取得エラー: ${meetingsRes.status}`);
+        }
+
+        const projectsData: unknown = await projectsRes.json();
+        const meetingsData: unknown = await meetingsRes.json();
+
+        // 型安全なデータ処理
+        const projectsList = Array.isArray(projectsData)
+          ? projectsData
+          : (projectsData as { projects?: unknown[] })?.projects;
+
+        const validProjects = Array.isArray(projectsList)
+          ? projectsList.filter(isProjectForSearch)
+          : [];
+
+        const validMeetings = Array.isArray(meetingsData)
+          ? meetingsData.filter(isMeetingForSearch)
+          : [];
+
+        setProjects(validProjects);
+        setMeetings(validMeetings);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return; // コンポーネントアンマウント時は無視
+        }
+        console.error("データ取得エラー:", err);
+        setFetchError("データの取得に失敗しました。再読み込みしてください。");
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      abortController.abort();
+    };
   }, []);
 
   const query = searchQuery.trim().toLowerCase();
@@ -183,6 +249,12 @@ export function HomeProjectSearch({ size = "default" }: HomeProjectSearchProps) 
 
   return (
     <div ref={containerRef} className="relative w-full">
+      {fetchError && (
+        <div className="mb-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+          <AlertCircle className="h-4 w-4" />
+          {fetchError}
+        </div>
+      )}
       <div className="relative">
         <Search className={`absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 z-10 pointer-events-none ${isLarge ? "h-6 w-6" : "h-5 w-5"}`} />
         <Input

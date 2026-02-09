@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress, todos } from "@/db/schema";
-import { eq, lt, and, isNull, lte, gt, desc, sql, inArray } from "drizzle-orm";
+import { eq, lt, and, isNull, lte, gt, desc, sql } from "drizzle-orm";
 import { createErrorResponse } from "@/lib/api-error";
 import { requireOrganization } from "@/lib/auth-guard";
 
@@ -20,8 +20,10 @@ function parseCompletionMonth(completionMonth: string | null): Date | null {
   const match = completionMonth.match(/(\d{4})[年\/\-]?(\d{1,2})/);
   if (match) {
     const year = parseInt(match[1]);
-    const month = parseInt(match[2]) - 1;
-    return new Date(year, month, 1);
+    const month = parseInt(match[2]);
+    // 不正月（0, 13など）を拒否
+    if (month < 1 || month > 12) return null;
+    return new Date(year, month - 1, 1);
   }
   return null;
 }
@@ -37,8 +39,16 @@ export async function GET() {
   try {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const today = now.toISOString().split("T")[0];
-    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    // ローカル日付文字列を生成（UTC変換による日付ズレを防止）
+    const formatLocalDate = (d: Date): string => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    const today = formatLocalDate(now);
+    const weekFromNowDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const weekFromNow = formatLocalDate(weekFromNowDate);
 
     // 最適化: 並列でクエリを実行し、必要なデータのみ取得
     const [
@@ -110,8 +120,18 @@ export async function GET() {
         siteInvestigation: projects.siteInvestigation,
       }).from(projects).where(eq(projects.organizationId, organizationId)),
 
-      // 進捗
-      db.select().from(progress),
+      // 進捗（組織に属するプロジェクトのもののみ取得）
+      db.select({
+        id: progress.id,
+        projectId: progress.projectId,
+        title: progress.title,
+        status: progress.status,
+        createdAt: progress.createdAt,
+        completedAt: progress.completedAt,
+      })
+        .from(progress)
+        .innerJoin(projects, eq(progress.projectId, projects.id))
+        .where(eq(projects.organizationId, organizationId)),
 
       // 最近のプロジェクト（組織フィルタリング）
       db.select({
@@ -178,11 +198,22 @@ export async function GET() {
       for (const phaseTitle of PHASES) {
         const phaseProgress = progressByTitle.get(phaseTitle);
 
-        if (phaseProgress?.status === "completed" && phaseProgress?.completedAt) continue;
+        // statusが"completed"なら完了とみなす（completedAtが欠落していても対応）
+        if (phaseProgress?.status === "completed") continue;
 
         let phaseDate: Date | null = null;
         if (phaseProgress?.createdAt) {
-          phaseDate = new Date(phaseProgress.createdAt);
+          // UTC解釈を避けるためローカル日付としてパース
+          // ISO形式（YYYY-MM-DDTHH:mm:ss）の場合は日付部分のみ抽出
+          const dateStr = phaseProgress.createdAt.split("T")[0];
+          const parts = dateStr.split("-");
+          if (parts.length === 3) {
+            const [y, m, d] = parts.map(Number);
+            // 数値が有効か確認（Invalid Date防止）
+            if (!isNaN(y) && !isNaN(m) && !isNaN(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+              phaseDate = new Date(y, m - 1, d);
+            }
+          }
         }
 
         if (!phaseDate) {
@@ -235,7 +266,18 @@ export async function GET() {
       const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
                          (completionDate.getMonth() - now.getMonth());
 
-      if (monthsDiff <= 2) {
+      // 過去の完工月（monthsDiff < 0）は期限切れとして赤アラート
+      // 0-2ヶ月以内は赤、3ヶ月以内は黄色
+      if (monthsDiff < 0) {
+        completionAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          client: project.client || "",
+          completionMonth: project.completionMonth || "",
+          level: "red",
+          monthsRemaining: monthsDiff, // 負の値で期限切れを示す
+        });
+      } else if (monthsDiff <= 2) {
         completionAlerts.push({
           id: project.id,
           managementNumber: project.managementNumber,
@@ -288,7 +330,16 @@ export async function GET() {
       const monthsDiff = (completionDate.getFullYear() - now.getFullYear()) * 12 +
                          (completionDate.getMonth() - now.getMonth());
 
-      if (monthsDiff <= 2) {
+      // 過去の完工月（monthsDiff < 0）は期限切れとして赤アラート
+      if (monthsDiff < 0) {
+        siteInvestigationAlerts.push({
+          id: project.id,
+          managementNumber: project.managementNumber,
+          client: project.client || "",
+          completionMonth: project.completionMonth || "",
+          level: "red",
+        });
+      } else if (monthsDiff <= 2) {
         siteInvestigationAlerts.push({
           id: project.id,
           managementNumber: project.managementNumber,

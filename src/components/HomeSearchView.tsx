@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -14,11 +14,10 @@ import {
   AlertTriangle,
   CalendarClock,
   Activity,
-  ChevronRight,
   Construction,
   MapPin,
+  AlertCircle,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,52 +37,92 @@ export function HomeSearchView() {
   // ダッシュボード用state
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // 300msのデバウンス
   const debouncedQuery = useDebounce(query, 300);
 
   // ダッシュボードデータ取得
   useEffect(() => {
+    const abortController = new AbortController();
+
     const fetchDashboard = async () => {
+      setDashboardError(null);
       try {
-        const res = await fetch("/api/dashboard");
-        if (res.ok) {
-          const data = await res.json();
-          setDashboard(data);
+        const res = await fetch("/api/dashboard", {
+          signal: abortController.signal,
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data: unknown = await res.json();
+        // 基本的な型チェック
+        if (data && typeof data === "object" && "overdueTodos" in data) {
+          setDashboard(data as DashboardData);
+        } else {
+          throw new Error("不正なレスポンス形式");
         }
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
         console.error("ダッシュボード取得エラー:", err);
+        setDashboardError("ダッシュボードの取得に失敗しました");
       } finally {
         setIsDashboardLoading(false);
       }
     };
     fetchDashboard();
+
+    return () => {
+      abortController.abort();
+    };
   }, []);
 
   // デバウンスされたクエリで検索を実行
   useEffect(() => {
+    const abortController = new AbortController();
+
     const search = async () => {
       if (!debouncedQuery.trim()) {
         setResults([]);
+        setSearchError(null);
         return;
       }
 
       setIsSearching(true);
+      setSearchError(null);
 
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery.trim())}`);
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery.trim())}`, {
+          signal: abortController.signal,
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data: unknown = await res.json();
+        if (Array.isArray(data)) {
+          setResults(data as SearchResult[]);
+        } else {
+          setResults([]);
         }
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
         console.error("検索エラー:", err);
+        setSearchError("検索に失敗しました");
       } finally {
         setIsSearching(false);
       }
     };
 
     search();
+
+    return () => {
+      abortController.abort();
+    };
   }, [debouncedQuery]);
 
   // 結果をカテゴリごとに分類
@@ -231,7 +270,12 @@ export function HomeSearchView() {
               "absolute left-0 right-0 top-full z-50 bg-card border border-t-0 rounded-b-2xl shadow-lg overflow-hidden",
               isFocused && "ring-2 ring-ring ring-t-0 border-transparent"
             )}>
-              {results.length === 0 ? (
+              {searchError ? (
+                <div className="px-4 py-6 text-center text-red-600 dark:text-red-400 text-sm flex items-center justify-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  {searchError}
+                </div>
+              ) : results.length === 0 ? (
                 <div className="px-4 py-6 text-center text-muted-foreground text-sm">
                   {isSearching ? (
                     <div className="flex items-center justify-center gap-2">
@@ -305,6 +349,11 @@ export function HomeSearchView() {
             {isDashboardLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : dashboardError ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <AlertCircle className="h-8 w-8 mb-2 text-red-500" />
+                <p className="text-sm">{dashboardError}</p>
               </div>
             ) : dashboard && (
               <div className="grid grid-cols-3 gap-4">

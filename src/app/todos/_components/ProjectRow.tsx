@@ -64,14 +64,11 @@ function getPhaseAlertLevel(
   return null;
 }
 
-// 赤アラートかどうか
-function isPhaseAlert(progressItems: Progress[], phaseIndex: number, today: Date): boolean {
-  return getPhaseAlertLevel(progressItems, phaseIndex, today) === "critical";
-}
-
 function ProjectRowComponent({ project, today, onOpenEditDialog }: ProjectRowProps) {
   const currentPhaseIndex = getCurrentPhaseIndex(project.progressItems);
-  const hasAlert = PHASES.some((_, i) => isPhaseAlert(project.progressItems, i, today));
+  const hasAlert = PHASES.some(
+    (_, i) => getPhaseAlertLevel(project.progressItems, i, today) === "critical"
+  );
 
   const handleOpenEditDialog = useCallback(
     (phase: (typeof PHASES)[number]) => {

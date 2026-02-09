@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
   // 条件を構築
   const conditions = [eq(todos.organizationId, organizationId)];
   if (filterUserId) {
-    conditions.push(eq(todos.userId, parseInt(filterUserId, 10)));
+    const parsedUserId = parseInt(filterUserId, 10);
+    // NaNチェック：不正なuserIdは無視して組織全体のTODOを返す
+    if (!isNaN(parsedUserId) && parsedUserId > 0) {
+      conditions.push(eq(todos.userId, parsedUserId));
+    }
   }
 
   const rows = await db

@@ -11,21 +11,32 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 認証・組織チェック
-  const authResult = await requireOrganization();
-  if (!authResult.success) {
-    return authResult.response;
-  }
-  const { organizationId } = authResult;
+  try {
+    // 認証・組織チェック
+    const authResult = await requireOrganization();
+    if (!authResult.success) {
+      return authResult.response;
+    }
+    const { organizationId } = authResult;
 
-  const { id } = await params;
-  const [project] = await db.select().from(projects).where(
-    and(eq(projects.id, Number(id)), eq(projects.organizationId, organizationId))
-  );
-  if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const { id } = await params;
+    const projectId = Number(id);
+
+    // NaNチェック
+    if (Number.isNaN(projectId) || projectId <= 0) {
+      return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+    }
+
+    const [project] = await db.select().from(projects).where(
+      and(eq(projects.id, projectId), eq(projects.organizationId, organizationId))
+    );
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(project);
+  } catch (error) {
+    return createErrorResponse(error, "プロジェクトの取得に失敗しました");
   }
-  return NextResponse.json(project);
 }
 
 export async function PUT(
@@ -41,6 +52,13 @@ export async function PUT(
 
   try {
     const { id } = await params;
+    const projectId = Number(id);
+
+    // NaNチェック
+    if (Number.isNaN(projectId) || projectId <= 0) {
+      return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+    }
+
     const validation = await validateBody(request, updateProjectSchema);
     if (!validation.success) {
       return NextResponse.json(validation.error, { status: 400 });
@@ -50,7 +68,7 @@ export async function PUT(
     const [result] = await db
       .update(projects)
       .set(validation.data)
-      .where(and(eq(projects.id, Number(id)), eq(projects.organizationId, organizationId)))
+      .where(and(eq(projects.id, projectId), eq(projects.organizationId, organizationId)))
       .returning();
 
     if (!result) {
@@ -77,28 +95,37 @@ export async function DELETE(
   }
   const { user, organizationId } = authResult;
 
-  const { id } = await params;
-  const projectId = Number(id);
+  try {
+    const { id } = await params;
+    const projectId = Number(id);
 
-  // 組織に属するプロジェクトか確認
-  const [project] = await db.select().from(projects).where(
-    and(eq(projects.id, projectId), eq(projects.organizationId, organizationId))
-  );
-  if (!project) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // NaNチェック
+    if (Number.isNaN(projectId) || projectId <= 0) {
+      return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+    }
+
+    // 組織に属するプロジェクトか確認
+    const [project] = await db.select().from(projects).where(
+      and(eq(projects.id, projectId), eq(projects.organizationId, organizationId))
+    );
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // 関連するコメントを先に削除
+    await db.delete(comments).where(eq(comments.projectId, projectId));
+
+    // 関連する進捗を削除
+    await db.delete(progress).where(eq(progress.projectId, projectId));
+
+    // 案件を削除
+    await db.delete(projects).where(eq(projects.id, projectId));
+
+    // 監査ログ記録
+    await logProjectDelete(user, projectId, project.managementNumber, request);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return createErrorResponse(error, "プロジェクトの削除に失敗しました");
   }
-
-  // 関連するコメントを先に削除
-  await db.delete(comments).where(eq(comments.projectId, projectId));
-
-  // 関連する進捗を削除
-  await db.delete(progress).where(eq(progress.projectId, projectId));
-
-  // 案件を削除
-  await db.delete(projects).where(eq(projects.id, projectId));
-
-  // 監査ログ記録
-  await logProjectDelete(user, projectId, project.managementNumber, request);
-
-  return NextResponse.json({ success: true });
 }

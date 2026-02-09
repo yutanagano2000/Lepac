@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   parseCoordinateString,
@@ -70,10 +70,10 @@ export function GeoSearchView() {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=ja&addressdetails=1&zoom=18`
       );
+      if (!response.ok) {
+        throw new Error(`Nominatim API error: ${response.status}`);
+      }
       const data = await response.json();
-      
-      // デバッグ用（開発中のみ）
-      console.log('Nominatim APIレスポンス:', data);
       
       const address = data.address || {};
       
@@ -165,6 +165,9 @@ export function GeoSearchView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ latitude: lat, longitude: lon, prefecture: pref }),
       });
+      if (!response.ok) {
+        throw new Error(`Legal check API error: ${response.status}`);
+      }
       const data: JudgmentResult = await response.json();
       setResult(data);
     } catch (error) {
@@ -195,6 +198,7 @@ export function GeoSearchView() {
     setLongitude(lonParam);
     setPrefecture(prefectureParam);
     runSearch({ lat, lon, prefecture: prefectureParam });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const handleCopy = async (text: string) => {

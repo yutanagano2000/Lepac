@@ -81,23 +81,28 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid todo ID" }, { status: 400 });
   }
 
-  // 削除前にTODOを取得（監査ログ用）
-  const [existingTodo] = await db
-    .select()
-    .from(todos)
-    .where(and(eq(todos.id, todoId), eq(todos.organizationId, organizationId)));
+  try {
+    // 削除前にTODOを取得（監査ログ用）
+    const [existingTodo] = await db
+      .select()
+      .from(todos)
+      .where(and(eq(todos.id, todoId), eq(todos.organizationId, organizationId)));
 
-  if (!existingTodo) {
-    return NextResponse.json({ error: "TODOが見つかりません" }, { status: 404 });
+    if (!existingTodo) {
+      return NextResponse.json({ error: "TODOが見つかりません" }, { status: 404 });
+    }
+
+    // 組織に属するTODOのみ削除可能
+    await db.delete(todos).where(
+      and(eq(todos.id, todoId), eq(todos.organizationId, organizationId))
+    );
+
+    // 監査ログ記録
+    await logTodoDelete(user, todoId, existingTodo.content, request);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete todo:", error);
+    return NextResponse.json({ error: "TODOの削除に失敗しました" }, { status: 500 });
   }
-
-  // 組織に属するTODOのみ削除可能
-  await db.delete(todos).where(
-    and(eq(todos.id, todoId), eq(todos.organizationId, organizationId))
-  );
-
-  // 監査ログ記録
-  await logTodoDelete(user, todoId, existingTodo.content, request);
-
-  return NextResponse.json({ success: true });
 }

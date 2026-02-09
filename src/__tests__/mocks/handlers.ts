@@ -50,6 +50,34 @@ export const mockTodos = [
   },
 ]
 
+// フィードバックのモックデータ
+export const mockFeedbacks = [
+  {
+    id: 1,
+    content: 'テストフィードバック1',
+    status: 'pending',
+    likes: 5,
+    replies: null,
+    userId: 1,
+    userName: 'テストユーザー',
+    pagePath: '/projects',
+    pageTitle: '案件一覧',
+    createdAt: '2026-02-01T00:00:00.000Z',
+  },
+  {
+    id: 2,
+    content: 'テストフィードバック2',
+    status: 'in_progress',
+    likes: 3,
+    replies: '対応中です',
+    userId: 2,
+    userName: 'テストユーザー2',
+    pagePath: '/dashboard',
+    pageTitle: 'ダッシュボード',
+    createdAt: '2026-02-02T00:00:00.000Z',
+  },
+]
+
 export const handlers = [
   // 認証関連
   http.get('/api/auth/session', () => {
@@ -187,5 +215,99 @@ export const handlers = [
       return HttpResponse.json({ error: 'Todo not found' }, { status: 404 })
     }
     return HttpResponse.json({ ...todo, ...body })
+  }),
+
+  // フィードバック関連
+  http.get('/api/feedbacks', () => {
+    return HttpResponse.json(mockFeedbacks)
+  }),
+
+  http.get('/api/feedbacks/:id', ({ params }) => {
+    const id = params.id as string
+    // ID検証
+    if (!/^\d+$/.test(id)) {
+      return HttpResponse.json({ error: 'Invalid ID' }, { status: 400 })
+    }
+    const numId = Number(id)
+    if (numId <= 0) {
+      return HttpResponse.json({ error: 'Invalid ID' }, { status: 400 })
+    }
+    const feedback = mockFeedbacks.find((f) => f.id === numId)
+    if (!feedback) {
+      return HttpResponse.json({ error: 'Feedback not found' }, { status: 404 })
+    }
+    return HttpResponse.json(feedback)
+  }),
+
+  http.post('/api/feedbacks', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>
+    if (!body.content) {
+      return HttpResponse.json({ error: 'content is required' }, { status: 400 })
+    }
+    return HttpResponse.json({
+      id: 999,
+      content: body.content,
+      status: 'pending',
+      likes: 0,
+      ...body,
+    }, { status: 201 })
+  }),
+
+  http.put('/api/feedbacks/:id', async ({ params, request }) => {
+    const id = params.id as string
+    if (!/^\d+$/.test(id)) {
+      return HttpResponse.json({ error: 'Invalid ID' }, { status: 400 })
+    }
+    const numId = Number(id)
+    const feedback = mockFeedbacks.find((f) => f.id === numId)
+    if (!feedback) {
+      return HttpResponse.json({ error: 'Feedback not found' }, { status: 404 })
+    }
+
+    let body: Record<string, unknown>
+    try {
+      body = await request.json() as Record<string, unknown>
+    } catch {
+      return HttpResponse.json({ error: '無効なJSONです' }, { status: 400 })
+    }
+
+    // ステータスバリデーション
+    const allowedStatuses = ['pending', 'in_progress', 'completed', 'rejected']
+    if (body.status && !allowedStatuses.includes(body.status as string)) {
+      return HttpResponse.json({ error: '無効なステータス値です' }, { status: 400 })
+    }
+
+    // repliesの長さバリデーション
+    if (body.replies && typeof body.replies === 'string' && body.replies.length > 10000) {
+      return HttpResponse.json({ error: 'repliesは10000文字以内の文字列である必要があります' }, { status: 400 })
+    }
+
+    return HttpResponse.json({ ...feedback, ...body })
+  }),
+
+  http.post('/api/feedbacks/:id/like', ({ params }) => {
+    const id = params.id as string
+    if (!/^\d+$/.test(id)) {
+      return HttpResponse.json({ error: 'Invalid ID' }, { status: 400 })
+    }
+    const numId = Number(id)
+    const feedback = mockFeedbacks.find((f) => f.id === numId)
+    if (!feedback) {
+      return HttpResponse.json({ error: 'フィードバックが見つかりません' }, { status: 404 })
+    }
+    return HttpResponse.json({ id: numId, likes: feedback.likes + 1 })
+  }),
+
+  http.delete('/api/feedbacks/:id', ({ params }) => {
+    const id = params.id as string
+    if (!/^\d+$/.test(id)) {
+      return HttpResponse.json({ error: 'Invalid ID' }, { status: 400 })
+    }
+    const numId = Number(id)
+    const feedback = mockFeedbacks.find((f) => f.id === numId)
+    if (!feedback) {
+      return HttpResponse.json({ error: 'Feedback not found' }, { status: 404 })
+    }
+    return HttpResponse.json({ success: true })
   }),
 ]

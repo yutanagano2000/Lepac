@@ -4,6 +4,33 @@ import { db } from "@/db";
 import { constructionPhotos, CONSTRUCTION_PHOTO_CATEGORIES } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { requireProjectAccess } from "@/lib/auth-guard";
+import crypto from "crypto";
+import path from "path";
+
+// 文字列サニタイズ（XSS対策）
+function sanitizeString(str: string | null, maxLength: number = 500): string | null {
+  if (!str) return null;
+  return str
+    .slice(0, maxLength)
+    .replace(/[<>]/g, "")  // HTMLタグ除去
+    .trim();
+}
+
+// ファイル名サニタイズ（パストラバーサル対策）
+function sanitizeFileName(fileName: string): string {
+  // パス区切り文字を除去し、ファイル名のみ取得
+  const baseName = path.basename(fileName);
+  // 危険な文字を除去
+  const sanitized = baseName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  // 長さ制限
+  const maxLength = 100;
+  if (sanitized.length > maxLength) {
+    const ext = path.extname(sanitized);
+    const name = path.basename(sanitized, ext).slice(0, maxLength - ext.length);
+    return name + ext;
+  }
+  return sanitized;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +129,10 @@ export async function POST(
       );
     }
 
-    const pathname = `projects/${projectId}/construction/${Date.now()}-${file.name}`;
+    // セキュアなファイル名生成（パストラバーサル対策）
+    const safeFileName = sanitizeFileName(file.name);
+    const uniqueId = crypto.randomBytes(8).toString("hex");
+    const pathname = `projects/${projectId}/construction/${Date.now()}-${uniqueId}-${safeFileName}`;
     const token = process.env.BLOB_READ_WRITE_TOKEN;
 
     if (!token) {
@@ -123,19 +153,24 @@ export async function POST(
       addRandomSuffix: false,
     });
 
+    // 入力値サニタイズ
+    const sanitizedContractorName = sanitizeString(contractorName, 100);
+    const sanitizedNote = sanitizeString(note, 1000);
+    const sanitizedTakenAt = takenAt ? takenAt.slice(0, 30) : null;
+
     // DBに保存
     const [result] = await db
       .insert(constructionPhotos)
       .values({
         projectId,
         category,
-        fileName: file.name,
+        fileName: safeFileName,
         fileUrl: blob.url,
         fileType: file.type,
         fileSize: file.size,
-        contractorName: contractorName || null,
-        note: note || null,
-        takenAt: takenAt || null,
+        contractorName: sanitizedContractorName,
+        note: sanitizedNote,
+        takenAt: sanitizedTakenAt,
         createdAt: new Date().toISOString(),
       })
       .returning();
@@ -143,9 +178,9 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     console.error("Construction photo upload error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    // 情報漏洩防止：詳細エラーはログのみ、クライアントには一般メッセージ
     return NextResponse.json(
-      { error: `Failed to upload photo: ${errorMessage}` },
+      { error: "Failed to upload photo" },
       { status: 500 }
     );
   }

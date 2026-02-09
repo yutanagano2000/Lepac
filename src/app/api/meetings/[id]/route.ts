@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { meetings } from "@/db/schema";
 import { requireOrganization, requireOrganizationWithCsrf } from "@/lib/auth-guard";
 import { logMeetingUpdate, logMeetingDelete } from "@/lib/audit-log";
+import { updateMeetingSchema, validateBody } from "@/lib/validations";
 
 export const dynamic = "force-dynamic";
 
@@ -62,13 +63,19 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const body = await request.json();
+  // バリデーション
+  const validation = await validateBody(request, updateMeetingSchema);
+  if (!validation.success) {
+    return NextResponse.json(validation.error, { status: 400 });
+  }
+
+  const { title, meetingDate, category, content, agenda } = validation.data;
   const updates = {
-    ...(body.title !== undefined && { title: body.title }),
-    ...(body.meetingDate !== undefined && { meetingDate: body.meetingDate }),
-    ...(body.category !== undefined && { category: body.category }),
-    ...(body.content !== undefined && { content: body.content ?? null }),
-    ...(body.agenda !== undefined && { agenda: body.agenda ?? null }),
+    ...(title !== undefined && { title }),
+    ...(meetingDate !== undefined && { meetingDate }),
+    ...(category !== undefined && { category }),
+    ...(content !== undefined && { content: content ?? null }),
+    ...(agenda !== undefined && { agenda: agenda ?? null }),
   };
   const [updated] = await db
     .update(meetings)

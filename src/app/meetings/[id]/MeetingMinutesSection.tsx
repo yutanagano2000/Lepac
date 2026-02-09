@@ -28,11 +28,15 @@ export function MeetingMinutesSection({ meetingId, initialContent }: MeetingMinu
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: content || null }),
       });
-      if (!res.ok) throw new Error("保存に失敗しました");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "保存に失敗しました");
+      }
       setIsEditing(false);
       setShowPreview(false);
       router.refresh();
     } catch (e) {
+      console.error("Meeting save error:", e);
       alert(e instanceof Error ? e.message : "保存に失敗しました");
     } finally {
       setSaving(false);

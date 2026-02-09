@@ -36,7 +36,7 @@ export default function LoginPage() {
         router.push("/onboarding/select-organization");
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError("ログイン中にエラーが発生しました");
     } finally {
       setLoading(false);
@@ -48,7 +48,7 @@ export default function LoginPage() {
     setError("");
     try {
       await signIn("line", { callbackUrl: "/onboarding/select-organization" });
-    } catch (err) {
+    } catch {
       setError("LINE認証中にエラーが発生しました");
       setLineLoading(false);
     }

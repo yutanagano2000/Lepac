@@ -50,6 +50,7 @@ export function EditPhaseDialog({
   onMarkComplete,
   onMarkIncomplete,
   onAddTodo,
+  showAlert,
 }: EditPhaseDialogProps) {
   const [plannedDate, setPlannedDate] = useState<Date | undefined>(undefined);
   const [completedDate, setCompletedDate] = useState<Date | undefined>(undefined);
@@ -77,6 +78,8 @@ export function EditPhaseDialog({
     try {
       await onSave({ plannedDate, completedDate, memo: phaseMemo });
       onOpenChange(false);
+    } catch (error) {
+      showAlert("エラー", "保存に失敗しました。もう一度お試しください。");
     } finally {
       setIsSaving(false);
     }
@@ -87,6 +90,8 @@ export function EditPhaseDialog({
     try {
       await onMarkComplete();
       onOpenChange(false);
+    } catch (error) {
+      showAlert("エラー", "完了の更新に失敗しました。もう一度お試しください。");
     } finally {
       setIsSaving(false);
     }
@@ -97,6 +102,8 @@ export function EditPhaseDialog({
     try {
       await onMarkIncomplete();
       onOpenChange(false);
+    } catch (error) {
+      showAlert("エラー", "未完了への変更に失敗しました。もう一度お試しください。");
     } finally {
       setIsSaving(false);
     }
@@ -106,6 +113,8 @@ export function EditPhaseDialog({
     setIsSaving(true);
     try {
       await onAddTodo();
+    } catch (error) {
+      showAlert("エラー", "TODOの追加に失敗しました。もう一度お試しください。");
     } finally {
       setIsSaving(false);
     }
@@ -231,7 +240,7 @@ export function EditPhaseDialog({
                 <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                   キャンセル
                 </Button>
-                <Button onClick={handleSave} disabled={isSaving || (!plannedDate && !completedDate)}>
+                <Button onClick={handleSave} disabled={isSaving}>
                   {isSaving ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />

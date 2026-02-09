@@ -53,14 +53,16 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
   const [localConfirmedBy, setLocalConfirmedBy] = useState(currentConfirmedBy || "");
   const [localDepartment, setLocalDepartment] = useState(currentDepartment || "");
 
-  // 外部stateが変わったら同期
-  useEffect(() => { setLocalNote(currentNote || ""); }, [currentNote]);
-  useEffect(() => { setLocalConfirmationSource(currentConfirmationSource || ""); }, [currentConfirmationSource]);
-  useEffect(() => { setLocalContactInfo(currentContactInfo || ""); }, [currentContactInfo]);
-  useEffect(() => { setLocalConfirmationMethod(currentConfirmationMethod || ""); }, [currentConfirmationMethod]);
-  useEffect(() => { setLocalConfirmationDate(currentConfirmationDate || ""); }, [currentConfirmationDate]);
-  useEffect(() => { setLocalConfirmedBy(currentConfirmedBy || ""); }, [currentConfirmedBy]);
-  useEffect(() => { setLocalDepartment(currentDepartment || ""); }, [currentDepartment]);
+  // 外部stateが変わったら同期（単一useEffectに統合）
+  useEffect(() => {
+    setLocalNote(currentNote || "");
+    setLocalConfirmationSource(currentConfirmationSource || "");
+    setLocalContactInfo(currentContactInfo || "");
+    setLocalConfirmationMethod(currentConfirmationMethod || "");
+    setLocalConfirmationDate(currentConfirmationDate || "");
+    setLocalConfirmedBy(currentConfirmedBy || "");
+    setLocalDepartment(currentDepartment || "");
+  }, [currentNote, currentConfirmationSource, currentContactInfo, currentConfirmationMethod, currentConfirmationDate, currentConfirmedBy, currentDepartment]);
 
   // メモの保存（debounce的に入力完了後に呼び出し）
   const handleNoteBlur = () => {
@@ -360,7 +362,7 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
               key={index}
               variant="outline"
               size="sm"
-              onClick={() => window.open(button.url, '_blank')}
+              onClick={() => window.open(button.url, '_blank', 'noopener,noreferrer')}
             >
               <ExternalLink className="h-3 w-3 mr-2" />
               {button.label}

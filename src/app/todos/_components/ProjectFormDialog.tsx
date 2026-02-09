@@ -58,6 +58,10 @@ export function ProjectFormDialog({
       showAlert("入力エラー", "担当を選択してください");
       return;
     }
+    if (!projectForm.completionMonth?.trim()) {
+      showAlert("入力エラー", "完成月を選択してください");
+      return;
+    }
     setIsSubmitting(true);
     try {
       await onSubmit(projectForm);

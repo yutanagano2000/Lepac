@@ -7,11 +7,16 @@ import {
   type SlopeResult,
 } from "@/lib/slope";
 import { fetchElevation } from "@/lib/elevation-grid";
+import { requireOrganizationWithCsrf } from "@/lib/auth-guard";
 
 const OFFSET_METERS = 10;
 
 export async function POST(req: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireOrganizationWithCsrf(req);
+    if (!authResult.success) return authResult.response;
+
     const body = await req.json();
     const { lat, lon } = body;
 
@@ -62,10 +67,10 @@ export async function POST(req: NextRequest) {
     };
 
     return NextResponse.json(result);
-  } catch (e: any) {
+  } catch (e) {
     console.error("Slope API error:", e);
     return NextResponse.json(
-      { error: e.message || "傾斜計算に失敗しました" },
+      { error: e instanceof Error ? e.message : "傾斜計算に失敗しました" },
       { status: 500 }
     );
   }

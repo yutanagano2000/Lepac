@@ -10,7 +10,8 @@ export const authConfig = {
       const isLoginPage = nextUrl.pathname === "/login";
       const isOnboardingPage = nextUrl.pathname.startsWith("/onboarding");
       const isPublicApi = nextUrl.pathname.startsWith("/api/auth") ||
-                         nextUrl.pathname.startsWith("/api/register-initial-user");
+                         nextUrl.pathname.startsWith("/api/register-initial-user") ||
+                         nextUrl.pathname.startsWith("/api/mobile");
       const isAdmin = auth?.user?.role === "admin";
 
       if (isLoginPage) {

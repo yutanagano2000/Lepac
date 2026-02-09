@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 案件一覧を取得（写真数付き）
-    const projectList = await db
+    // 案件一覧を取得（写真数付き - サブクエリで一括取得、N+1問題を回避）
+    const projectsWithPhotoCount = await db
       .select({
         id: projects.id,
         managementNumber: projects.managementNumber,
@@ -46,26 +46,16 @@ export async function GET(request: NextRequest) {
         constructionEndScheduled: projects.constructionEndScheduled,
         constructionEndDate: projects.constructionEndDate,
         coordinates: projects.coordinates,
+        photoCount: sql<number>`(
+          SELECT COUNT(*)
+          FROM ${constructionPhotos}
+          WHERE ${constructionPhotos.projectId} = ${projects.id}
+        )`.as("photoCount"),
       })
       .from(projects)
       .where(eq(projects.organizationId, auth.organizationId))
       .orderBy(desc(projects.id))
       .limit(100);
-
-    // 各案件の写真数を取得
-    const projectsWithPhotoCount = await Promise.all(
-      projectList.map(async (project) => {
-        const [photoCountResult] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(constructionPhotos)
-          .where(eq(constructionPhotos.projectId, project.id));
-
-        return {
-          ...project,
-          photoCount: photoCountResult?.count || 0,
-        };
-      })
-    );
 
     return NextResponse.json({
       projects: projectsWithPhotoCount,

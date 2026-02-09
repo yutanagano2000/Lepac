@@ -1,8 +1,9 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
 import { meetings } from "@/db/schema";
+import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
@@ -16,11 +17,25 @@ interface MeetingDetailPageProps {
 export const dynamic = "force-dynamic";
 
 export default async function MeetingDetailPage({ params }: MeetingDetailPageProps) {
+  // 認証チェック
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+  const organizationId = session.user.organizationId;
+  if (!organizationId) {
+    redirect("/login");
+  }
+
   const { id } = await params;
   const idNum = parseInt(id, 10);
   if (isNaN(idNum)) notFound();
 
-  const [meeting] = await db.select().from(meetings).where(eq(meetings.id, idNum));
+  // 組織IDでフィルタリングしてアクセス制御
+  const [meeting] = await db
+    .select()
+    .from(meetings)
+    .where(and(eq(meetings.id, idNum), eq(meetings.organizationId, organizationId)));
   if (!meeting) notFound();
 
   const displayDate = meeting.meetingDate

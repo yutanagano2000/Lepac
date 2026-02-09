@@ -29,6 +29,7 @@ export function FeedbackInput() {
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
 
   // 要望画面では表示しない
   if (pathname === "/feedbacks") {
@@ -39,6 +40,7 @@ export function FeedbackInput() {
     if (!content.trim()) return;
 
     setIsSubmitting(true);
+    setShowError(false);
     try {
       const res = await fetch("/api/feedbacks", {
         method: "POST",
@@ -55,9 +57,14 @@ export function FeedbackInput() {
         setIsOpen(false);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
+      } else {
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
       }
     } catch (error) {
       console.error("Failed to submit feedback:", error);
+      setShowError(true);
+      setTimeout(() => setShowError(false), 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -69,6 +76,13 @@ export function FeedbackInput() {
       {showSuccess && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-in fade-in slide-in-from-bottom-2">
           要望を送信しました
+        </div>
+      )}
+
+      {/* エラーメッセージ */}
+      {showError && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-in fade-in slide-in-from-bottom-2">
+          送信に失敗しました。再度お試しください
         </div>
       )}
 

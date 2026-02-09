@@ -23,7 +23,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
+  let body: { name?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
   const name = body.name?.trim() ?? "";
 
   if (!name) {
@@ -52,9 +57,10 @@ export async function POST(request: Request) {
       .returning();
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     // 重複エラーの場合
-    if (error.message?.includes("UNIQUE constraint failed")) {
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("UNIQUE constraint failed")) {
       // 既存の組織を返す
       const existing = await db.select().from(organizations);
       const found = existing.find((org) => org.name === name || org.code === code);

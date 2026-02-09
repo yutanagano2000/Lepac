@@ -122,17 +122,29 @@ export default function FeedbacksPage() {
   }, []);
 
   const handleLike = async (id: number) => {
-    await fetch(`/api/feedbacks/${id}/like`, { method: "POST" });
-    fetchFeedbacks();
+    try {
+      const res = await fetch(`/api/feedbacks/${id}/like`, { method: "POST" });
+      if (res.ok) {
+        fetchFeedbacks();
+      }
+    } catch {
+      // エラーは静かに無視（UXを損なわない）
+    }
   };
 
   const handleStatusChange = async (id: number, status: string) => {
-    await fetch(`/api/feedbacks/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    fetchFeedbacks();
+    try {
+      const res = await fetch(`/api/feedbacks/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        fetchFeedbacks();
+      }
+    } catch {
+      // エラーは静かに無視
+    }
   };
 
   const handleReply = async (feedback: Feedback) => {

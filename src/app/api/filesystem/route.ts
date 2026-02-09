@@ -8,6 +8,22 @@ export const dynamic = "force-dynamic";
 // どこでもキャビネットのベースパス（環境変数で設定可能）
 const CABINET_BASE_PATH = process.env.CABINET_BASE_PATH || "C:\\Person Energy\\◇Person独自案件管理\\□Person独自案件";
 
+/**
+ * 管理番号のバリデーション（数字のみ、1-10桁）
+ */
+function isValidManagementNumber(value: string): boolean {
+  return /^\d{1,10}$/.test(value);
+}
+
+/**
+ * パストラバーサル対策：パスがベースパス内に収まっているか検証
+ */
+function isPathWithinBase(targetPath: string, basePath: string): boolean {
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedBase = path.resolve(basePath);
+  return resolvedTarget.startsWith(resolvedBase + path.sep) || resolvedTarget === resolvedBase;
+}
+
 // サブフォルダの定義
 const SUBFOLDERS = [
   { key: "agreement", name: "01_合意書", label: "合意書" },
@@ -71,10 +87,24 @@ function countFiles(folderPath: string): { count: number; files: string[] } {
   }
 }
 
+// 再帰走査の制限
+const MAX_FILES = 500;
+const MAX_DEPTH = 5;
+
 /**
- * フォルダ内のファイル情報を再帰的に取得
+ * フォルダ内のファイル情報を再帰的に取得（制限付き）
  */
-function getFilesRecursive(folderPath: string, basePath: string = folderPath): { name: string; path: string; size: number; modifiedAt: string }[] {
+function getFilesRecursive(
+  folderPath: string,
+  basePath: string = folderPath,
+  depth: number = 0,
+  fileCount: { count: number } = { count: 0 }
+): { name: string; path: string; size: number; modifiedAt: string }[] {
+  // 深さ制限チェック
+  if (depth > MAX_DEPTH) {
+    return [];
+  }
+
   if (!fs.existsSync(folderPath)) {
     return [];
   }
@@ -85,6 +115,11 @@ function getFilesRecursive(folderPath: string, basePath: string = folderPath): {
     const entries = fs.readdirSync(folderPath, { withFileTypes: true });
 
     for (const entry of entries) {
+      // ファイル数制限チェック
+      if (fileCount.count >= MAX_FILES) {
+        break;
+      }
+
       const fullPath = path.join(folderPath, entry.name);
 
       if (entry.isFile() && !entry.name.startsWith(".") && entry.name !== "desktop.ini") {
@@ -95,8 +130,9 @@ function getFilesRecursive(folderPath: string, basePath: string = folderPath): {
           size: stats.size,
           modifiedAt: stats.mtime.toISOString(),
         });
+        fileCount.count++;
       } else if (entry.isDirectory() && !entry.name.startsWith(".")) {
-        result.push(...getFilesRecursive(fullPath, basePath));
+        result.push(...getFilesRecursive(fullPath, basePath, depth + 1, fileCount));
       }
     }
   } catch {
@@ -121,8 +157,12 @@ export async function GET(request: Request) {
   if (!fs.existsSync(CABINET_BASE_PATH)) {
     return NextResponse.json({
       error: "ファイルサーバーに接続できません",
-      basePath: CABINET_BASE_PATH,
     }, { status: 503 });
+  }
+
+  // 管理番号のバリデーション
+  if (managementNumber && !isValidManagementNumber(managementNumber)) {
+    return NextResponse.json({ error: "無効な管理番号形式です" }, { status: 400 });
   }
 
   // アクション: フォルダ検索（管理番号で検索）
@@ -173,7 +213,14 @@ export async function GET(request: Request) {
       const sf = SUBFOLDERS.find(s => s.key === subfolder);
       if (sf) {
         targetPath = path.join(folderPath, sf.name);
+      } else {
+        return NextResponse.json({ error: "無効なサブフォルダ指定です" }, { status: 400 });
       }
+    }
+
+    // パストラバーサル対策
+    if (!isPathWithinBase(targetPath, CABINET_BASE_PATH)) {
+      return NextResponse.json({ error: "アクセスが拒否されました" }, { status: 403 });
     }
 
     const files = getFilesRecursive(targetPath);

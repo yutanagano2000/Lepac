@@ -165,6 +165,13 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
     setRecentSearches(getRecentSearches());
   }, []);
 
+  // 検索タイマーのクリーンアップ（メモリリーク防止）
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
+
   const handleSearchFocus = () => setShowSuggestions(true);
   const handleSearchBlur = () => {
     setTimeout(() => setShowSuggestions(false), 200);
@@ -241,14 +248,21 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
     }
     setIsSubmitting(true);
     try {
-      await fetch("/api/projects", {
+      const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "案件の登録に失敗しました");
+      }
       setForm({ managementNumber: "", manager: "", client: "", projectNumber: "", completionMonth: "" });
       setOpen(false);
       fetchPage(pagination.page);
+    } catch (error) {
+      console.error("handleSubmit error:", error);
+      alert(error instanceof Error ? error.message : "案件の登録に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -257,14 +271,23 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProject) return;
-    await fetch(`/api/projects/${editingProject.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editingProject),
-    });
-    setEditOpen(false);
-    setEditingProject(null);
-    fetchPage(pagination.page);
+    try {
+      const res = await fetch(`/api/projects/${editingProject.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingProject),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "案件の更新に失敗しました");
+      }
+      setEditOpen(false);
+      setEditingProject(null);
+      fetchPage(pagination.page);
+    } catch (error) {
+      console.error("handleEditSubmit error:", error);
+      alert(error instanceof Error ? error.message : "案件の更新に失敗しました");
+    }
   };
 
   const openEditDialog = (project: Project, e: React.MouseEvent) => {
@@ -287,10 +310,19 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
 
   const handleDelete = async () => {
     if (!deletingProject) return;
-    await fetch(`/api/projects/${deletingProject.id}`, { method: "DELETE" });
-    setDeleteOpen(false);
-    setDeletingProject(null);
-    fetchPage(pagination.page);
+    try {
+      const res = await fetch(`/api/projects/${deletingProject.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "案件の削除に失敗しました");
+      }
+      setDeleteOpen(false);
+      setDeletingProject(null);
+      fetchPage(pagination.page);
+    } catch (error) {
+      console.error("handleDelete error:", error);
+      alert(error instanceof Error ? error.message : "案件の削除に失敗しました");
+    }
   };
 
   const selectMonth = (monthIndex: number) => {

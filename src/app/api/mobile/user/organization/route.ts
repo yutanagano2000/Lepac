@@ -26,7 +26,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body: SetOrganizationRequest = await request.json();
+    // JSONパースエラーのハンドリング
+    let body: SetOrganizationRequest;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
 
     // バリデーション
     if (!body.organizationId || typeof body.organizationId !== "number") {
@@ -79,6 +88,19 @@ export async function PUT(request: NextRequest) {
       });
     }
 
+    // ユーザーの存在確認
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, auth.userId));
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
     // ユーザーの組織IDを更新
     await db
       .update(users)
@@ -90,6 +112,13 @@ export async function PUT(request: NextRequest) {
       .select()
       .from(users)
       .where(eq(users.id, auth.userId));
+
+    if (!updatedUser) {
+      return NextResponse.json(
+        { error: "Failed to update user" },
+        { status: 500 }
+      );
+    }
 
     // 新しいJWTを発行（organizationIdを含む）
     const newToken = await signMobileToken({

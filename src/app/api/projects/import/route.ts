@@ -4,16 +4,39 @@ import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import * as fs from "fs";
+import * as path from "path";
 
 export const dynamic = "force-dynamic";
 
 const CABINET_BASE_PATH = process.env.CABINET_BASE_PATH || "C:\\Person Energy\\◇Person独自案件管理\\□Person独自案件";
+
+// 入力値のサニタイズ用正規表現
+const SAFE_MANAGEMENT_NUMBER = /^\d{1,10}$/;
+const SAFE_MANAGER = /^[^\\/:<>|"*?\x00-\x1f]{1,50}$/;
+const SAFE_PROJECT_NUMBER = /^[A-Za-z]+\d{1,10}$/;
 
 interface FolderInfo {
   folderName: string;
   managementNumber: string;
   manager: string;
   projectNumber: string;
+}
+
+/**
+ * FolderInfoのバリデーション
+ */
+function validateFolderInfo(folder: unknown): folder is FolderInfo {
+  if (typeof folder !== "object" || folder === null) return false;
+  const f = folder as Record<string, unknown>;
+  return (
+    typeof f.folderName === "string" &&
+    typeof f.managementNumber === "string" &&
+    typeof f.manager === "string" &&
+    typeof f.projectNumber === "string" &&
+    SAFE_MANAGEMENT_NUMBER.test(f.managementNumber) &&
+    SAFE_MANAGER.test(f.manager) &&
+    SAFE_PROJECT_NUMBER.test(f.projectNumber)
+  );
 }
 
 /**
@@ -102,10 +125,25 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { folders } = body as { folders: FolderInfo[] };
+    const { folders } = body as { folders: unknown[] };
 
     if (!folders || !Array.isArray(folders) || folders.length === 0) {
       return NextResponse.json({ error: "登録する案件を選択してください" }, { status: 400 });
+    }
+
+    // 登録上限チェック（DoS対策）
+    const MAX_IMPORT_COUNT = 100;
+    if (folders.length > MAX_IMPORT_COUNT) {
+      return NextResponse.json({ error: `一度に登録できるのは${MAX_IMPORT_COUNT}件までです` }, { status: 400 });
+    }
+
+    // 全フォルダのバリデーション
+    const validFolders: FolderInfo[] = [];
+    for (const folder of folders) {
+      if (!validateFolderInfo(folder)) {
+        return NextResponse.json({ error: "不正なフォルダ情報が含まれています" }, { status: 400 });
+      }
+      validFolders.push(folder);
     }
 
     // 重複チェック
@@ -121,7 +159,7 @@ export async function POST(request: Request) {
       existingProjects.map(p => `${p.managementNumber}-${p.projectNumber}`)
     );
 
-    const toInsert = folders.filter(
+    const toInsert = validFolders.filter(
       f => !existingSet.has(`${f.managementNumber}-${f.projectNumber}`)
     );
 

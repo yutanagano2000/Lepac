@@ -4,6 +4,15 @@ import { constructionProgress, CONSTRUCTION_PROGRESS_CATEGORIES } from "@/db/sch
 import { eq, and, desc } from "drizzle-orm";
 import { requireProjectAccess } from "@/lib/auth-guard";
 
+// 文字列サニタイズ（XSS対策）
+function sanitizeString(str: string | null | undefined, maxLength: number = 500): string | null {
+  if (!str) return null;
+  return str
+    .slice(0, maxLength)
+    .replace(/[<>]/g, "")  // HTMLタグ除去
+    .trim();
+}
+
 export const dynamic = "force-dynamic";
 
 // 工事進捗一覧取得
@@ -86,13 +95,16 @@ export async function POST(
 
     const now = new Date().toISOString();
 
+    // 入力値サニタイズ
+    const sanitizedNote = sanitizeString(note, 1000);
+
     if (existing.length > 0) {
       // 更新
       const [result] = await db
         .update(constructionProgress)
         .set({
           status,
-          note: note || null,
+          note: sanitizedNote,
           completedAt: status === "completed" ? now : null,
           updatedAt: now,
         })
@@ -108,7 +120,7 @@ export async function POST(
           projectId,
           category,
           status,
-          note: note || null,
+          note: sanitizedNote,
           completedAt: status === "completed" ? now : null,
           createdAt: now,
         })

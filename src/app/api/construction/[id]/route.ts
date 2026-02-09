@@ -10,9 +10,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const projectId = parseInt(id);
 
-  if (isNaN(projectId)) {
+  // 厳密なID検証: 数字のみで構成されているか確認
+  if (!/^\d+$/.test(id)) {
+    return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
+  const projectId = Number(id);
+
+  // Number.isSafeInteger で Infinity、小数、範囲外を拒否
+  if (!Number.isSafeInteger(projectId) || projectId <= 0) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
@@ -29,30 +35,22 @@ export async function PATCH(
   }
 
   const updateData = validation.data;
-  console.log("[Construction PATCH] projectId:", projectId, "updateData:", updateData);
 
   if (Object.keys(updateData).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
   try {
-    // プロジェクトを更新（組織フィルタリング）
-    await db.update(projects)
+    // プロジェクトを更新（組織フィルタリング）+ 全カラムを返す
+    const [updated] = await db.update(projects)
       .set(updateData)
-      .where(and(eq(projects.id, projectId), eq(projects.organizationId, organizationId)));
+      .where(and(eq(projects.id, projectId), eq(projects.organizationId, organizationId)))
+      .returning();
 
-    // 更新後のデータを取得して返す
-    const [updated] = await db.select().from(projects).where(eq(projects.id, projectId));
-
+    // 更新対象が存在しない場合は404
     if (!updated) {
       return NextResponse.json({ error: "プロジェクトが見つかりません" }, { status: 404 });
     }
-
-    console.log("[Construction PATCH] updated project:", {
-      id: updated.id,
-      mountOrderDate: updated.mountOrderDate,
-      mountDeliveryScheduled: updated.mountDeliveryScheduled,
-    });
 
     return NextResponse.json({ success: true, project: updated });
   } catch (error) {

@@ -85,12 +85,24 @@ function MapEditorContent() {
     [projectId, annotation?.id]
   );
 
-  // Compute initial center
-  const initialCenter: [number, number] = annotation?.mapCenter
-    ? JSON.parse(annotation.mapCenter)
-    : lat && lon
-      ? [lat, lon]
-      : [36.0, 138.0];
+  // Compute initial center with safe JSON parsing
+  const parseMapCenter = (mapCenter: string | null): [number, number] | null => {
+    if (!mapCenter) return null;
+    try {
+      const parsed = JSON.parse(mapCenter);
+      if (Array.isArray(parsed) && parsed.length === 2 &&
+          typeof parsed[0] === "number" && typeof parsed[1] === "number") {
+        return parsed as [number, number];
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const initialCenter: [number, number] =
+    parseMapCenter(annotation?.mapCenter ?? null) ??
+    (lat && lon ? [lat, lon] : [36.0, 138.0]);
 
   const initialZoom = annotation?.mapZoom ?? (lat && lon ? 16 : 5);
   const initialTileLayer = (annotation?.tileLayer as TileLayerType) ?? "photo";

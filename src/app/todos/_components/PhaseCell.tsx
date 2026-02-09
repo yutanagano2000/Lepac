@@ -25,7 +25,6 @@ function formatDateShort(date: Date | null): string {
 }
 
 function PhaseCellComponent({
-  phaseKey,
   index,
   isCompleted,
   isCurrent,

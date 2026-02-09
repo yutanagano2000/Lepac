@@ -42,13 +42,21 @@ function CommentsTabContent({ projectId, comments, onCommentsChange }: CommentsT
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
-    await fetch(`/api/projects/${projectId}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newComment }),
-    });
-    setNewComment("");
-    onCommentsChange();
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment }),
+      });
+      if (!res.ok) {
+        console.error("Failed to create comment:", res.status);
+        return;
+      }
+      setNewComment("");
+      onCommentsChange();
+    } catch (error) {
+      console.error("Failed to create comment:", error);
+    }
   };
 
   const openEditDialog = (comment: Comment) => {
@@ -59,14 +67,22 @@ function CommentsTabContent({ projectId, comments, onCommentsChange }: CommentsT
 
   const handleEdit = async () => {
     if (!editingComment || !editContent.trim()) return;
-    await fetch(`/api/projects/${projectId}/comments`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId: editingComment.id, content: editContent }),
-    });
-    setEditOpen(false);
-    setEditingComment(null);
-    onCommentsChange();
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId: editingComment.id, content: editContent }),
+      });
+      if (!res.ok) {
+        console.error("Failed to edit comment:", res.status);
+        return;
+      }
+      setEditOpen(false);
+      setEditingComment(null);
+      onCommentsChange();
+    } catch (error) {
+      console.error("Failed to edit comment:", error);
+    }
   };
 
   const openDeleteDialog = (comment: Comment) => {
@@ -76,12 +92,20 @@ function CommentsTabContent({ projectId, comments, onCommentsChange }: CommentsT
 
   const handleDelete = async () => {
     if (!deletingComment) return;
-    await fetch(`/api/projects/${projectId}/comments?commentId=${deletingComment.id}`, {
-      method: "DELETE",
-    });
-    setDeleteOpen(false);
-    setDeletingComment(null);
-    onCommentsChange();
+    try {
+      const res = await fetch(`/api/projects/${projectId}/comments?commentId=${deletingComment.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        console.error("Failed to delete comment:", res.status);
+        return;
+      }
+      setDeleteOpen(false);
+      setDeletingComment(null);
+      onCommentsChange();
+    } catch (error) {
+      console.error("Failed to delete comment:", error);
+    }
   };
 
   return (

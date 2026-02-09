@@ -1,18 +1,52 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireOrganization } from "@/lib/auth-guard";
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
+import { createReadStream } from "fs";
+import { Readable } from "stream";
 
 export const dynamic = "force-dynamic";
 
 const CABINET_BASE_PATH = process.env.CABINET_BASE_PATH || "C:\\Person Energy\\◇Person独自案件管理\\□Person独自案件";
 
+// 最大ファイルサイズ（100MB）
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+// 許可されたファイル拡張子
+const ALLOWED_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
+  ".pdf",
+  ".mp4", ".mov",
+  ".xlsx", ".xls", ".docx", ".doc",
+]);
+
+/**
+ * 安全なパス検証（パストラバーサル防止）
+ * path.relative を使用して、ターゲットがベースパス内にあるか確認
+ */
+function isPathWithinBase(basePath: string, targetPath: string): boolean {
+  const resolvedBase = path.resolve(basePath);
+  const resolvedTarget = path.resolve(targetPath);
+
+  // Windows: 大文字小文字を無視して比較
+  const normalizedBase = resolvedBase.toLowerCase();
+  const normalizedTarget = resolvedTarget.toLowerCase();
+
+  // path.relative で相対パスを計算
+  const relative = path.relative(resolvedBase, resolvedTarget);
+
+  // ".." で始まる or 絶対パス = ベースパス外
+  return !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
 /**
  * 管理番号からフォルダを検索
  * フォルダ名は "0012-担当者　P3327" 形式のため、先頭一致で検索
  */
-function findProjectFolder(managementNumber: string): string | null {
-  if (!fs.existsSync(CABINET_BASE_PATH)) {
+async function findProjectFolder(managementNumber: string): Promise<string | null> {
+  try {
+    await fs.access(CABINET_BASE_PATH);
+  } catch {
     return null;
   }
 
@@ -20,7 +54,7 @@ function findProjectFolder(managementNumber: string): string | null {
   const padded = managementNumber.padStart(4, "0");
 
   try {
-    const entries = fs.readdirSync(CABINET_BASE_PATH, { withFileTypes: true });
+    const entries = await fs.readdir(CABINET_BASE_PATH, { withFileTypes: true });
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
@@ -39,7 +73,7 @@ function findProjectFolder(managementNumber: string): string | null {
 /**
  * ファイルを取得して返す（画像・PDF等）
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   // 認証チェック
   const authResult = await requireOrganization();
   if (!authResult.success) {
@@ -55,7 +89,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "managementNumber and path are required" }, { status: 400 });
   }
 
-  const folderPath = findProjectFolder(managementNumber);
+  // 入力バリデーション
+  if (managementNumber.length > 10 || filePath.length > 500) {
+    return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
+  }
+
+  // ファイル拡張子チェック
+  const ext = path.extname(filePath).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return NextResponse.json({ error: "File type not allowed" }, { status: 403 });
+  }
+
+  const folderPath = await findProjectFolder(managementNumber);
   if (!folderPath) {
     return NextResponse.json({ error: "Project folder not found" }, { status: 404 });
   }
@@ -80,21 +125,34 @@ export async function GET(request: Request) {
     basePath = path.join(folderPath, subfolderMap[subfolder]);
   }
 
-  const fullPath = path.join(basePath, filePath);
-
-  // セキュリティチェック: パストラバーサル防止
-  const normalizedPath = path.normalize(fullPath);
-  if (!normalizedPath.startsWith(folderPath)) {
+  // セキュリティ: 絶対パスが渡された場合はbasePathを無視するため、相対パスのみ許可
+  if (path.isAbsolute(filePath)) {
     return NextResponse.json({ error: "Invalid path" }, { status: 403 });
   }
 
-  if (!fs.existsSync(fullPath)) {
-    return NextResponse.json({ error: `File not found: ${fullPath}` }, { status: 404 });
+  const fullPath = path.resolve(basePath, filePath);
+
+  // セキュリティチェック: パストラバーサル防止（改善版）
+  if (!isPathWithinBase(folderPath, fullPath)) {
+    console.warn(`Blocked path traversal attempt: ${filePath}`);
+    return NextResponse.json({ error: "Invalid path" }, { status: 403 });
   }
 
   try {
-    const fileBuffer = fs.readFileSync(fullPath);
-    const ext = path.extname(fullPath).toLowerCase();
+    await fs.access(fullPath);
+  } catch {
+    // セキュリティ: サーバーパスを漏洩しない
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  }
+
+  try {
+    // ファイルサイズチェック
+    const stats = await fs.stat(fullPath);
+    if (stats.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: "File too large" }, { status: 413 });
+    }
+
+    const fileExt = path.extname(fullPath).toLowerCase();
 
     // MIMEタイプを決定
     const mimeTypes: Record<string, string> = {
@@ -113,10 +171,29 @@ export async function GET(request: Request) {
       ".doc": "application/msword",
     };
 
-    const mimeType = mimeTypes[ext] || "application/octet-stream";
+    const mimeType = mimeTypes[fileExt] || "application/octet-stream";
     const fileName = path.basename(fullPath);
 
-    // 画像をそのまま返す
+    // 大きいファイルはストリーミング、小さいファイルはバッファで返す
+    const STREAM_THRESHOLD = 5 * 1024 * 1024; // 5MB
+
+    if (stats.size > STREAM_THRESHOLD) {
+      // ストリーミングレスポンス
+      const stream = createReadStream(fullPath);
+      const webStream = Readable.toWeb(stream) as ReadableStream;
+
+      return new NextResponse(webStream, {
+        headers: {
+          "Content-Type": mimeType,
+          "Content-Disposition": `inline; filename="${encodeURIComponent(fileName)}"`,
+          "Content-Length": stats.size.toString(),
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    }
+
+    // 小さいファイルはバッファで返す
+    const fileBuffer = await fs.readFile(fullPath);
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": mimeType,

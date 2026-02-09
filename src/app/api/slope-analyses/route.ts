@@ -40,7 +40,11 @@ export async function GET(request: NextRequest) {
 
   const conditions = [eq(slopeAnalyses.organizationId, organizationId)];
   if (projectId) {
-    conditions.push(eq(slopeAnalyses.projectId, parseInt(projectId, 10)));
+    const parsedProjectId = parseInt(projectId, 10);
+    if (isNaN(parsedProjectId) || parsedProjectId <= 0) {
+      return NextResponse.json({ error: "無効なprojectIdです" }, { status: 400 });
+    }
+    conditions.push(eq(slopeAnalyses.projectId, parsedProjectId));
   }
 
   const results = await db
@@ -107,10 +111,10 @@ export async function POST(request: NextRequest) {
       .returning();
 
     return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Slope analysis save error:", error);
     return NextResponse.json(
-      { error: error.message || "保存に失敗しました" },
+      { error: "傾斜解析の保存に失敗しました" },
       { status: 500 }
     );
   }

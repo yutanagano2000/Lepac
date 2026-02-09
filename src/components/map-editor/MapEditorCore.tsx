@@ -7,7 +7,7 @@ import "leaflet-draw";
 import "leaflet-draw/dist/leaflet.draw.css";
 import { DrawingToolbar } from "./DrawingToolbar";
 import { TextInputDialog, LeaderInputDialog } from "./InputDialog";
-import { TILE_LAYERS, createSitePinIcon, createLeaderBoxHtml, formatCoord } from "./constants";
+import { TILE_LAYERS, createSitePinIcon, createLeaderBoxHtml, formatCoord, escapeHtml } from "./constants";
 import type { TileLayerType } from "./constants";
 export type { TileLayerType } from "./constants";
 import type { MapEditorCoreProps } from "./types";
@@ -272,10 +272,11 @@ export default function MapEditorCore({
 
   // テキストマーカー作成
   const createTextMarker = useCallback((map: L.Map, featureGroup: L.FeatureGroup, latlng: L.LatLng, label: string) => {
+    const safeLabel = escapeHtml(label);
     const marker = L.marker(latlng, {
       icon: L.divIcon({
         className: "map-text-label",
-        html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${label}</div>`,
+        html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${safeLabel}</div>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       }),
@@ -308,9 +309,10 @@ export default function MapEditorCore({
 
   // テキストマーカー更新
   const updateTextMarker = useCallback((marker: L.Marker, newLabel: string) => {
+    const safeLabel = escapeHtml(newLabel);
     const newIcon = L.divIcon({
       className: "map-text-label",
-      html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${newLabel}</div>`,
+      html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${safeLabel}</div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
@@ -592,10 +594,11 @@ export default function MapEditorCore({
 
             // Text annotation restoration
             if (feature.properties?.isTextAnnotation && feature.properties?.label) {
+              const safeLabel = escapeHtml(feature.properties.label);
               const marker = L.marker(latlng, {
                 icon: L.divIcon({
                   className: "map-text-label",
-                  html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${feature.properties.label}</div>`,
+                  html: `<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border:1px solid #666;border-radius:3px;font-size:13px;white-space:nowrap;color:#000;cursor:pointer;">${safeLabel}</div>`,
                   iconSize: [0, 0],
                   iconAnchor: [0, 0],
                 }),

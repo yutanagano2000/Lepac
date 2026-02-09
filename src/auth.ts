@@ -7,7 +7,6 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { validatePassword, PASSWORD_REQUIREMENTS } from "@/lib/password-policy";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -48,7 +47,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        console.log("Invalid credentials");
         return null;
       },
     }),
@@ -56,8 +54,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
     async signIn({ user, account, profile }) {
-      console.log("[LINE Auth] signIn callback started", { provider: account?.provider });
-
       // LINE認証の場合、ユーザーをDBに登録/更新
       if (account?.provider === "line") {
         try {
@@ -69,8 +65,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const name = user.name || (profile?.name as string) || "LINE User";
           const image = user.image || (profile?.picture as string);
 
-          console.log("[LINE Auth] Processing user:", { lineId, name });
-
           // 既存ユーザーを検索
           const [existingUser] = await db
             .select()
@@ -78,7 +72,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             .where(eq(users.lineId, lineId));
 
           if (existingUser) {
-            console.log("[LINE Auth] Existing user found:", existingUser.id);
             // 既存ユーザーの情報を更新
             await db
               .update(users)
@@ -91,7 +84,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             user.organizationId = existingUser.organizationId;
             user.role = existingUser.role;
           } else {
-            console.log("[LINE Auth] Creating new user");
             // 新規ユーザーを作成
             const username = `line_${lineId.substring(0, 8)}`;
             const hashedPassword = await bcrypt.hash(lineId, 10); // ダミーパスワード
@@ -108,7 +100,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               })
               .returning();
 
-            console.log("[LINE Auth] New user created:", newUser.id);
             user.id = String(newUser.id);
             user.username = newUser.username;
             user.organizationId = newUser.organizationId;

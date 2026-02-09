@@ -68,7 +68,10 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
 
   const fetchTodos = () => {
     fetch("/api/todos", { cache: "no-store" })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("API error");
+        return res.json();
+      })
       .then(setTodos)
       .catch((err) => console.error("TODO一覧の取得に失敗しました:", err));
   };
@@ -82,8 +85,11 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
     if (!todoToDelete) return;
     setIsDeleting(true);
     try {
-      await fetch(`/api/todos/${todoToDelete}`, { method: "DELETE" });
+      const res = await fetch(`/api/todos/${todoToDelete}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete TODO");
       fetchTodos();
+    } catch (err) {
+      console.error("TODO削除に失敗しました:", err);
     } finally {
       setIsDeleting(false);
       setDeleteDialogOpen(false);
@@ -134,13 +140,17 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
   }, [filteredTodos]);
 
   const handleReopen = async (todo: TodoWithProject) => {
-    // 再開時はメッセージを保持（completedAtのみクリア）
-    await fetch(`/api/todos/${todo.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completedAt: null }),
-    });
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${todo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedAt: null }),
+      });
+      if (!res.ok) throw new Error("Failed to reopen TODO");
+      fetchTodos();
+    } catch (err) {
+      console.error("TODO再開に失敗しました:", err);
+    }
   };
 
   const TodoItem = ({ todo }: { todo: TodoWithProject }) => {

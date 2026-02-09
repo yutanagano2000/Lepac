@@ -97,7 +97,10 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
   useEffect(() => {
     if (showCreateForm) {
       fetch("/api/users", { cache: "no-store" })
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
         .then((data) => setOrgUsers(data))
         .catch((err) => console.error("ユーザー一覧の取得に失敗しました:", err));
     }
@@ -117,7 +120,10 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
       ? `/api/todos?userId=${currentUserId}`
       : "/api/todos";
     fetch(url, { cache: "no-store" })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(setTodos)
       .catch((err) => console.error("TODO一覧の取得に失敗しました:", err));
   };
@@ -137,8 +143,11 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
     if (!todoToDelete) return;
     setIsDeleting(true);
     try {
-      await fetch(`/api/todos/${todoToDelete}`, { method: "DELETE" });
+      const res = await fetch(`/api/todos/${todoToDelete}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchTodos();
+    } catch (err) {
+      console.error("TODO削除に失敗しました:", err);
     } finally {
       setIsDeleting(false);
       setDeleteDialogOpen(false);
@@ -189,12 +198,17 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
   }, [filteredTodos]);
 
   const handleReopen = async (todo: TodoWithProject) => {
-    await fetch(`/api/todos/${todo.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completedAt: null }),
-    });
-    fetchTodos();
+    try {
+      const res = await fetch(`/api/todos/${todo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedAt: null }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      fetchTodos();
+    } catch (err) {
+      console.error("TODO再開に失敗しました:", err);
+    }
   };
 
   // プレーンTODOを作成
@@ -207,7 +221,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
         ? orgUsers.find((u) => u.id === parseInt(newTodoAssigneeId, 10))
         : null;
 
-      await fetch("/api/todos", {
+      const res = await fetch("/api/todos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -217,6 +231,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
           assigneeName: assignee?.name ?? assignee?.username ?? null,
         }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewTodoContent("");
       setNewTodoDueDate("");
       setNewTodoSelectedDate(undefined);

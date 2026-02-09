@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,9 +24,23 @@ export default function SelectOrganizationPage() {
   const [error, setError] = useState("");
   const [visibleItems, setVisibleItems] = useState<number[]>([]);
 
+  const fetchOrganizations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/organizations");
+      if (res.ok) {
+        const data = await res.json();
+        setOrganizations(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch organizations:", err);
+    } finally {
+      setFetchLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrganizations();
-  }, []);
+  }, [fetchOrganizations]);
 
   // スタガーアニメーション
   useEffect(() => {
@@ -41,20 +55,6 @@ export default function SelectOrganizationPage() {
       }, organizations.length * 80);
     }
   }, [fetchLoading, organizations]);
-
-  const fetchOrganizations = async () => {
-    try {
-      const res = await fetch("/api/organizations");
-      if (res.ok) {
-        const data = await res.json();
-        setOrganizations(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch organizations:", err);
-    } finally {
-      setFetchLoading(false);
-    }
-  };
 
   const handleSelectOrg = (orgId: number) => {
     setSelectedOrgId(orgId);
@@ -118,9 +118,9 @@ export default function SelectOrganizationPage() {
 
       // 強制リロードでセッションを確実に反映
       window.location.href = "/";
-    } catch (err: any) {
+    } catch (err) {
       console.error("Organization update error:", err);
-      setError(err.message || "エラーが発生しました");
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
       setLoading(false);
     }
   };

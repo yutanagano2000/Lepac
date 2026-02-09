@@ -27,6 +27,9 @@ interface PhotoRegisterRequest {
   takenAt: string; // ISO8601 format
 }
 
+// Supabase Storage URLのパターン（セキュリティ）
+const ALLOWED_FILE_URL_PATTERN = /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/(public|authenticated)\/construction-photos\/.+$/;
+
 export async function POST(request: NextRequest) {
   try {
     // 認証チェック
@@ -38,12 +41,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: PhotoRegisterRequest = await request.json();
+    // JSONパースエラーのハンドリング
+    let body: PhotoRegisterRequest;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
 
     // バリデーション
     if (!body.projectId || !body.category || !body.fileUrl || !body.fileName) {
       return NextResponse.json(
         { error: "Missing required fields: projectId, category, fileUrl, fileName" },
+        { status: 400 }
+      );
+    }
+
+    // fileUrl のセキュリティ検証（Supabase Storage URLのみ許可）
+    if (!ALLOWED_FILE_URL_PATTERN.test(body.fileUrl)) {
+      return NextResponse.json(
+        { error: "Invalid fileUrl: must be a valid Supabase Storage URL" },
         { status: 400 }
       );
     }

@@ -23,6 +23,9 @@ import {
 import type { TileLayerType } from "./constants";
 import { captureMapAsPng, captureMapAsPdf, downloadBlob } from "@/lib/map-export";
 
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
 interface DrawingToolbarProps {
   activeTile: TileLayerType;
   onTileChange: (type: TileLayerType) => void;
@@ -88,11 +91,29 @@ export function DrawingToolbar({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // ファイルタイプ検証
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      alert("対応していないファイル形式です（JPEG, PNG, GIF, WebPのみ）");
+      e.target.value = "";
+      return;
+    }
+
+    // ファイルサイズ検証
+    if (file.size > MAX_IMAGE_SIZE) {
+      alert("ファイルサイズが大きすぎます（10MB以下）");
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
         onImageUpload(reader.result);
       }
+    };
+    reader.onerror = () => {
+      alert("ファイルの読み込みに失敗しました");
     };
     reader.readAsDataURL(file);
     // リセットして同じファイルも再選択可能に

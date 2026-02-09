@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireOrganization } from "@/lib/auth-guard";
 
 // Yahoo! JAPAN ルビ振りAPI (V2)
 // https://developer.yahoo.co.jp/webapi/jlp/furigana/v2/furigana.html
 const YAHOO_API_ENDPOINT = "https://jlp.yahooapis.jp/FuriganaService/V2/furigana";
+
+// 入力制限
+const MAX_NAME_LENGTH = 100;
 
 interface YahooWord {
   surface: string;
@@ -39,6 +43,12 @@ function hiraganaToKatakana(str: string): string {
  * Response: { furigana: string }
  */
 export async function POST(request: NextRequest) {
+  // 認証チェック
+  const authResult = await requireOrganization();
+  if (!authResult.success) {
+    return authResult.response;
+  }
+
   try {
     const body = await request.json();
     const { name } = body;
@@ -46,6 +56,14 @@ export async function POST(request: NextRequest) {
     if (!name || typeof name !== "string") {
       return NextResponse.json(
         { error: "名前を入力してください" },
+        { status: 400 }
+      );
+    }
+
+    // 入力長の制限（DoS対策）
+    if (name.length > MAX_NAME_LENGTH) {
+      return NextResponse.json(
+        { error: `名前は${MAX_NAME_LENGTH}文字以内で入力してください` },
         { status: 400 }
       );
     }

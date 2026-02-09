@@ -59,16 +59,19 @@ type Project = {
   processRemarks: string | null;
 };
 
-function parseCompletionMonth(completionMonth: string | null): { year: number; month: number } | null {
-  if (!completionMonth) return null;
-  const match = completionMonth.match(/(\d{4})[-/年]?(\d{1,2})/);
-  if (match) {
-    return {
-      year: parseInt(match[1]),
-      month: parseInt(match[2]),
+// テキストのサニタイズ関数（XSS対策）
+function sanitizeText(text: string | null | undefined): string {
+  if (!text) return "";
+  return text.replace(/[<>"'&]/g, (char) => {
+    const entities: Record<string, string> = {
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+      "&": "&amp;",
     };
-  }
-  return null;
+    return entities[char] || char;
+  });
 }
 
 export default function ConstructionView() {
@@ -90,6 +93,8 @@ export default function ConstructionView() {
         if (res.ok) {
           const data = await res.json();
           setProjects(data.projects);
+        } else {
+          console.error("Failed to fetch projects: HTTP", res.status);
         }
       } catch (error) {
         console.error("Failed to fetch projects:", error);
@@ -224,13 +229,13 @@ export default function ConstructionView() {
               </TabsList>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToPreviousMonth}>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToPreviousMonth} aria-label="前月へ">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-sm font-medium min-w-[100px] text-center">
+                <span className="text-sm font-medium min-w-[100px] text-center" aria-live="polite">
                   {monthDisplay}
                 </span>
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToNextMonth}>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={goToNextMonth} aria-label="次月へ">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -266,7 +271,7 @@ export default function ConstructionView() {
                             <TableCell className="whitespace-nowrap">{project.client || "-"}</TableCell>
                             <TableCell className="whitespace-nowrap">{project.projectNumber || "-"}</TableCell>
                             <TableCell className="whitespace-nowrap">{project.prefecture || "-"}</TableCell>
-                            <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={project.address || ""}>
+                            <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={sanitizeText(project.address)}>
                               {project.address || "-"}
                             </TableCell>
                           </TableRow>
@@ -345,10 +350,10 @@ export default function ConstructionView() {
                                   placeholder="-"
                                 />
                               </TableCell>
-                              <TableCell className="whitespace-nowrap max-w-[150px] truncate" title={project.constructionRemarks || ""}>
+                              <TableCell className="whitespace-nowrap max-w-[150px] truncate" title={sanitizeText(project.constructionRemarks)}>
                                 {project.constructionRemarks || "-"}
                               </TableCell>
-                              <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={project.constructionNote || ""}>
+                              <TableCell className="whitespace-nowrap max-w-[200px] truncate" title={sanitizeText(project.constructionNote)}>
                                 {project.constructionNote || "-"}
                               </TableCell>
                               <TableCell className="whitespace-nowrap">{project.completionMonth || "-"}</TableCell>

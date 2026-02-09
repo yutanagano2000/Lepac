@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { requireOrganization } from "@/lib/auth-guard";
 import { syncFromSheets, saveSyncLog, getLastSyncStatus } from "@/lib/sheets-sync";
 
@@ -35,7 +36,22 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (authHeader && cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    // タイミング攻撃を防ぐためtimingSafeEqualを使用
+    const isValidCronAuth = (() => {
+      if (!authHeader || !cronSecret) return false;
+      const expected = `Bearer ${cronSecret}`;
+      if (authHeader.length !== expected.length) return false;
+      try {
+        return timingSafeEqual(
+          Buffer.from(authHeader),
+          Buffer.from(expected)
+        );
+      } catch {
+        return false;
+      }
+    })();
+
+    if (isValidCronAuth) {
       // Cron 実行時はデフォルト組織ID（Person Energy = 1）
       organizationId = 1;
     } else {

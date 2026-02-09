@@ -30,9 +30,21 @@ export function createSitePinIcon() {
   });
 }
 
+// Helper: escape HTML to prevent XSS
+export function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Helper: create leader box HTML
 export function createLeaderBoxHtml(postalCode: string, address: string) {
-  return `<div style="background:#fff;border:2px solid #333;padding:4px 8px;font-size:12px;white-space:nowrap;color:#000;font-family:sans-serif;line-height:1.4;">〒${postalCode}<br/>${address}</div>`;
+  const safePostalCode = escapeHtml(postalCode);
+  const safeAddress = escapeHtml(address);
+  return `<div style="background:#fff;border:2px solid #333;padding:4px 8px;font-size:12px;white-space:nowrap;color:#000;font-family:sans-serif;line-height:1.4;">〒${safePostalCode}<br/>${safeAddress}</div>`;
 }
 
 // Helper: format coordinate display

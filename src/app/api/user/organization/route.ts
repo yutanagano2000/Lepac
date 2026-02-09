@@ -14,7 +14,6 @@ const updateOrganizationSchema = z.object({
 // ログインユーザーの所属組織を更新
 export async function PUT(request: Request) {
   const session = await auth();
-  console.log("[Organization API] Session:", session?.user?.id);
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,7 +38,6 @@ export async function PUT(request: Request) {
   }
 
   const { organizationId } = validation.data;
-  console.log("[Organization API] organizationId:", organizationId);
 
   try {
     // 組織の存在確認
@@ -48,25 +46,23 @@ export async function PUT(request: Request) {
       .from(organizations)
       .where(eq(organizations.id, organizationId));
 
-    console.log("[Organization API] Found org:", org);
-
     if (!org) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
     // ユーザーの組織IDを更新
-    const userId = parseInt(session.user.id);
-    console.log("[Organization API] Updating user:", userId);
+    const userId = parseInt(session.user.id, 10);
+    if (Number.isNaN(userId)) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+    }
 
     await db
       .update(users)
       .set({ organizationId })
       .where(eq(users.id, userId));
 
-    console.log("[Organization API] Update successful");
     return NextResponse.json({ success: true, organizationId });
-  } catch (error) {
-    console.error("[Organization API] Error:", error);
+  } catch {
     return NextResponse.json({ error: "組織の更新に失敗しました" }, { status: 500 });
   }
 }

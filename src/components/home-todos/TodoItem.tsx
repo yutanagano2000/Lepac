@@ -29,8 +29,9 @@ interface TodoItemProps {
 }
 
 export function TodoItem({ todo, onReopen, onDelete }: TodoItemProps) {
+  const dueDate = new Date(todo.dueDate + "T00:00:00");
   const info = getDueDateInfo(todo.dueDate);
-  const dueDateFormatted = formatDateJp(new Date(todo.dueDate + "T00:00:00"));
+  const dueDateFormatted = formatDateJp(dueDate);
   const isCompleted = !!todo.completedAt;
   const hasProject = todo.projectId !== null;
 
@@ -66,7 +67,7 @@ export function TodoItem({ todo, onReopen, onDelete }: TodoItemProps) {
       {todo.completedMemo && (
         <div className="mt-2 space-y-1">
           {parseTodoMessages(todo.completedMemo).map((msg, idx, arr) => (
-            <div key={idx} className="flex items-start gap-2 text-xs text-muted-foreground">
+            <div key={`${todo.id}-memo-${msg.createdAt}`} className="flex items-start gap-2 text-xs text-muted-foreground">
               <div className="flex flex-col items-center">
                 <div className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5"></div>
                 {idx < arr.length - 1 && (

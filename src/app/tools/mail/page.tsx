@@ -119,16 +119,24 @@ export default function MailPage() {
 
   const onCopyBody = async () => {
     if (!emailText) return;
-    await navigator.clipboard.writeText(emailText);
-    setCopiedBody(true);
-    setTimeout(() => setCopiedBody(false), 1500);
+    try {
+      await navigator.clipboard.writeText(emailText);
+      setCopiedBody(true);
+      setTimeout(() => setCopiedBody(false), 1500);
+    } catch {
+      // クリップボードAPIが利用できない場合は無視
+    }
   };
 
   const onCopyTitle = async () => {
     if (!emailTitle) return;
-    await navigator.clipboard.writeText(emailTitle);
-    setCopiedTitle(true);
-    setTimeout(() => setCopiedTitle(false), 1500);
+    try {
+      await navigator.clipboard.writeText(emailTitle);
+      setCopiedTitle(true);
+      setTimeout(() => setCopiedTitle(false), 1500);
+    } catch {
+      // クリップボードAPIが利用できない場合は無視
+    }
   };
 
   return (

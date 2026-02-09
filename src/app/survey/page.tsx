@@ -245,8 +245,8 @@ function SurveyPageContent() {
       }
 
       setGridResult(data as GridAnalysisResult);
-    } catch (e: any) {
-      setGridError(e.message || "通信エラーが発生しました");
+    } catch {
+      setGridError("通信エラーが発生しました");
     } finally {
       setGridLoading(false);
       setCountdown(null);

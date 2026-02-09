@@ -78,11 +78,19 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
     );
   });
 
-  const fetchMeetings = () => {
-    fetch("/api/meetings", { cache: "no-store" })
-      .then((res) => res.json())
-      .then(setMeetings)
-      .catch((err) => console.error("会議一覧の取得に失敗しました:", err));
+  const fetchMeetings = async () => {
+    try {
+      const res = await fetch("/api/meetings", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMeetings(data);
+      }
+    } catch (err) {
+      console.error("会議一覧の取得に失敗しました:", err);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -97,7 +105,7 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
     }
     setIsSubmitting(true);
     try {
-      await fetch("/api/meetings", {
+      const res = await fetch("/api/meetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -107,10 +115,17 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
           content: form.content.trim() || null,
         }),
       });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "登録に失敗しました");
+      }
       setForm({ title: "", meetingDate: "", category: "社内", content: "" });
       setSelectedDate(undefined);
       setOpen(false);
-      fetchMeetings();
+      await fetchMeetings();
+    } catch (err) {
+      console.error("Meeting create error:", err);
+      alert(err instanceof Error ? err.message : "登録に失敗しました");
     } finally {
       setIsSubmitting(false);
     }

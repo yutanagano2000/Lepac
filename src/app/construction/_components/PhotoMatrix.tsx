@@ -135,6 +135,8 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
         const data = await res.json();
         setProjects(data.projects || []);
         setPhotoMatrix(data.photoMatrix || {});
+      } else {
+        console.error("Failed to fetch photo matrix: HTTP", res.status);
       }
     } catch (error) {
       console.error("Failed to fetch photo matrix:", error);
@@ -189,9 +191,14 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
         setUploadFile(null);
         setUploadNote("");
         fetchData();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Upload failed:", errorData);
+        alert("写真のアップロードに失敗しました");
       }
     } catch (error) {
       console.error("Upload failed:", error);
+      alert("写真のアップロードに失敗しました");
     } finally {
       setUploading(false);
     }
@@ -210,9 +217,13 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
       if (res.ok) {
         setCellPhotos((prev) => prev.filter((p) => p.id !== photoId));
         fetchData();
+      } else {
+        console.error("Delete failed: HTTP", res.status);
+        alert("写真の削除に失敗しました");
       }
     } catch (error) {
       console.error("Delete failed:", error);
+      alert("写真の削除に失敗しました");
     }
   };
 
@@ -772,6 +783,7 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
                         size="icon"
                         className="self-end h-7 w-7 text-white hover:text-red-400 hover:bg-transparent"
                         onClick={() => handleDeletePhoto(photo.id)}
+                        aria-label="写真を削除"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

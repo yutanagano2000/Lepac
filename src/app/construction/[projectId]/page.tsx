@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -92,6 +92,7 @@ export default function ConstructionDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadNote, setUploadNote] = useState("");
   const [uploading, setUploading] = useState(false);
+  const previewUrlRef = useRef<string | null>(null);
 
   // ライトボックス状態
   const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
@@ -123,6 +124,22 @@ export default function ConstructionDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // URL.createObjectURLのクリーンアップ
+  useEffect(() => {
+    if (uploadFile) {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+      previewUrlRef.current = URL.createObjectURL(uploadFile);
+    }
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+    };
+  }, [uploadFile]);
 
   // カテゴリ別に写真をグループ化
   const photosByCategory = PHOTO_CATEGORIES.reduce((acc, cat) => {
@@ -158,9 +175,13 @@ export default function ConstructionDetailPage() {
         setUploadFile(null);
         setUploadNote("");
         setUploadingCategory(null);
+      } else {
+        console.error("Upload failed: HTTP", res.status);
+        alert("写真のアップロードに失敗しました");
       }
     } catch (error) {
       console.error("Upload failed:", error);
+      alert("写真のアップロードに失敗しました");
     } finally {
       setUploading(false);
     }
@@ -178,9 +199,13 @@ export default function ConstructionDetailPage() {
       if (res.ok) {
         setPhotos((prev) => prev.filter((p) => p.id !== photoId));
         setLightboxPhoto(null);
+      } else {
+        console.error("Delete failed: HTTP", res.status);
+        alert("写真の削除に失敗しました");
       }
     } catch (error) {
       console.error("Delete failed:", error);
+      alert("写真の削除に失敗しました");
     }
   };
 
@@ -416,12 +441,12 @@ export default function ConstructionDetailPage() {
                 />
               </div>
 
-              {uploadFile && (
+              {uploadFile && previewUrlRef.current && (
                 <>
                   <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
                     <img
-                      src={URL.createObjectURL(uploadFile)}
-                      alt="Preview"
+                      src={previewUrlRef.current}
+                      alt="プレビュー"
                       className="w-full h-full object-contain"
                     />
                   </div>
@@ -468,6 +493,7 @@ export default function ConstructionDetailPage() {
                       size="icon"
                       className="text-destructive hover:text-destructive"
                       onClick={() => handleDelete(lightboxPhoto.id)}
+                      aria-label="写真を削除"
                     >
                       <Trash2 className="h-5 w-5" />
                     </Button>

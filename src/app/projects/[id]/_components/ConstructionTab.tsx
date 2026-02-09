@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, memo } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { HardHat, ListTodo, Camera, Upload, Trash2, Loader2, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { Project, ConstructionProgress, ConstructionPhoto } from "@/db/schema";
 import { CONSTRUCTION_PROGRESS_CATEGORIES, CONSTRUCTION_PHOTO_CATEGORIES } from "@/db/schema";
@@ -33,16 +43,22 @@ function ConstructionTabContent({ project, projectId, onProjectUpdate }: Constru
   const [photoUploadCategory, setPhotoUploadCategory] = useState<string>("");
   const [photoContractorName, setPhotoContractorName] = useState("");
   const [photoNote, setPhotoNote] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   // 工事データ取得
-  const fetchConstructionData = async () => {
+  const fetchConstructionData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [progressRes, photosRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/construction-progress`),
         fetch(`/api/projects/${projectId}/construction-photos`),
       ]);
+      if (!progressRes.ok || !photosRes.ok) {
+        console.error("Failed to fetch construction data");
+        return;
+      }
       const progressData = await progressRes.json();
       const photosData = await photosRes.json();
       setConstructionProgressList(Array.isArray(progressData) ? progressData : []);
@@ -52,31 +68,43 @@ function ConstructionTabContent({ project, projectId, onProjectUpdate }: Constru
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [projectId]);
 
   // 初回マウント時に取得
   useEffect(() => {
     fetchConstructionData();
-  }, [projectId]);
+  }, [fetchConstructionData]);
 
   // 日付更新ハンドラ
   const handleDateUpdate = async (field: string, value: string | null) => {
-    await fetch(`/api/projects/${projectId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
-    });
-    onProjectUpdate();
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) {
+        console.error("Failed to update date:", res.status);
+        return;
+      }
+      onProjectUpdate();
+    } catch (error) {
+      console.error("Failed to update date:", error);
+    }
   };
 
   // 工事進捗更新
   const handleProgressUpdate = async (category: string, status: string) => {
     try {
-      await fetch(`/api/projects/${projectId}/construction-progress`, {
+      const res = await fetch(`/api/projects/${projectId}/construction-progress`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category, status }),
       });
+      if (!res.ok) {
+        console.error("Failed to update construction progress:", res.status);
+        return;
+      }
       fetchConstructionData();
     } catch (error) {
       console.error("Failed to update construction progress:", error);
@@ -115,13 +143,25 @@ function ConstructionTabContent({ project, projectId, onProjectUpdate }: Constru
     }
   };
 
+  // 写真削除ダイアログを開く
+  const openDeleteDialog = (photoId: number) => {
+    setDeletingPhotoId(photoId);
+    setDeleteDialogOpen(true);
+  };
+
   // 写真削除
-  const handlePhotoDelete = async (photoId: number) => {
-    if (!confirm("この写真を削除しますか？")) return;
+  const handlePhotoDelete = async () => {
+    if (!deletingPhotoId) return;
     try {
-      await fetch(`/api/projects/${projectId}/construction-photos/${photoId}`, {
+      const res = await fetch(`/api/projects/${projectId}/construction-photos/${deletingPhotoId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        console.error("Failed to delete photo:", res.status);
+        return;
+      }
+      setDeleteDialogOpen(false);
+      setDeletingPhotoId(null);
       fetchConstructionData();
     } catch (error) {
       console.error("Failed to delete photo:", error);
@@ -316,7 +356,7 @@ function ConstructionTabContent({ project, projectId, onProjectUpdate }: Constru
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => handlePhotoDelete(photo.id)}
+                          onClick={() => openDeleteDialog(photo.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -341,6 +381,24 @@ function ConstructionTabContent({ project, projectId, onProjectUpdate }: Constru
           )}
         </CardContent>
       </Card>
+
+      {/* 削除確認ダイアログ */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        {deleteDialogOpen && (
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>写真を削除</AlertDialogTitle>
+              <AlertDialogDescription>
+                この写真を削除しますか？この操作は取り消せません。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+              <AlertDialogAction onClick={handlePhotoDelete}>削除</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        )}
+      </AlertDialog>
     </div>
   );
 }

@@ -9,12 +9,17 @@ import {
   computeStats,
   extractCrossSection,
 } from "@/lib/slope-analysis";
+import { requireOrganizationWithCsrf } from "@/lib/auth-guard";
 
 const MAX_GRID_POINTS = 1000;
 const FIXED_INTERVAL = 2; // 2m固定グリッド
 
 export async function POST(req: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireOrganizationWithCsrf(req);
+    if (!authResult.success) return authResult.response;
+
     const body = await req.json();
     const { polygon, crossSectionLine } = body;
     const interval = FIXED_INTERVAL; // 2m固定
@@ -125,10 +130,10 @@ export async function POST(req: NextRequest) {
       crossSection,
       autoCrossSectionLine,
     });
-  } catch (e: any) {
+  } catch (e) {
     console.error("Slope Grid API error:", e);
     return NextResponse.json(
-      { error: e.message || "グリッド傾斜計算に失敗しました" },
+      { error: e instanceof Error ? e.message : "グリッド傾斜計算に失敗しました" },
       { status: 500 }
     );
   }

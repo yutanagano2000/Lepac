@@ -47,7 +47,7 @@ export function LawAlertCard({
           <Button
             variant="outline"
             size="lg"
-            onClick={() => window.open(detailUrl, "_blank")}
+            onClick={() => window.open(detailUrl, "_blank", "noopener,noreferrer")}
             className="h-12 px-6 text-base"
           >
             <ExternalLink className="h-4 w-4 mr-2" />

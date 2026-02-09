@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { mapAnnotations } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { requireProjectAccess } from "@/lib/auth-guard";
+import { eq, desc, and } from "drizzle-orm";
+import { requireProjectAccess, requireProjectAccessWithCsrf } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export async function GET(
 
 // POST: アノテーション作成/更新 (upsert)
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -44,7 +44,8 @@ export async function POST(
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
-  const authResult = await requireProjectAccess(projectId);
+  // CSRF保護付き認証
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
@@ -60,7 +61,7 @@ export async function POST(
     const now = new Date().toISOString();
 
     if (annotationId) {
-      // Update
+      // Update - IDOR防止: projectIdも条件に含める
       const [updated] = await db
         .update(mapAnnotations)
         .set({
@@ -71,8 +72,12 @@ export async function POST(
           tileLayer,
           updatedAt: now,
         })
-        .where(eq(mapAnnotations.id, annotationId))
+        .where(and(eq(mapAnnotations.id, annotationId), eq(mapAnnotations.projectId, projectId)))
         .returning();
+
+      if (!updated) {
+        return NextResponse.json({ error: "Annotation not found or access denied" }, { status: 404 });
+      }
 
       return NextResponse.json(updated);
     } else {
@@ -105,7 +110,7 @@ export async function POST(
 
 // DELETE: アノテーション削除
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -115,7 +120,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
-  const authResult = await requireProjectAccess(projectId);
+  // CSRF保護付き認証
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
@@ -131,9 +137,18 @@ export async function DELETE(
       );
     }
 
+    const annotationIdNum = Number(annotationId);
+    if (isNaN(annotationIdNum)) {
+      return NextResponse.json(
+        { error: "Invalid annotationId" },
+        { status: 400 }
+      );
+    }
+
+    // IDOR防止: projectIdも条件に含める
     const deleted = await db
       .delete(mapAnnotations)
-      .where(eq(mapAnnotations.id, Number(annotationId)))
+      .where(and(eq(mapAnnotations.id, annotationIdNum), eq(mapAnnotations.projectId, projectId)))
       .returning();
 
     if (deleted.length === 0) {

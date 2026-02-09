@@ -29,8 +29,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 開発用: admin/admin123 はハードコードで許可
-    if (body.username === "admin" && body.password === "admin123") {
+    // 開発用admin認証（NODE_ENV=developmentの場合のみ有効）
+    if (
+      process.env.NODE_ENV === "development" &&
+      body.username === "admin" &&
+      body.password === "admin123"
+    ) {
       console.log(`[Credentials Auth] Dev admin login`);
 
       // JWT発行（開発用admin）
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
       .where(eq(users.username, body.username));
 
     if (!user) {
-      console.log(`[Credentials Auth] User not found: ${body.username}`);
+      console.log(`[Credentials Auth] User not found`);
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isValidPassword) {
-      console.log(`[Credentials Auth] Invalid password for: ${body.username}`);
+      console.log(`[Credentials Auth] Invalid password`);
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
@@ -103,7 +107,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
     });
 
-    console.log(`[Credentials Auth] Login successful: ${user.username} (role: ${user.role})`);
+    console.log(`[Credentials Auth] Login successful (userId: ${user.id}, role: ${user.role})`);
 
     return NextResponse.json({
       token,

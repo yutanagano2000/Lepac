@@ -100,6 +100,9 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
   // 削除確認ダイアログ用
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // エラー表示用
+  const [error, setError] = useState<string | null>(null);
+
   // モバイル判定
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -146,6 +149,7 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
     if (!newEvent.title.trim()) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
       const res = await fetch("/api/calendar/events", {
         method: "POST",
@@ -189,8 +193,10 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
         description: "",
         type: "other",
       });
-    } catch (error) {
-      console.error("イベントの作成に失敗しました:", error);
+    } catch (err) {
+      console.error("イベントの作成に失敗しました:", err);
+      setError("予定の追加に失敗しました。再度お試しください。");
+      setTimeout(() => setError(null), 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -210,8 +216,10 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
           method: "DELETE",
         });
         if (!res.ok) throw new Error("Failed to delete event");
-      } catch (error) {
-        console.error("イベントの削除に失敗しました:", error);
+      } catch (err) {
+        console.error("イベントの削除に失敗しました:", err);
+        setError("予定の削除に失敗しました。再度お試しください。");
+        setTimeout(() => setError(null), 3000);
         return;
       }
     }
@@ -224,6 +232,13 @@ export default function FullCalendarView({ initialEvents = [] }: FullCalendarVie
 
   return (
     <div className="h-full">
+      {/* エラーメッセージ */}
+      {error && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-in fade-in slide-in-from-top-2">
+          {error}
+        </div>
+      )}
+
       {/* 凡例 - シンプル */}
       <div className="flex flex-wrap gap-2 mb-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">

@@ -95,7 +95,7 @@ export const LawSearchCard: React.FC<LawSearchCardProps> = ({
               key={index}
               variant="outline"
               size="sm"
-              onClick={() => window.open(button.url, '_blank')}
+              onClick={() => window.open(button.url, '_blank', 'noopener,noreferrer')}
               className="w-full"
             >
               <ExternalLink className="h-3 w-3 mr-2" />

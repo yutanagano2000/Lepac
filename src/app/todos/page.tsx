@@ -39,8 +39,9 @@ export default async function TimelinePage() {
       });
     }
 
-    if (row.progressItem) {
-      projectMap.get(projectId)!.progressItems.push(row.progressItem);
+    const projectEntry = projectMap.get(projectId);
+    if (projectEntry && row.progressItem) {
+      projectEntry.progressItems.push(row.progressItem);
     }
   }
 

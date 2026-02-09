@@ -17,11 +17,13 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim();
 
-  if (!query) {
+  if (!query || query.length > 100) {
     return NextResponse.json([]);
   }
 
-  const searchPattern = `%${query}%`;
+  // SQLインジェクション対策: LIKE特殊文字をエスケープ
+  const escapedQuery = query.replace(/[%_\\]/g, (char) => `\\${char}`);
+  const searchPattern = `%${escapedQuery}%`;
 
   // 案件を検索（組織フィルタリング）
   const projectResults = await db

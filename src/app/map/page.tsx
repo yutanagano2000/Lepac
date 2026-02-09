@@ -177,10 +177,12 @@ export default function MapPage() {
               案内図エディタ
             </h2>
             <Link
-              href={hasValidCoords
-                ? `/map-editor?lat=${parseCoordinateString(coordinates)!.lat}&lon=${parseCoordinateString(coordinates)!.lon}`
-                : "/map-editor"
-              }
+              href={(() => {
+                const parsed = parseCoordinateString(coordinates);
+                return parsed
+                  ? `/map-editor?lat=${parsed.lat}&lon=${parsed.lon}`
+                  : "/map-editor";
+              })()}
               className={`flex items-center justify-between gap-4 w-full px-4 py-3 rounded-lg border transition-colors bg-card hover:bg-muted border-border cursor-pointer`}
             >
               <span className="font-medium flex items-center gap-2">

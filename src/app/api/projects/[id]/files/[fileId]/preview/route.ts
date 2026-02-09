@@ -43,41 +43,108 @@ export async function GET(
       throw ApiError.notFound("ファイルが見つかりません");
     }
 
-    // ファイルパスを抽出
-    const urlObj = new URL(file.fileUrl);
-    const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/sign\/project-files\/(.+)$/);
+    // ファイルパスまたはURLを処理
+    // パターン1: 相対パス（projects/...）の場合 - 直接Supabase Storageから取得
+    // パターン2: フルURL（https://...）の場合 - URLをパースして処理
+    let arrayBuffer: ArrayBuffer;
 
-    if (!pathMatch) {
-      // 古い形式のURLの場合
-      return NextResponse.redirect(file.fileUrl);
-    }
+    const isRelativePath = !file.fileUrl.startsWith("http");
 
-    const filePath = decodeURIComponent(pathMatch[1]);
+    if (isRelativePath) {
+      // 相対パスの場合: 直接Supabase Storageからダウンロード
+      const { data, error } = await getSupabaseAdmin().storage
+        .from(STORAGE_BUCKET)
+        .download(file.fileUrl);
 
-    // Supabaseからファイルをダウンロード
-    const { data, error } = await getSupabaseAdmin().storage
-      .from(STORAGE_BUCKET)
-      .download(filePath);
-
-    if (error || !data) {
-      throw ApiError.internal(
-        "ファイルの読み込みに失敗しました",
-        `Failed to download file: ${error?.message}`
+      if (error || !data) {
+        throw ApiError.internal(
+          "ファイルの読み込みに失敗しました",
+          `Failed to download file: ${error?.message}`
+        );
+      }
+      arrayBuffer = await data.arrayBuffer();
+    } else {
+      // フルURLの場合: URLをパースして適切に処理
+      const urlObj = new URL(file.fileUrl);
+      // signed URLまたはpublic URLの両方に対応
+      const bucketPattern = new RegExp(
+        `\\/storage\\/v1\\/object\\/(?:sign|public)\\/${STORAGE_BUCKET}\\/(.+)$`
       );
+      const pathMatch = urlObj.pathname.match(bucketPattern);
+
+      if (!pathMatch) {
+        // Vercel Blob等の場合 - プロキシ経由で配信（リダイレクトせず認証を維持）
+        const allowedHosts = [
+          "blob.vercel-storage.com",
+          "public.blob.vercel-storage.com",
+        ];
+        const supabaseUrl = process.env.SUPABASE_URL;
+        if (supabaseUrl) {
+          try {
+            allowedHosts.push(new URL(supabaseUrl).host);
+          } catch {
+            // 無効なURLは無視
+          }
+        }
+
+        if (!allowedHosts.some((host) => urlObj.host.endsWith(host))) {
+          throw ApiError.badRequest("不正なファイルURLです");
+        }
+
+        // プロキシ: ファイルをfetchしてセキュリティヘッダー付きで返す
+        const response = await fetch(file.fileUrl);
+        if (!response.ok) {
+          throw ApiError.internal(
+            "ファイルの読み込みに失敗しました",
+            `Failed to fetch file: ${response.status}`
+          );
+        }
+        arrayBuffer = await response.arrayBuffer();
+      } else {
+        // Supabase Storageの場合
+        const filePath = decodeURIComponent(pathMatch[1]);
+        const { data, error } = await getSupabaseAdmin().storage
+          .from(STORAGE_BUCKET)
+          .download(filePath);
+
+        if (error || !data) {
+          throw ApiError.internal(
+            "ファイルの読み込みに失敗しました",
+            `Failed to download file: ${error?.message}`
+          );
+        }
+        arrayBuffer = await data.arrayBuffer();
+      }
     }
 
-    const arrayBuffer = await data.arrayBuffer();
+    // セキュリティ: Content-Typeを許可リストで検証（XSS防止）
+    const allowedContentTypes: Record<string, string> = {
+      "image/jpeg": "image/jpeg",
+      "image/png": "image/png",
+      "image/gif": "image/gif",
+      "image/webp": "image/webp",
+      "application/pdf": "application/pdf",
+    };
+
+    // 許可されていないタイプは安全なデフォルトにフォールバック
+    const safeContentType = allowedContentTypes[file.fileType] || "application/octet-stream";
+    const isAllowedInline = safeContentType !== "application/octet-stream";
 
     // ヘッダーを設定
     const headers: HeadersInit = {
-      "Content-Type": file.fileType,
+      "Content-Type": safeContentType,
       "Content-Length": String(arrayBuffer.byteLength),
-      "Cache-Control": "public, max-age=3600",
+      // 認証が必要なコンテンツは private キャッシュ
+      "Cache-Control": "private, max-age=3600",
+      // XSS防止: Content-Type スニッフィング無効化
+      "X-Content-Type-Options": "nosniff",
     };
 
-    // PDFの場合はインライン表示用のヘッダーを追加
-    if (file.fileType === "application/pdf") {
+    // 許可されたタイプはインライン表示、それ以外はダウンロード
+    if (isAllowedInline) {
       headers["Content-Disposition"] = "inline";
+    } else {
+      headers["Content-Disposition"] = `attachment; filename="${encodeURIComponent(file.fileName)}"`;
     }
 
     return new NextResponse(arrayBuffer, { headers });

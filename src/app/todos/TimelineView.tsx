@@ -169,7 +169,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
       const newStatus = completedDate ? "completed" : "planned";
 
       if (existingProgress) {
-        await fetch(`/api/projects/${editingProject.id}/progress`, {
+        const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -180,8 +180,9 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
             description: phaseMemo || null,
           }),
         });
+        if (!res.ok) throw new Error("Failed to update progress");
       } else {
-        await fetch(`/api/projects/${editingProject.id}/progress`, {
+        const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -192,6 +193,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
             description: phaseMemo || null,
           }),
         });
+        if (!res.ok) throw new Error("Failed to create progress");
       }
 
       // ローカル状態を更新
@@ -252,7 +254,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
       const completedDateStr = now.toISOString();
 
       if (existingProgress) {
-        await fetch(`/api/projects/${editingProject.id}/progress`, {
+        const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -263,8 +265,9 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
             description: phaseMemo || null,
           }),
         });
+        if (!res.ok) throw new Error("Failed to mark as complete");
       } else {
-        await fetch(`/api/projects/${editingProject.id}/progress`, {
+        const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -275,6 +278,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
             description: phaseMemo || null,
           }),
         });
+        if (!res.ok) throw new Error("Failed to create completed progress");
       }
 
       setProjects((prev) =>
@@ -336,7 +340,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
       const plannedDateStr = plannedDate ? plannedDate.toISOString() : existingProgress.createdAt;
 
-      await fetch(`/api/projects/${editingProject.id}/progress`, {
+      const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -347,6 +351,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           description: phaseMemo || null,
         }),
       });
+      if (!res.ok) throw new Error("Failed to mark as incomplete");
 
       setProjects((prev) =>
         prev.map((p) => {
@@ -387,7 +392,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
       const dueDateStr = `${plannedDate.getFullYear()}-${String(plannedDate.getMonth() + 1).padStart(2, "0")}-${String(plannedDate.getDate()).padStart(2, "0")}`;
       const content = `【${editingPhase.title}】${phaseMemo || editingPhase.title}`;
 
-      await fetch(`/api/projects/${editingProject.id}/todos`, {
+      const res = await fetch(`/api/projects/${editingProject.id}/todos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -395,6 +400,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           dueDate: dueDateStr,
         }),
       });
+      if (!res.ok) throw new Error("Failed to add TODO");
 
       showAlert("完了", "TODOに追加しました");
     } catch (error) {

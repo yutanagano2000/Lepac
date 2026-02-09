@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import { Folder, Upload, RefreshCw, AlertCircle, CheckCircle2, XCircle, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +58,7 @@ export default function ImportPage() {
       }
 
       setFolders(data.folders);
-    } catch (err) {
+    } catch {
       setError("ファイルサーバーに接続できません");
     } finally {
       setLoading(false);
@@ -120,7 +119,7 @@ export default function ImportPage() {
           const data = await res.json();
           results.push({ success: false, folderName, error: data.error || "登録に失敗しました" });
         }
-      } catch (err) {
+      } catch {
         results.push({ success: false, folderName, error: "通信エラー" });
       }
     }

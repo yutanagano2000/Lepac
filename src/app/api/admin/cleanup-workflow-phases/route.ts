@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { progress } from "@/db/schema";
-import { inArray } from "drizzle-orm";
-import { requireOrganization } from "@/lib/auth-guard";
+import { progress, projects } from "@/db/schema";
+import { inArray, eq, and, sql, asc } from "drizzle-orm";
+import { requireAdmin } from "@/lib/auth-guard";
+import { validateCsrf } from "@/lib/csrf-protection";
 
 /**
  * POST /api/admin/cleanup-workflow-phases
@@ -42,24 +43,62 @@ const WORKFLOW_PHASE_TITLES = [
   "決済（名義変更）",
 ];
 
-export async function POST(request: Request) {
-  // 認証チェック
-  const authResult = await requireOrganization();
+export async function POST(request: NextRequest) {
+  // CSRF保護（破壊的操作のため必須）
+  const csrfResult = validateCsrf(request);
+  if (!csrfResult.valid) {
+    return NextResponse.json({ error: csrfResult.error }, { status: 403 });
+  }
+
+  // 管理者権限チェック（CRITICAL: 組織メンバーではなく管理者のみ許可）
+  const authResult = await requireAdmin();
   if (!authResult.success) {
     return authResult.response;
   }
 
+  const { organizationId } = authResult;
+
   try {
-    // WORKFLOW_PHASESベースの項目を削除
-    const result = await db
+    // サブクエリで組織内プロジェクトを指定（大規模inArray回避でパフォーマンス向上）
+    const orgProjectSubquery = db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.organizationId, organizationId));
+
+    // 削除前に件数を取得（.returning()による大量データ取得を回避）
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(progress)
+      .where(
+        and(
+          inArray(progress.title, WORKFLOW_PHASE_TITLES),
+          sql`${progress.projectId} IN (${orgProjectSubquery})`
+        )
+      );
+
+    const deleteCount = Number(countResult[0]?.count ?? 0);
+
+    if (deleteCount === 0) {
+      return NextResponse.json({
+        success: true,
+        deleted: 0,
+        message: "No matching items to delete",
+      });
+    }
+
+    // 組織内のプロジェクトに限定してWORKFLOW_PHASESベースの項目を削除
+    await db
       .delete(progress)
-      .where(inArray(progress.title, WORKFLOW_PHASE_TITLES))
-      .returning();
+      .where(
+        and(
+          inArray(progress.title, WORKFLOW_PHASE_TITLES),
+          sql`${progress.projectId} IN (${orgProjectSubquery})`
+        )
+      );
 
     return NextResponse.json({
       success: true,
-      deleted: result.length,
-      deletedTitles: result.map(r => r.title),
+      deleted: deleteCount,
     });
   } catch (error) {
     console.error("Cleanup failed:", error);
@@ -67,26 +106,50 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  // 削除対象の項目を確認（プレビュー）
-  const authResult = await requireOrganization();
+export async function GET(request: NextRequest) {
+  // 削除対象の項目を確認（プレビュー）- 管理者のみ
+  const authResult = await requireAdmin();
   if (!authResult.success) {
     return authResult.response;
   }
 
+  const { organizationId } = authResult;
+
+  // ページネーション（デフォルト100件、最大500件）
+  const url = new URL(request.url);
+  const limit = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
+  const offset = Math.max(Number(url.searchParams.get("offset")) || 0, 0);
+
   try {
+    // サブクエリで組織内プロジェクトを指定（大規模inArray回避）
+    const orgProjectSubquery = db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.organizationId, organizationId));
+
+    // 組織内のプロジェクトに限定してプレビュー（ページネーション付き）
+    // orderBy追加で一貫したページネーション結果を保証
     const items = await db
-      .select()
+      .select({
+        id: progress.id,
+        projectId: progress.projectId,
+        title: progress.title,
+      })
       .from(progress)
-      .where(inArray(progress.title, WORKFLOW_PHASE_TITLES));
+      .where(
+        and(
+          inArray(progress.title, WORKFLOW_PHASE_TITLES),
+          sql`${progress.projectId} IN (${orgProjectSubquery})`
+        )
+      )
+      .orderBy(asc(progress.id))
+      .limit(limit)
+      .offset(offset);
 
     return NextResponse.json({
       count: items.length,
-      items: items.map(i => ({
-        id: i.id,
-        projectId: i.projectId,
-        title: i.title,
-      })),
+      items,
+      pagination: { limit, offset, hasMore: items.length === limit },
     });
   } catch (error) {
     console.error("Preview failed:", error);

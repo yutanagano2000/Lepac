@@ -81,6 +81,9 @@ export async function DELETE(
 ) {
   const { id } = await params;
   const projectId = Number(id);
+  if (isNaN(projectId)) {
+    return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
 
   // 認証・組織・プロジェクト所有権チェック
   const authResult = await requireProjectAccess(projectId);
@@ -89,10 +92,31 @@ export async function DELETE(
   }
 
   const { searchParams } = new URL(request.url);
-  const todoId = searchParams.get("todoId");
-  if (!todoId) {
+  const todoIdParam = searchParams.get("todoId");
+  if (!todoIdParam) {
     return NextResponse.json({ error: "todoId is required" }, { status: 400 });
   }
-  await db.delete(todos).where(eq(todos.id, Number(todoId)));
+
+  const todoId = Number(todoIdParam);
+  if (isNaN(todoId) || todoId <= 0) {
+    return NextResponse.json({ error: "Invalid todoId" }, { status: 400 });
+  }
+
+  // IDOR対策: 該当TODOがこのプロジェクトに属しているか確認
+  const [existingTodo] = await db
+    .select({ id: todos.id, projectId: todos.projectId })
+    .from(todos)
+    .where(eq(todos.id, todoId))
+    .limit(1);
+
+  if (!existingTodo) {
+    return NextResponse.json({ error: "TODO not found" }, { status: 404 });
+  }
+
+  if (existingTodo.projectId !== projectId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  await db.delete(todos).where(eq(todos.id, todoId));
   return NextResponse.json({ success: true });
 }

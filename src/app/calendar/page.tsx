@@ -54,8 +54,29 @@ const getEventColor = (type: string, status?: string) => {
   }
 };
 
-// SWR fetcher
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// API response type
+interface CalendarEventResponse {
+  id: string;
+  title: string;
+  start: string;
+  end?: string;
+  type: "todo" | "progress" | "meeting" | "custom" | "other";
+  projectId?: number;
+  projectName?: string;
+  description?: string;
+  status?: string;
+  userName?: string | null;
+  category?: string;
+}
+
+// SWR fetcher with error handling
+const fetcher = async (url: string): Promise<CalendarEventResponse[]> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error("Failed to fetch calendar events");
+  }
+  return res.json();
+};
 
 // 日付範囲を計算（現在月の前後3ヶ月）
 const getDateRange = () => {
@@ -82,10 +103,10 @@ export default function CalendarPage() {
   );
 
   // イベントデータをメモ化
-  const events = useMemo(() => {
+  const events = useMemo((): CalendarEvent[] => {
     if (!data || !Array.isArray(data)) return [];
 
-    return data.map((event: any) => {
+    return data.map((event: CalendarEventResponse) => {
       const colors = getEventColor(event.type, event.status);
       return {
         id: event.id,
