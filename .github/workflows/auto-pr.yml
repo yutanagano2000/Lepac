@@ -1,0 +1,53 @@
+name: Auto PR
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+jobs:
+  create-pr:
+    name: Create PR to develop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check existing PR
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_EXISTS=$(gh pr list --base develop --head "${{ github.ref_name }}" --json number --jq 'length')
+          echo "exists=$PR_EXISTS" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR
+        if: steps.check.outputs.exists == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+
+          gh pr create \
+            --base develop \
+            --head "$BRANCH_NAME" \
+            --title "$COMMIT_MSG" \
+            --body "$(cat <<'EOF'
+          ## Auto PR
+          **Branch**: \`${{ github.ref_name }}\`
+
+          > feature → develop への自動PRです。
+          > CIが完了したらレビューしてください。
+          EOF
+          )"
+
+      - name: Update PR title
+        if: steps.check.outputs.exists != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "PR already exists. Skipping creation."
