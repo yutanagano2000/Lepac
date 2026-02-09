@@ -21,8 +21,8 @@ import { AnalysisProgress } from "@/components/survey/AnalysisProgress";
 import type { DrawMode } from "@/components/survey/PolygonToolbar";
 import { extractCrossSection, type SlopeStats, type CrossSectionPoint } from "@/lib/slope-analysis";
 
-const CesiumTerrainViewer = dynamic(
-  () => import("@/components/survey/CesiumTerrainViewer"),
+const ThreeTerrainViewer = dynamic(
+  () => import("@/components/survey/ThreeTerrainViewer"),
   { ssr: false, loading: () => (
     <div className="flex items-center justify-center h-full">
       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -391,7 +391,7 @@ function SurveyPageContent() {
             </Card>
 
             <Card className="overflow-hidden" ref={surfaceContainerRef}>
-              <Tabs defaultValue={gridResult ? "surface" : "cesium"}>
+              <Tabs defaultValue={gridResult ? "surface" : "terrain3d"}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">3D地形ビューワー</CardTitle>
@@ -401,7 +401,7 @@ function SurveyPageContent() {
                           3D解析
                         </TabsTrigger>
                       )}
-                      <TabsTrigger value="cesium" className="text-xs px-3 h-7">
+                      <TabsTrigger value="terrain3d" className="text-xs px-3 h-7">
                         航空写真3D
                       </TabsTrigger>
                     </TabsList>
@@ -441,11 +441,12 @@ function SurveyPageContent() {
                     </div>
                   </TabsContent>
                 )}
-                <TabsContent value="cesium" className="mt-0">
+                <TabsContent value="terrain3d" className="mt-0">
                   <div className="h-[400px]">
-                    <CesiumTerrainViewer
+                    <ThreeTerrainViewer
                       center={jumpTarget ?? undefined}
                       polygon={gridResult ? polygon : undefined}
+                      elevationMatrix={gridResult?.elevationMatrix}
                       slopeMatrix={gridResult?.slopeMatrix}
                       gridInfo={gridResult ? {
                         originLat: gridResult.gridInfo.originLat,
