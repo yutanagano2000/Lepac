@@ -13,6 +13,9 @@ interface TodoSectionProps {
   badge?: React.ReactNode;
   onReopen: (todo: TodoWithProject) => void;
   onDelete: (todoId: number) => void;
+  onComplete?: (todo: TodoWithProject) => void;
+  onEdit?: (todo: TodoWithProject) => void;
+  onAddMessage?: (todo: TodoWithProject) => void;
 }
 
 export function TodoSection({
@@ -24,6 +27,9 @@ export function TodoSection({
   badge,
   onReopen,
   onDelete,
+  onComplete,
+  onEdit,
+  onAddMessage,
 }: TodoSectionProps) {
   return (
     <Card>
@@ -43,7 +49,15 @@ export function TodoSection({
         ) : (
           <div className="space-y-2">
             {items.map((todo) => (
-              <TodoItem key={todo.id} todo={todo} onReopen={onReopen} onDelete={onDelete} />
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                onReopen={onReopen}
+                onDelete={onDelete}
+                onComplete={onComplete}
+                onEdit={onEdit}
+                onAddMessage={onAddMessage}
+              />
             ))}
           </div>
         )}

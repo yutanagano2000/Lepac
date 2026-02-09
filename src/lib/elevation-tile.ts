@@ -10,8 +10,13 @@ import { PNG } from "pngjs";
 
 const EARTH_RADIUS_M = 6371000;
 
-// DEM5A (5mメッシュ) タイル URL - ズームレベル15が最高精度
-const DEM_TILE_URL = "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png";
+// DEMタイルURL（優先度順：DEM5A → DEM5B → DEM5C → DEM10B）
+const DEM_TILE_URLS = [
+  "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/{z}/{x}/{y}.png",
+  "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/{z}/{x}/{y}.png",
+  "https://cyberjapandata.gsi.go.jp/xyz/dem5c_png/{z}/{x}/{y}.png",
+  "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png",
+];
 const TILE_SIZE = 256;
 const MAX_ZOOM = 15;
 
@@ -56,35 +61,48 @@ async function fetchTilePixels(x: number, y: number, z: number): Promise<Uint8Ar
     return tileCache.get(key) ?? null;
   }
 
-  try {
-    const url = DEM_TILE_URL.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
-    const response = await fetch(url);
+  // DEM5A → DEM5B → DEM5C → DEM10B の順にフォールバック
+  for (const urlTemplate of DEM_TILE_URLS) {
+    try {
+      const url = urlTemplate.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+      const response = await fetch(url);
 
-    if (!response.ok) {
-      tileCache.set(key, null);
-      return null;
+      if (!response.ok) continue;
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const png = PNG.sync.read(buffer);
+      const pixels = new Uint8Array(png.data);
+
+      // タイル全体が無効データ（全ピクセルが無効値）かチェック
+      let hasValidPixel = false;
+      const sampleStep = Math.floor(TILE_SIZE / 4);
+      for (let sy = sampleStep; sy < TILE_SIZE && !hasValidPixel; sy += sampleStep) {
+        for (let sx = sampleStep; sx < TILE_SIZE && !hasValidPixel; sx += sampleStep) {
+          if (getElevationFromPixels(pixels, sx, sy) !== null) {
+            hasValidPixel = true;
+          }
+        }
+      }
+      if (!hasValidPixel) continue; // 全サンプル点が無効→次のDEMソースへフォールバック
+
+      // キャッシュサイズ制限
+      if (tileCache.size >= CACHE_MAX) {
+        const firstKey = tileCache.keys().next().value;
+        if (firstKey) tileCache.delete(firstKey);
+      }
+
+      tileCache.set(key, pixels);
+      return pixels;
+    } catch {
+      continue;
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // pngjsでデコード
-    const png = PNG.sync.read(buffer);
-    const pixels = new Uint8Array(png.data);
-
-    // キャッシュサイズ制限
-    if (tileCache.size >= CACHE_MAX) {
-      const firstKey = tileCache.keys().next().value;
-      if (firstKey) tileCache.delete(firstKey);
-    }
-
-    tileCache.set(key, pixels);
-    return pixels;
-  } catch (e) {
-    console.error(`Tile fetch error: ${key}`, e);
-    tileCache.set(key, null);
-    return null;
   }
+
+  console.warn(`[Tile DEM] ${key} → 全DEMソースで取得失敗`);
+  tileCache.set(key, null);
+  return null;
 }
 
 /**
@@ -93,12 +111,23 @@ async function fetchTilePixels(x: number, y: number, z: number): Promise<Uint8Ar
  * 無効値: R=128, G=0, B=0
  */
 function rgbToElevation(r: number, g: number, b: number): number | null {
-  // 無効値チェック
+  // GSI DEM無効値チェック
+  // R=128, G=0, B=0 は公式の無効値
   if (r === 128 && g === 0 && b === 0) {
+    return null;
+  }
+  // R=0, G=0, B=0 (黒ピクセル) はタイル欠損・海域 → -100000になるため除外
+  if (r === 0 && g === 0 && b === 0) {
     return null;
   }
 
   const elevation = (r * 256 * 256 + g * 256 + b) * 0.01 - 100000;
+
+  // 日本国内の標高範囲外（-500m〜4000m）は無効とみなす
+  if (elevation < -500 || elevation > 4000) {
+    return null;
+  }
+
   return elevation;
 }
 

@@ -757,18 +757,32 @@ export default function ProjectDetailPage() {
     setLegalSearchParams({ lat: parsed.lat, lon: parsed.lon, prefecture: prefectureParam });
   }, [activeTab, legalSearchParams, project?.coordinates, project?.address]);
 
-  // 進捗を日付でソート（すべてDBから取得）
+  // PROGRESS_TITLESの全16フェーズを順番に表示（DBにデータがあればそれを使用、なければpending）
   const sortedTimeline = useMemo(() => {
-    return [...progressList]
-      .map((p) => ({
-        id: p.id,
-        title: p.title,
-        description: p.description ?? undefined,
-        date: new Date(p.createdAt),
-        completedAt: p.completedAt ? new Date(p.completedAt) : undefined,
-        status: p.status as "completed" | "planned",
-      }))
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const progressByTitle = new Map(
+      progressList.map((p) => [p.title, p])
+    );
+    return PROGRESS_TITLES.map((title) => {
+      const p = progressByTitle.get(title);
+      if (p) {
+        return {
+          id: p.id,
+          title: p.title,
+          description: p.description ?? undefined,
+          date: new Date(p.createdAt),
+          completedAt: p.completedAt ? new Date(p.completedAt) : undefined,
+          status: p.status as "completed" | "planned",
+        };
+      }
+      return {
+        id: -1, // DBに存在しないフェーズ
+        title,
+        description: undefined,
+        date: new Date(), // 仮の日付（表示はpending扱い）
+        completedAt: undefined,
+        status: "planned" as const,
+      };
+    });
   }, [progressList]);
 
   if (!project) return null;
@@ -1101,42 +1115,52 @@ export default function ProjectDetailPage() {
               <div className="w-full">
                 <div className="flex items-start gap-0 py-4">
                   {(() => {
-                    // 直近の未完了項目のインデックスを計算
+                    // 直近の未完了項目のインデックスを計算（プレースホルダーを除外）
                     const firstPendingIndex = sortedTimeline.findIndex(
-                      (item) => item.status !== "completed"
+                      (item) => item.status !== "completed" && item.id !== -1
                     );
+                    // DB登録済みの最後のインデックスを計算（placeholderを除外）
+                    const lastDbIndex = (() => {
+                      for (let i = sortedTimeline.length - 1; i >= 0; i--) {
+                        if (sortedTimeline[i].id !== -1) return i;
+                      }
+                      return -1;
+                    })();
                     return sortedTimeline.map((item, index) => {
                       const isCompleted = item.status === "completed";
                       const isFirstPending = index === firstPendingIndex;
+                      const hasDbRecord = item.id !== -1;
 
-                      // 予定日までの日数を計算
+                      // 予定日までの日数を計算（DB登録済みの場合のみ）
                       const now = new Date();
-                      const daysUntilDue = Math.ceil((item.date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                      const isOverdue = !isCompleted && daysUntilDue < 0;
+                      const daysUntilDue = hasDbRecord ? Math.ceil((item.date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                      const isOverdue = hasDbRecord && !isCompleted && daysUntilDue < 0;
 
                       return (
-                        <div key={item.id} className="flex flex-col items-center flex-1 min-w-0">
+                        <div key={item.title} className="flex flex-col items-center flex-1 min-w-0">
                           {/* 上部：タイトルと編集ボタン */}
                           <div className="text-center mb-2 px-0.5">
                             <div className="flex items-center justify-center gap-0.5">
                               <p
                                 className={`text-[10px] sm:text-xs font-medium truncate max-w-full ${
-                                  isCompleted ? "" : "text-muted-foreground"
+                                  isCompleted ? "" : hasDbRecord ? "text-muted-foreground" : "text-muted-foreground/50"
                                 }`}
                                 title={item.title}
                               >
                                 {item.title}
                               </p>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const p = progressList.find((pr) => pr.id === item.id);
-                                  if (p) openEditDialog(p);
-                                }}
-                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
-                              >
-                                <Pencil className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                              </button>
+                              {hasDbRecord && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const p = progressList.find((pr) => pr.id === item.id);
+                                    if (p) openEditDialog(p);
+                                  }}
+                                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
+                                >
+                                  <Pencil className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -1148,7 +1172,7 @@ export default function ProjectDetailPage() {
                                 className={`flex-1 h-0.5 ${
                                   sortedTimeline[index - 1].status === "completed"
                                     ? "bg-green-500"
-                                    : "border-t-2 border-dashed border-muted-foreground"
+                                    : "border-t-2 border-dashed border-muted-foreground/30"
                                 }`}
                               />
                             )}
@@ -1159,6 +1183,8 @@ export default function ProjectDetailPage() {
                               className={`flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full border-2 ${
                                 isCompleted
                                   ? "border-green-500 bg-green-500"
+                                  : !hasDbRecord
+                                  ? "border-muted-foreground/30 bg-background"
                                   : isOverdue
                                   ? "border-red-500 bg-background"
                                   : "border-muted-foreground bg-background"
@@ -1167,7 +1193,9 @@ export default function ProjectDetailPage() {
                               {isCompleted ? (
                                 <Check className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                               ) : (
-                                <Circle className={`h-3 w-3 sm:h-4 sm:w-4 ${isOverdue ? "text-red-500" : "text-muted-foreground"}`} />
+                                <Circle className={`h-3 w-3 sm:h-4 sm:w-4 ${
+                                  !hasDbRecord ? "text-muted-foreground/30" : isOverdue ? "text-red-500" : "text-muted-foreground"
+                                }`} />
                               )}
                             </div>
 
@@ -1177,7 +1205,7 @@ export default function ProjectDetailPage() {
                                 className={`flex-1 h-0.5 ${
                                   isCompleted
                                     ? "bg-green-500"
-                                    : "border-t-2 border-dashed border-muted-foreground"
+                                    : "border-t-2 border-dashed border-muted-foreground/30"
                                 }`}
                               />
                             )}
@@ -1186,49 +1214,59 @@ export default function ProjectDetailPage() {
 
                           {/* 下部：日付と説明、アクションボタン */}
                           <div className="text-center mt-2 px-0.5">
-                            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                              {formatDateJp(item.date)}
-                            </p>
-                            {item.completedAt && (
-                              <p className={`text-[9px] sm:text-[10px] ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
-                                → {formatDateJp(item.completedAt)}
-                              </p>
-                            )}
-                            {item.description && (
-                              <p className="mt-1 text-[9px] sm:text-[10px] text-muted-foreground truncate max-w-full" title={item.description}>
-                                {item.description}
+                            {hasDbRecord ? (
+                              <>
+                                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                                  {formatDateJp(item.date)}
+                                </p>
+                                {item.completedAt && (
+                                  <p className={`text-[9px] sm:text-[10px] ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
+                                    → {formatDateJp(item.completedAt)}
+                                  </p>
+                                )}
+                                {item.description && (
+                                  <p className="mt-1 text-[9px] sm:text-[10px] text-muted-foreground truncate max-w-full" title={item.description}>
+                                    {item.description}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-[10px] sm:text-xs text-muted-foreground/40 truncate">
+                                未設定
                               </p>
                             )}
 
-                            {/* アクションボタン */}
-                            <div className="mt-2 flex flex-col gap-1">
-                              {/* 未完了にするボタン（直近の完了タスク） */}
-                              {isCompleted && (
-                                firstPendingIndex === -1
-                                  ? index === sortedTimeline.length - 1
-                                  : index === firstPendingIndex - 1
-                              ) && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs h-7 px-2 border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                                  onClick={() => markAsIncomplete(item.id)}
-                                >
-                                  未完了
-                                </Button>
-                              )}
-                              {/* 完了にするボタン（直近の未完了タスク） */}
-                              {isFirstPending && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-xs h-7 px-2"
-                                  onClick={() => markAsCompleted(item.id)}
-                                >
-                                  完了
-                                </Button>
-                              )}
-                            </div>
+                            {/* アクションボタン（DB登録済みの場合のみ） */}
+                            {hasDbRecord && (
+                              <div className="mt-2 flex flex-col gap-1">
+                                {/* 未完了にするボタン（直近の完了タスク） */}
+                                {isCompleted && (
+                                  firstPendingIndex === -1
+                                    ? index === lastDbIndex
+                                    : index === firstPendingIndex - 1
+                                ) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs h-7 px-2 border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                                    onClick={() => markAsIncomplete(item.id)}
+                                  >
+                                    未完了
+                                  </Button>
+                                )}
+                                {/* 完了にするボタン（直近の未完了タスク） */}
+                                {isFirstPending && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs h-7 px-2"
+                                    onClick={() => markAsCompleted(item.id)}
+                                  >
+                                    完了
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );

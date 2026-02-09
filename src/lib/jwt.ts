@@ -18,7 +18,15 @@ function validateJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
-    throw new Error("[JWT] JWT_SECRET 環境変数が設定されていません");
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("[JWT] JWT_SECRET 環境変数が設定されていません");
+    }
+    if (process.env.VERCEL_ENV === "preview" || process.env.VERCEL_ENV === "production") {
+      throw new Error("[JWT] JWT_SECRET 環境変数が設定されていません（Vercel環境）");
+    }
+    // ローカル開発環境のみフォールバックシークレットを使用
+    console.warn("[JWT] WARNING: JWT_SECRET が未設定のため開発用フォールバックを使用しています。本番・ステージング環境では必ず設定してください");
+    return new TextEncoder().encode("dev-fallback-secret-do-not-use-in-production");
   }
 
   // 本番環境での最低限のセキュリティチェック

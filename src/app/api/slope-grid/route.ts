@@ -11,7 +11,8 @@ import {
 } from "@/lib/slope-analysis";
 import { requireOrganizationWithCsrf } from "@/lib/auth-guard";
 
-const MAX_GRID_POINTS = 1000;
+const MAX_GRID_POINTS = 5000;
+const GRID_TIMEOUT_MS = 30000; // 30秒タイムアウト
 const FIXED_INTERVAL = 2; // 2m固定グリッド
 
 export async function POST(req: NextRequest) {
@@ -58,8 +59,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 標高バッチ取得（タイルベースで高速化）
-    const elevations = await fetchElevationBatchFromTiles(points);
+    // 標高バッチ取得（タイルベースで高速化、タイムアウト付き）
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const elevations = await Promise.race([
+      fetchElevationBatchFromTiles(points).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+      }),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`標高取得が${GRID_TIMEOUT_MS / 1000}秒を超過しました。ポリゴンを小さくしてください`)), GRID_TIMEOUT_MS);
+      }),
+    ]);
 
     // 標高マトリクス構築
     const { z, x, y } = buildElevationMatrix(elevations, rows, cols);

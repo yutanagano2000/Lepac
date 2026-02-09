@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trash2, ArrowRight, User } from "lucide-react";
+import { Trash2, ArrowRight, User, CheckCircle2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDateJp } from "@/lib/timeline";
 import { parseTodoMessages } from "@/lib/utils";
@@ -26,9 +26,12 @@ interface TodoItemProps {
   todo: TodoWithProject;
   onReopen: (todo: TodoWithProject) => void;
   onDelete: (todoId: number) => void;
+  onComplete?: (todo: TodoWithProject) => void;
+  onEdit?: (todo: TodoWithProject) => void;
+  onAddMessage?: (todo: TodoWithProject) => void;
 }
 
-export function TodoItem({ todo, onReopen, onDelete }: TodoItemProps) {
+export function TodoItem({ todo, onReopen, onDelete, onComplete, onEdit, onAddMessage }: TodoItemProps) {
   const dueDate = new Date(todo.dueDate + "T00:00:00");
   const info = getDueDateInfo(todo.dueDate);
   const dueDateFormatted = formatDateJp(dueDate);
@@ -100,19 +103,64 @@ export function TodoItem({ todo, onReopen, onDelete }: TodoItemProps) {
       )}
       <div className="flex items-center gap-1 shrink-0">
         {isCompleted ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={(e) => {
-              e.preventDefault();
-              onReopen(todo);
-            }}
-          >
-            再開
-          </Button>
+          <div className="flex flex-col gap-1">
+            {onAddMessage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onAddMessage(todo);
+                }}
+                title="メッセージを追加"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                メモ
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={(e) => {
+                e.preventDefault();
+                onReopen(todo);
+              }}
+            >
+              再開
+            </Button>
+          </div>
         ) : (
           <>
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onEdit(todo);
+                }}
+                title="編集"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onComplete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-green-600 hover:text-green-700"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onComplete(todo);
+                }}
+                title="完了"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

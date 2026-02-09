@@ -133,11 +133,11 @@ export function computeStats(
     degs.reduce((acc, d) => acc + (d - mean) ** 2, 0) / degs.length;
   const std = Math.sqrt(variance);
 
-  // 標高の範囲
+  // 標高の範囲（-500m〜4000m範囲外の異常値はDEM no-dataとして統計から除外）
   const elevations: number[] = [];
   for (const row of z) {
     for (const v of row) {
-      if (v !== null) elevations.push(v);
+      if (v !== null && v >= -500 && v <= 4000) elevations.push(v);
     }
   }
   const minElev = elevations.length > 0 ? Math.min(...elevations) : 0;
