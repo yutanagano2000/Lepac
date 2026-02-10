@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Calendar as CalendarIcon, Pencil, Trash2, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, PenTool, Mountain } from "lucide-react";
+import { ArrowLeft, Plus, Check, Pencil, Trash2, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, PenTool, Mountain } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
 import { WorkflowTimeline } from "@/components/WorkflowTimeline";
 import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
@@ -22,8 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -56,6 +55,7 @@ import { ConstructionTab, CommentsTab } from "./_components";
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
@@ -65,14 +65,10 @@ export default function ProjectDetailPage() {
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [newTodoContent, setNewTodoContent] = useState("");
   const [newTodoDueDate, setNewTodoDueDate] = useState<string>("");
-  const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
-  const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [todoEditOpen, setTodoEditOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [editTodoContent, setEditTodoContent] = useState("");
   const [editTodoDueDate, setEditTodoDueDate] = useState("");
-  const [editTodoCalendarOpen, setEditTodoCalendarOpen] = useState(false);
-  const [editTodoSelectedDate, setEditTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [todoCompleteOpen, setTodoCompleteOpen] = useState(false);
   const [completingTodo, setCompletingTodo] = useState<Todo | null>(null);
   const [completeTodoMemo, setCompleteTodoMemo] = useState("");
@@ -80,6 +76,7 @@ export default function ProjectDetailPage() {
   const [addingMessageTodo, setAddingMessageTodo] = useState<Todo | null>(null);
   const [newTodoMessage, setNewTodoMessage] = useState("");
   const [todoDeleteOpen, setTodoDeleteOpen] = useState(false);
+  const [projectDeleteOpen, setProjectDeleteOpen] = useState(false);
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
@@ -376,7 +373,6 @@ export default function ProjectDetailPage() {
     });
     setNewTodoContent("");
     setNewTodoDueDate("");
-    setNewTodoSelectedDate(undefined);
     fetchTodos();
   };
 
@@ -399,7 +395,6 @@ export default function ProjectDetailPage() {
     setEditingTodo(todo);
     setEditTodoContent(todo.content);
     setEditTodoDueDate(todo.dueDate);
-    setEditTodoSelectedDate(new Date(todo.dueDate + "T00:00:00"));
     setTodoEditOpen(true);
   };
 
@@ -509,6 +504,18 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // 案件削除
+  const handleDeleteProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("削除に失敗しました");
+      setProjectDeleteOpen(false);
+      router.push("/projects");
+    } catch (error) {
+      console.error("handleDeleteProject error:", error);
+    }
+  };
+
   // Strict Modeでの二重呼び出しを防止
   const hasGeneratedRef = useRef(false);
 
@@ -612,7 +619,7 @@ export default function ProjectDetailPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
-            <div className="space-y-1 min-w-0">
+            <div className="space-y-1 min-w-0 flex-1">
               <h1 className="text-xl sm:text-2xl font-bold truncate">{project.managementNumber}</h1>
               <p className="text-sm sm:text-base text-muted-foreground truncate">
                 {project.client} / {project.projectNumber}
@@ -623,13 +630,22 @@ export default function ProjectDetailPage() {
                 </p>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10"
+              onClick={() => setProjectDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              削除
+            </Button>
           </div>
 
           {/* 進捗ダッシュボード */}
           <ProjectDashboard project={project} progressList={progressList} />
 
           {/* ワークフロータイムライン */}
-          <WorkflowTimeline progressList={progressList} />
+          <WorkflowTimeline progressList={progressList} completionMonth={project?.completionMonth} />
 
           {/* TODO（この日までに行うリマインダー） */}
           <Card>
@@ -653,40 +669,12 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">期日</Label>
-                    <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            "w-[180px] justify-start text-left font-normal",
-                            !newTodoSelectedDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newTodoSelectedDate
-                            ? formatDateJp(newTodoSelectedDate)
-                            : "期日を選択"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={newTodoSelectedDate}
-                          onSelect={(date) => {
-                            setNewTodoSelectedDate(date);
-                            if (date) {
-                              const y = date.getFullYear();
-                              const m = String(date.getMonth() + 1).padStart(2, "0");
-                              const d = String(date.getDate()).padStart(2, "0");
-                              setNewTodoDueDate(`${y}-${m}-${d}`);
-                              setNewTodoCalendarOpen(false);
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DatePicker
+                      value={newTodoDueDate || null}
+                      onChange={(val) => setNewTodoDueDate(val || "")}
+                      placeholder="期日を選択"
+                      className="w-[180px]"
+                    />
                   </div>
                   <Button type="submit" size="default" disabled={!newTodoContent.trim() || !newTodoDueDate}>
                     追加
@@ -1800,6 +1788,27 @@ export default function ProjectDetailPage() {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* 案件削除確認ダイアログ */}
+          <AlertDialog open={projectDeleteOpen} onOpenChange={setProjectDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>案件を削除</AlertDialogTitle>
+                <AlertDialogDescription>
+                  「{project.managementNumber}」を削除しますか？<br />関連する進捗・TODO・コメントもすべて削除されます。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteProject}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  削除
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           {/* TODO完了ダイアログ */}
           <Dialog open={todoCompleteOpen} onOpenChange={setTodoCompleteOpen}>
             <DialogContent>
@@ -1915,40 +1924,12 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>期日</Label>
-                    <Popover open={editTodoCalendarOpen} onOpenChange={setEditTodoCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !editTodoSelectedDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {editTodoSelectedDate
-                            ? formatDateJp(editTodoSelectedDate)
-                            : "期日を選択"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={editTodoSelectedDate}
-                          onSelect={(date) => {
-                            setEditTodoSelectedDate(date);
-                            if (date) {
-                              const y = date.getFullYear();
-                              const m = String(date.getMonth() + 1).padStart(2, "0");
-                              const d = String(date.getDate()).padStart(2, "0");
-                              setEditTodoDueDate(`${y}-${m}-${d}`);
-                              setEditTodoCalendarOpen(false);
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DatePicker
+                      value={editTodoDueDate || null}
+                      onChange={(val) => setEditTodoDueDate(val || "")}
+                      placeholder="期日を選択"
+                      className="w-full"
+                    />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button

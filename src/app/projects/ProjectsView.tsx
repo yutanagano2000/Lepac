@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Loader2, Check, FolderInput, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Loader2, Check, FolderInput, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +47,8 @@ import { toast } from "sonner";
 import type { Project, NewProject } from "@/db/schema";
 import { MONTHS, MANAGER_OPTIONS, TABLE_COLUMNS, getRecentSearches, addRecentSearch } from "./_constants";
 import { EditableCell } from "./_components/EditableCell";
+import { SheetsSyncButton } from "./_components/SheetsSyncButton";
+import { ProjectFilterPanel } from "./_components/ProjectFilterPanel";
 
 type ProjectWithOverdue = Project & { hasOverdue: boolean };
 
@@ -99,6 +101,13 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
   // ソート
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+  // フィルタリング
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<number>>(new Set());
+  const [filterSearchQuery, setFilterSearchQuery] = useState("");
+  const [allProjectSummaries, setAllProjectSummaries] = useState<{ id: number; managementNumber: string; client: string }[]>([]);
+  const [filterLoading, setFilterLoading] = useState(false);
+
   // 編集モード
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCell, setEditingCell] = useState<{ projectId: number; columnKey: string } | null>(null);
@@ -114,7 +123,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
 
   // ── API経由でデータ取得 ──
-  const fetchPage = useCallback(async (page: number, query?: string, sort?: "asc" | "desc") => {
+  const fetchPage = useCallback(async (page: number, query?: string, sort?: "asc" | "desc", ids?: Set<number>) => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -124,6 +133,11 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       });
       const q = query ?? searchQuery;
       if (q) params.set("q", q);
+
+      const filterIds = ids ?? selectedProjectIds;
+      if (filterIds.size > 0) {
+        params.set("ids", Array.from(filterIds).join(","));
+      }
 
       const res = await fetch(`/api/projects?${params}`, { cache: "no-store" });
       if (res.ok) {
@@ -136,7 +150,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.limit, sortOrder, searchQuery]);
+  }, [pagination.limit, sortOrder, searchQuery, selectedProjectIds]);
 
   // 検索（デバウンス 400ms）
   const handleSearchChange = (value: string) => {
@@ -154,6 +168,60 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
     setSortOrder(next);
     fetchPage(pagination.page, undefined, next);
   };
+
+  // フィルター用の全案件サマリー取得
+  const fetchAllSummaries = useCallback(async () => {
+    if (allProjectSummaries.length > 0) return;
+    setFilterLoading(true);
+    try {
+      const res = await fetch("/api/projects?limit=500&sort=asc", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setAllProjectSummaries(
+          data.projects.map((p: { id: number; managementNumber: string; client: string }) => ({
+            id: p.id,
+            managementNumber: p.managementNumber,
+            client: p.client,
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("案件サマリーの取得に失敗:", err);
+    } finally {
+      setFilterLoading(false);
+    }
+  }, [allProjectSummaries.length]);
+
+  const handleFilterOpenChange = useCallback((open: boolean) => {
+    setFilterOpen(open);
+    if (open) fetchAllSummaries();
+    if (!open && selectedProjectIds.size > 0) {
+      fetchPage(1, undefined, undefined, selectedProjectIds);
+    }
+  }, [fetchAllSummaries, fetchPage, selectedProjectIds]);
+
+  const handleToggleProject = useCallback((projectId: number) => {
+    setSelectedProjectIds(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedProjectIds(new Set(allProjectSummaries.map(p => p.id)));
+  }, [allProjectSummaries]);
+
+  const handleClearAll = useCallback(() => {
+    setSelectedProjectIds(new Set());
+  }, []);
+
+  // フィルター適用時にページをリセット
+  const handleFilterApply = useCallback(() => {
+    setFilterOpen(false);
+    fetchPage(1, undefined, undefined, selectedProjectIds);
+  }, [fetchPage, selectedProjectIds]);
 
   // ページ遷移
   const goToPage = (page: number) => {
@@ -258,9 +326,16 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "案件の登録に失敗しました");
       }
+      const newProject = await res.json();
       setForm({ managementNumber: "", manager: "", client: "", projectNumber: "", completionMonth: "" });
       setOpen(false);
-      fetchPage(pagination.page);
+      toast.success("案件を登録しました");
+      // 完工月がある場合は案件詳細に遷移してタイムラインを即表示
+      if (form.completionMonth && newProject?.id) {
+        router.push(`/projects/${newProject.id}`);
+      } else {
+        fetchPage(pagination.page);
+      }
     } catch (error) {
       console.error("handleSubmit error:", error);
       toast.error(error instanceof Error ? error.message : "案件の登録に失敗しました");
@@ -434,7 +509,8 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       <div className="py-6 sm:py-10">
         <div className="space-y-4 sm:space-y-6">
           {/* ヘッダー */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            {/* 左: タイトル */}
             <div className="space-y-1 shrink-0">
               <h1 className="text-lg sm:text-2xl font-semibold">案件一覧</h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
@@ -442,8 +518,8 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
               </p>
             </div>
 
-            {/* 検索欄 */}
-            <div className="relative flex-1 sm:max-w-md">
+            {/* 中央: 検索欄 */}
+            <div className="relative flex-1 max-w-md mx-auto sm:mx-0">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none" />
               <Input
                 placeholder="管理番号・案件番号・地権者・住所で検索"
@@ -479,74 +555,97 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
               )}
             </div>
 
-            <Button size="sm" variant={isEditMode ? "default" : "outline"} onClick={toggleEditMode}
-              className={cn(isEditMode && "bg-primary text-primary-foreground")}>
-              {isEditMode ? <><Check className="h-4 w-4" /> 編集完了</> : <><Pencil className="h-4 w-4" /> 編集</>}
-            </Button>
+            {/* 右: ボタン群 */}
+            <div className="flex items-center gap-2 shrink-0 sm:ml-auto flex-wrap">
+              <ProjectFilterPanel
+                open={filterOpen}
+                onOpenChange={(open) => {
+                  if (!open && filterOpen) {
+                    handleFilterApply();
+                  } else {
+                    handleFilterOpenChange(open);
+                  }
+                }}
+                projects={allProjectSummaries}
+                selectedProjectIds={selectedProjectIds}
+                filterSearchQuery={filterSearchQuery}
+                onFilterSearchChange={setFilterSearchQuery}
+                onToggleProject={handleToggleProject}
+                onSelectAll={handleSelectAll}
+                onClearAll={handleClearAll}
+                isLoading={filterLoading}
+              />
 
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm"><Plus className="h-4 w-4" /> 新規登録</Button>
-              </DialogTrigger>
-              {/* 遅延マウント: open時のみDialogContentをレンダリング */}
-              {open && (
-                <DialogContent>
-                  <DialogHeader><DialogTitle>案件を新規登録</DialogTitle></DialogHeader>
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="managementNumber">管理番号</Label>
-                      <Input id="managementNumber" value={form.managementNumber} onChange={(e) => setForm({ ...form, managementNumber: e.target.value })} placeholder="例: P-001" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="manager">担当</Label>
-                      <Select value={form.manager || undefined} onValueChange={(value) => setForm({ ...form, manager: value })}>
-                        <SelectTrigger id="manager" className="w-full"><SelectValue placeholder="選択してください" /></SelectTrigger>
-                        <SelectContent>{MANAGER_OPTIONS.map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}</SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="client">販売先</Label>
-                      <Input id="client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="例: 〇〇不動産" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="projectNumber">案件番号</Label>
-                      <Input id="projectNumber" value={form.projectNumber} onChange={(e) => setForm({ ...form, projectNumber: e.target.value })} placeholder="例: 2026-0001" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>完成月</Label>
-                      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                        <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" className="w-full justify-start text-left font-normal">
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {form.completionMonth ? formatCompletionMonth(form.completionMonth) : "選択してください"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3">
-                          <div className="flex items-center justify-between mb-3">
-                            <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-                            <span className="font-medium">{calendarYear}年</span>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear + 1)}><ChevronRight className="h-4 w-4" /></Button>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {MONTHS.map((month, index) => (<Button key={month} type="button" variant="ghost" size="sm" className="h-9" onClick={() => selectMonth(index)}>{month}</Button>))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>キャンセル</Button>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />登録中...</> : "登録"}
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              )}
-            </Dialog>
+              <Button size="sm" variant={isEditMode ? "default" : "outline"} onClick={toggleEditMode}
+                className={cn(isEditMode && "bg-primary text-primary-foreground")}>
+                {isEditMode ? <><Check className="h-4 w-4" /> 編集完了</> : <><Pencil className="h-4 w-4" /> 編集</>}
+              </Button>
 
-            <Button size="sm" variant="outline" onClick={() => { setImportOpen(true); fetchImportableFolders(); }}>
-              <FolderInput className="h-4 w-4" /> 一括取込
-            </Button>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm"><Plus className="h-4 w-4" /> 新規登録</Button>
+                </DialogTrigger>
+                {open && (
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>案件を新規登録</DialogTitle></DialogHeader>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="managementNumber">管理番号</Label>
+                        <Input id="managementNumber" value={form.managementNumber} onChange={(e) => setForm({ ...form, managementNumber: e.target.value })} placeholder="例: P-001" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="manager">担当</Label>
+                        <Select value={form.manager || undefined} onValueChange={(value) => setForm({ ...form, manager: value })}>
+                          <SelectTrigger id="manager" className="w-full"><SelectValue placeholder="選択してください" /></SelectTrigger>
+                          <SelectContent>{MANAGER_OPTIONS.map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="client">販売先</Label>
+                        <Input id="client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} placeholder="例: 〇〇不動産" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="projectNumber">案件番号</Label>
+                        <Input id="projectNumber" value={form.projectNumber} onChange={(e) => setForm({ ...form, projectNumber: e.target.value })} placeholder="例: 2026-0001" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>完成月</Label>
+                        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                          <PopoverTrigger asChild>
+                            <Button type="button" variant="outline" className="w-full justify-start text-left font-normal">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {form.completionMonth ? formatCompletionMonth(form.completionMonth) : "選択してください"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+                              <span className="font-medium">{calendarYear}年</span>
+                              <Button type="button" variant="ghost" size="icon" onClick={() => setCalendarYear(calendarYear + 1)}><ChevronRight className="h-4 w-4" /></Button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {MONTHS.map((month, index) => (<Button key={month} type="button" variant="ghost" size="sm" className="h-9" onClick={() => selectMonth(index)}>{month}</Button>))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>キャンセル</Button>
+                        <Button type="submit" disabled={isSubmitting}>
+                          {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />登録中...</> : "登録"}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                )}
+              </Dialog>
+
+              <Button size="sm" variant="outline" onClick={() => { setImportOpen(true); fetchImportableFolders(); }}>
+                <FolderInput className="h-4 w-4" /> 一括取込
+              </Button>
+
+              <SheetsSyncButton onSyncComplete={() => fetchPage(pagination.page)} />
+            </div>
           </div>
 
           {/* インポートダイアログ（遅延マウント） */}
@@ -677,6 +776,27 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
             </AlertDialog>
           )}
 
+          {/* フィルター適用中の表示 */}
+          {selectedProjectIds.size > 0 && (
+            <div className="flex items-center gap-2 text-sm p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <Filter className="h-4 w-4 text-blue-600" />
+              <span className="text-blue-700 dark:text-blue-400 font-medium">
+                {selectedProjectIds.size}件の案件でフィルタリング中
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+                onClick={() => {
+                  setSelectedProjectIds(new Set());
+                  fetchPage(1, undefined, undefined, new Set());
+                }}
+              >
+                解除
+              </Button>
+            </div>
+          )}
+
           {/* 編集モードヘルプ */}
           {isEditMode && (
             <div className="flex items-center gap-2 text-sm p-2 rounded-lg bg-primary/10 border border-primary/20">
@@ -702,45 +822,62 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                 <div className="flex-shrink-0 border-r border-border bg-background z-10">
                   <Table>
                     <TableHeader>
-                      <TableRow className="h-12 bg-muted/30">
-                        <TableHead className="px-2 bg-muted/30" style={{ minWidth: "120px" }}>
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-xs font-semibold whitespace-nowrap">管理番号</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={toggleSort}>
-                              {sortOrder === "asc" ? <ArrowUp className="h-3 w-3 text-primary" /> : <ArrowDown className="h-3 w-3 text-primary" />}
+                      <TableRow className="h-14 bg-muted/40">
+                        {isEditMode && (
+                          <TableHead className="px-2 bg-muted/40 text-center" style={{ minWidth: "50px" }}>
+                            <span className="text-sm font-bold">削除</span>
+                          </TableHead>
+                        )}
+                        <TableHead className="px-3 bg-muted/40" style={{ minWidth: "130px" }}>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold whitespace-nowrap">管理番号</span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleSort}>
+                              {sortOrder === "asc" ? <ArrowUp className="h-4 w-4 text-primary" /> : <ArrowDown className="h-4 w-4 text-primary" />}
                             </Button>
                           </div>
                         </TableHead>
-                        <TableHead className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: "80px" }}>担当</TableHead>
-                        <TableHead className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: "120px" }}>販売先</TableHead>
-                        <TableHead className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: "140px" }}>販売店 案件番号</TableHead>
+                        <TableHead className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: "90px" }}>担当</TableHead>
+                        <TableHead className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: "130px" }}>販売先</TableHead>
+                        <TableHead className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: "150px" }}>販売店 案件番号</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {projects.length === 0 ? (
                         <TableRow className="h-16">
-                          <TableCell colSpan={4} className="text-center text-muted-foreground text-sm py-8">
-                            {searchQuery ? "検索結果がありません" : "案件がありません"}
+                          <TableCell colSpan={isEditMode ? 5 : 4} className="text-center text-muted-foreground text-base py-8">
+                            {searchQuery ? "検索結果がありません" : selectedProjectIds.size > 0 ? "フィルター条件に一致する案件がありません" : "案件がありません"}
                           </TableCell>
                         </TableRow>
                       ) : (
                         projects.map((project) => (
                           <TableRow
                             key={project.id}
-                            className={cn("h-12", !isEditMode && "cursor-pointer hover:bg-muted/50")}
+                            className={cn("h-14", !isEditMode && "cursor-pointer hover:bg-muted/50")}
                             onClick={() => { if (!isEditMode) router.push(`/projects/${project.id}`); }}
                             onMouseEnter={() => { if (!isEditMode) router.prefetch(`/projects/${project.id}`); }}
                           >
-                            <TableCell className="font-medium text-sm py-2 px-2 bg-background">
+                            {isEditMode && (
+                              <TableCell className="py-2.5 px-2 bg-background text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  onClick={(e) => openDeleteDialog(project, e)}
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                </Button>
+                              </TableCell>
+                            )}
+                            <TableCell className="font-semibold text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "managementNumber", "flex items-center gap-1")}
                             </TableCell>
-                            <TableCell className="text-sm py-2 px-2 bg-background">
+                            <TableCell className="text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "manager")}
                             </TableCell>
-                            <TableCell className="text-sm py-2 px-2 bg-background">
+                            <TableCell className="text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "client")}
                             </TableCell>
-                            <TableCell className="text-sm py-2 px-2 bg-background">
+                            <TableCell className="text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "projectNumber")}
                             </TableCell>
                           </TableRow>
@@ -755,9 +892,9 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                   <div className="min-w-max">
                     <Table>
                       <TableHeader>
-                        <TableRow className="h-12 bg-muted/30">
+                        <TableRow className="h-14 bg-muted/40">
                           {TABLE_COLUMNS.slice(FIXED_COLUMNS_COUNT).map((col) => (
-                            <TableHead key={col.key} className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: col.width }}>
+                            <TableHead key={col.key} className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: col.width }}>
                               {col.label}
                             </TableHead>
                           ))}
@@ -766,17 +903,17 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                       <TableBody>
                         {projects.length === 0 ? (
                           <TableRow className="h-16">
-                            <TableCell colSpan={TABLE_COLUMNS.length - FIXED_COLUMNS_COUNT} className="text-center text-muted-foreground text-sm py-8">&nbsp;</TableCell>
+                            <TableCell colSpan={TABLE_COLUMNS.length - FIXED_COLUMNS_COUNT} className="text-center text-muted-foreground text-base py-8">&nbsp;</TableCell>
                           </TableRow>
                         ) : (
                           projects.map((project) => (
                             <TableRow
                               key={project.id}
-                              className="h-12 hover:bg-muted/50"
+                              className="h-14 hover:bg-muted/50"
                               onMouseEnter={() => { if (!isEditMode) router.prefetch(`/projects/${project.id}`); }}
                             >
                               {TABLE_COLUMNS.slice(FIXED_COLUMNS_COUNT).map((col) => (
-                                <TableCell key={col.key} className="text-sm py-2 px-2 whitespace-nowrap">
+                                <TableCell key={col.key} className="text-base py-2.5 px-3 whitespace-nowrap">
                                   {renderEditableCell(project, col.key)}
                                 </TableCell>
                               ))}

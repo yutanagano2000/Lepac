@@ -15,16 +15,33 @@ interface ProjectRowProps {
   onOpenEditDialog: (project: ProjectWithProgress, phase: (typeof PHASES)[number]) => void;
 }
 
-// フェーズ状況を取得
-function getPhaseStatus(progressItems: Progress[], phaseTitle: string) {
-  const progressItem = progressItems.find((p) => p.title === phaseTitle);
-  if (!progressItem) return { status: "pending" as const, date: null };
+// フェーズ状況をサブフェーズから集約して取得
+function getPhaseStatus(progressItems: Progress[], phase: (typeof PHASES)[number]) {
+  const subTitles = phase.subTitles;
+  let completedCount = 0;
+  let latestDate: Date | null = null;
+  let hasAnyProgress = false;
 
-  if (progressItem.status === "completed" && progressItem.completedAt) {
-    return { status: "completed" as const, date: new Date(progressItem.completedAt) };
+  for (const subTitle of subTitles) {
+    const item = progressItems.find((p) => p.title === subTitle);
+    if (!item) continue;
+    hasAnyProgress = true;
+
+    if (item.status === "completed" && item.completedAt) {
+      completedCount++;
+      const d = new Date(item.completedAt);
+      if (!latestDate || d > latestDate) latestDate = d;
+    } else if (item.createdAt) {
+      const d = new Date(item.createdAt);
+      if (!latestDate || d > latestDate) latestDate = d;
+    }
   }
-  if (progressItem.createdAt) {
-    return { status: "planned" as const, date: new Date(progressItem.createdAt) };
+
+  if (completedCount === subTitles.length && subTitles.length > 0) {
+    return { status: "completed" as const, date: latestDate };
+  }
+  if (hasAnyProgress) {
+    return { status: "planned" as const, date: latestDate };
   }
   return { status: "pending" as const, date: null };
 }
@@ -32,7 +49,7 @@ function getPhaseStatus(progressItems: Progress[], phaseTitle: string) {
 // 現在のフェーズを特定
 function getCurrentPhaseIndex(progressItems: Progress[]): number {
   for (let i = PHASES.length - 1; i >= 0; i--) {
-    const status = getPhaseStatus(progressItems, PHASES[i].title);
+    const status = getPhaseStatus(progressItems, PHASES[i]);
     if (status.status === "completed") {
       return i + 1;
     }
@@ -43,11 +60,10 @@ function getCurrentPhaseIndex(progressItems: Progress[]): number {
 // アラート種別判定
 function getPhaseAlertLevel(
   progressItems: Progress[],
-  phaseIndex: number,
+  phase: (typeof PHASES)[number],
   today: Date
 ): AlertLevel {
-  const phase = PHASES[phaseIndex];
-  const phaseStatus = getPhaseStatus(progressItems, phase.title);
+  const phaseStatus = getPhaseStatus(progressItems, phase);
 
   if (phaseStatus.status === "completed") return null;
   if (!phaseStatus.date) return "critical";
@@ -67,7 +83,7 @@ function getPhaseAlertLevel(
 function ProjectRowComponent({ project, today, onOpenEditDialog }: ProjectRowProps) {
   const currentPhaseIndex = getCurrentPhaseIndex(project.progressItems);
   const hasAlert = PHASES.some(
-    (_, i) => getPhaseAlertLevel(project.progressItems, i, today) === "critical"
+    (phase) => getPhaseAlertLevel(project.progressItems, phase, today) === "critical"
   );
 
   const handleOpenEditDialog = useCallback(
@@ -114,10 +130,10 @@ function ProjectRowComponent({ project, today, onOpenEditDialog }: ProjectRowPro
         </Link>
       </td>
       {PHASES.map((phase, index) => {
-        const phaseStatus = getPhaseStatus(project.progressItems, phase.title);
+        const phaseStatus = getPhaseStatus(project.progressItems, phase);
         const isCompleted = phaseStatus.status === "completed";
         const isCurrent = index === currentPhaseIndex;
-        const alertLevel = getPhaseAlertLevel(project.progressItems, index, today);
+        const alertLevel = getPhaseAlertLevel(project.progressItems, phase, today);
 
         return (
           <PhaseCell

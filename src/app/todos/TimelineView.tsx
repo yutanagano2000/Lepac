@@ -25,20 +25,39 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
+import { format as formatDate } from "date-fns";
 import { PHASES } from "./_constants";
 import type { ProjectWithProgress, TimelineViewProps } from "./_types";
 import { ProjectRow, FilterPanel, ProjectFormDialog } from "./_components";
 
-// フェーズ状況を取得
-function getPhaseStatus(project: ProjectWithProgress, phaseTitle: string) {
-  const progressItem = project.progressItems.find((p) => p.title === phaseTitle);
-  if (!progressItem) return { status: "pending" as const, date: null };
+// フェーズ状況をサブフェーズから集約して取得
+function getPhaseStatus(project: ProjectWithProgress, phase: (typeof PHASES)[number]) {
+  const subTitles = phase.subTitles;
+  let completedCount = 0;
+  let latestDate: Date | null = null;
+  let hasAnyProgress = false;
 
-  if (progressItem.status === "completed" && progressItem.completedAt) {
-    return { status: "completed" as const, date: new Date(progressItem.completedAt) };
+  for (const subTitle of subTitles) {
+    const item = project.progressItems.find((p) => p.title === subTitle);
+    if (!item) continue;
+    hasAnyProgress = true;
+
+    if (item.status === "completed" && item.completedAt) {
+      completedCount++;
+      const d = new Date(item.completedAt);
+      if (!latestDate || d > latestDate) latestDate = d;
+    } else if (item.createdAt) {
+      const d = new Date(item.createdAt);
+      if (!latestDate || d > latestDate) latestDate = d;
+    }
   }
-  if (progressItem.createdAt) {
-    return { status: "planned" as const, date: new Date(progressItem.createdAt) };
+
+  if (completedCount === subTitles.length && subTitles.length > 0) {
+    return { status: "completed" as const, date: latestDate };
+  }
+  if (hasAnyProgress) {
+    return { status: "planned" as const, date: latestDate };
   }
   return { status: "pending" as const, date: null };
 }
@@ -46,7 +65,7 @@ function getPhaseStatus(project: ProjectWithProgress, phaseTitle: string) {
 // 赤アラートかどうか
 function isPhaseAlert(project: ProjectWithProgress, phaseIndex: number, today: Date): boolean {
   const phase = PHASES[phaseIndex];
-  const phaseStatus = getPhaseStatus(project, phase.title);
+  const phaseStatus = getPhaseStatus(project, phase);
 
   if (phaseStatus.status === "completed") return false;
   if (!phaseStatus.date) return true;
@@ -613,10 +632,11 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                       {PHASES.map((phase) => (
                         <th
                           key={phase.key}
-                          className="px-0 py-3 text-center font-semibold text-muted-foreground text-xs"
-                          title={phase.title}
+                          className="px-0 py-2 text-center text-muted-foreground"
+                          title={phase.subTitles.join("、")}
                         >
-                          <span className="block truncate leading-tight">{phase.title}</span>
+                          <span className="block text-xs font-semibold leading-tight">{phase.title}</span>
+                          <span className="block text-[10px] font-normal leading-tight mt-0.5 opacity-70">{phase.subtitle}</span>
                         </th>
                       ))}
                     </tr>
@@ -671,24 +691,20 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">予定日</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={plannedDate ? plannedDate.toISOString().split("T")[0] : ""}
-                  onChange={(e) =>
-                    setPlannedDate(e.target.value ? new Date(e.target.value) : undefined)
-                  }
+                <DatePicker
+                  value={plannedDate ? formatDate(plannedDate, "yyyy-MM-dd") : null}
+                  onChange={(val) => setPlannedDate(val ? new Date(val + "T00:00:00") : undefined)}
+                  placeholder="予定日を選択"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">完了日</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={completedDate ? completedDate.toISOString().split("T")[0] : ""}
-                  onChange={(e) =>
-                    setCompletedDate(e.target.value ? new Date(e.target.value) : undefined)
-                  }
+                <DatePicker
+                  value={completedDate ? formatDate(completedDate, "yyyy-MM-dd") : null}
+                  onChange={(val) => setCompletedDate(val ? new Date(val + "T00:00:00") : undefined)}
+                  placeholder="完了日を選択"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">

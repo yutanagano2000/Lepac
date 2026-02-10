@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { calculateTimeline } from "@/lib/timeline";
+import { calculateWorkflowTimelineFromCompletion } from "@/lib/timeline";
 import { requireProjectAccessWithCsrf } from "@/lib/auth-guard";
 import { createErrorResponse } from "@/lib/api-error";
 
@@ -90,36 +90,35 @@ export async function POST(
         .where(eq(progress.projectId, projectId));
     }
 
-    // タイムラインを計算
-    const timeline = calculateTimeline(project.completionMonth, false);
+    // WORKFLOW_PHASESベースで完工月から逆算
+    const timeline = calculateWorkflowTimelineFromCompletion(project.completionMonth);
 
     // 既存のタイトルをセットに変換（重複チェック用）
     const existingTitles = new Set(existingProgress.map((p) => p.title));
 
-    // 古い名前から新しい名前へのマッピング（互換性のため）
-    // 以前は「現地調査」「農転・地目申請」「連系（発電開始）」という名前で保存されていた
-    const legacyTitleMapping: Record<string, string[]> = {
-      "現調": ["現地調査"],
-      "法令申請": ["農転・地目申請"],
-      "連系": ["連系（発電開始）"],
-    };
-
-    // 新規追加する進捗
+    // 新規追加する進捗（親フェーズ + サブフェーズ両方を生成）
     const newProgress: { title: string; date: Date }[] = [];
 
     for (const phase of timeline) {
-      // 新しいタイトルと、古い名前の両方をチェック
-      const legacyTitles = legacyTitleMapping[phase.title] || [];
-      const titlesToCheck = [phase.title, ...legacyTitles];
-
-      // いずれかのタイトルが既に存在するかチェック
-      const exists = titlesToCheck.some((t) => existingTitles.has(t));
-
-      if (!exists) {
-        newProgress.push({
-          title: phase.title,
-          date: phase.date,
-        });
+      // サブフェーズがある場合はサブフェーズ単位で進捗を生成
+      if (phase.subPhases && phase.subPhases.length > 0) {
+        for (const sub of phase.subPhases) {
+          if (!existingTitles.has(sub.title) && sub.date) {
+            newProgress.push({
+              title: sub.title,
+              date: sub.date,
+            });
+          }
+        }
+      } else {
+        // サブフェーズがない場合は親フェーズで生成
+        const phaseDate = phase.startDate || phase.endDate;
+        if (phaseDate && !existingTitles.has(phase.title)) {
+          newProgress.push({
+            title: phase.title,
+            date: phaseDate,
+          });
+        }
       }
     }
 

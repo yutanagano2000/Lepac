@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
-import { eq, asc, sql, like, or, and } from "drizzle-orm";
-import { calculateTimeline } from "@/lib/timeline";
+import { eq, asc, sql, like, or, and, inArray } from "drizzle-orm";
+import { calculateWorkflowTimelineFromCompletion } from "@/lib/timeline";
 import { createProjectSchema, validateBody } from "@/lib/validations";
 import { createErrorResponse } from "@/lib/api-error";
 import { requireOrganization, requireOrganizationWithCsrf } from "@/lib/auth-guard";
@@ -16,6 +16,7 @@ import { logProjectCreate } from "@/lib/audit-log";
  *   limit    — 1ページの件数（デフォルト 50）
  *   q        — テキスト検索（管理番号・案件番号・地権者・住所）
  *   sort     — "asc" | "desc"（管理番号ソート、デフォルト asc）
+ *   ids      — カンマ区切りのプロジェクトID（フィルタリング用）
  */
 export async function GET(request: NextRequest) {
   const authResult = await requireOrganization();
@@ -29,13 +30,22 @@ export async function GET(request: NextRequest) {
   const sortDir = url.searchParams.get("sort") === "desc" ? "desc" : "asc";
   const offset = (page - 1) * limit;
 
+  // IDフィルタリング（カンマ区切り、最大200件）
+  const idsParam = url.searchParams.get("ids");
+  const filterIds = idsParam
+    ? idsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0).slice(0, 200)
+    : [];
+
   // 検索クエリの長さ制限（DoS対策）
   const MAX_SEARCH_LENGTH = 100;
   const searchQuery = rawSearchQuery.slice(0, MAX_SEARCH_LENGTH);
 
   // WHERE条件を構築
-  const orgFilter = eq(projects.organizationId, organizationId);
-  let whereClause;
+  const conditions = [eq(projects.organizationId, organizationId)];
+
+  if (filterIds.length > 0) {
+    conditions.push(inArray(projects.id, filterIds));
+  }
 
   if (searchQuery) {
     // LIKE演算子の特殊文字をエスケープ
@@ -44,8 +54,7 @@ export async function GET(request: NextRequest) {
       .replace(/%/g, "\\%")
       .replace(/_/g, "\\_");
     const pattern = `%${escapedQuery}%`;
-    whereClause = and(
-      orgFilter,
+    conditions.push(
       or(
         like(projects.managementNumber, pattern),
         like(projects.projectNumber, pattern),
@@ -55,11 +64,11 @@ export async function GET(request: NextRequest) {
         like(projects.landowner3, pattern),
         like(projects.landowner, pattern),
         like(projects.landownerAddress, pattern),
-      )
+      )!
     );
-  } else {
-    whereClause = orgFilter;
   }
+
+  const whereClause = and(...conditions);
 
   // 総件数を取得
   const [countResult] = await db
@@ -118,8 +127,11 @@ export async function GET(request: NextRequest) {
         return dueDate.getTime() < now.getTime();
       });
     } else if (project.completionMonth) {
-      const timeline = calculateTimeline(project.completionMonth, false);
-      hasOverdue = timeline.some((phase) => phase.date.getTime() < now.getTime());
+      const timeline = calculateWorkflowTimelineFromCompletion(project.completionMonth);
+      hasOverdue = timeline.some((phase) => {
+        const phaseDate = phase.startDate || phase.endDate;
+        return phaseDate ? phaseDate.getTime() < now.getTime() : false;
+      });
     }
 
     return { ...project, hasOverdue };
@@ -156,6 +168,43 @@ export async function POST(request: NextRequest) {
     }).returning();
 
     await logProjectCreate(user, result.id, result.managementNumber, request);
+
+    // 完工月が設定されている場合、進捗レコードを自動生成
+    if (result.completionMonth) {
+      try {
+        const timeline = calculateWorkflowTimelineFromCompletion(result.completionMonth);
+        const newProgress: { title: string; date: Date }[] = [];
+
+        for (const phase of timeline) {
+          if (phase.subPhases && phase.subPhases.length > 0) {
+            for (const sub of phase.subPhases) {
+              if (sub.date) {
+                newProgress.push({ title: sub.title, date: sub.date });
+              }
+            }
+          } else {
+            const phaseDate = phase.startDate || phase.endDate;
+            if (phaseDate) {
+              newProgress.push({ title: phase.title, date: phaseDate });
+            }
+          }
+        }
+
+        if (newProgress.length > 0) {
+          await db.insert(progress).values(
+            newProgress.map((item) => ({
+              projectId: result.id,
+              title: item.title,
+              description: null,
+              status: "planned" as const,
+              createdAt: item.date.toISOString(),
+            }))
+          );
+        }
+      } catch (progressError) {
+        console.error("Auto-generate progress error:", progressError);
+      }
+    }
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

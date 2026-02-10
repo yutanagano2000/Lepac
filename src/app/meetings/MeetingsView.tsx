@@ -22,14 +22,11 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
   const {
     form,
     updateForm,
-    selectedDate,
-    calendarOpen,
-    setCalendarOpen,
     dialogOpen,
     setDialogOpen,
     isSubmitting,
     handleSubmit,
-    handleDateSelect,
+    handleDateChange,
   } = useMeetingsActions({ onRefresh: fetchMeetings });
 
   return (
@@ -73,10 +70,7 @@ export default function MeetingsView({ initialMeetings }: MeetingsViewProps) {
               onOpenChange={setDialogOpen}
               form={form}
               onFormChange={updateForm}
-              selectedDate={selectedDate}
-              onDateSelect={handleDateSelect}
-              calendarOpen={calendarOpen}
-              onCalendarOpenChange={setCalendarOpen}
+              onDateChange={handleDateChange}
               isSubmitting={isSubmitting}
               onSubmit={handleSubmit}
             />

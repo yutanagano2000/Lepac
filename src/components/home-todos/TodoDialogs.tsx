@@ -5,9 +5,7 @@ import { CheckCircle2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatDateJp } from "@/lib/timeline";
-import { cn } from "@/lib/utils";
 import type { TodoWithProject } from "@/components/HomeTodosView";
 
 // 完了ダイアログ
@@ -96,8 +93,6 @@ interface EditDialogProps {
 export function TodoEditDialog({ open, onOpenChange, todo, onSubmit }: EditDialogProps) {
   const [content, setContent] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ダイアログが開いたときにtodoの値を設定
@@ -105,11 +100,9 @@ export function TodoEditDialog({ open, onOpenChange, todo, onSubmit }: EditDialo
     if (v && todo) {
       setContent(todo.content);
       setDueDate(todo.dueDate);
-      setSelectedDate(new Date(todo.dueDate + "T00:00:00"));
     } else if (!v) {
       setContent("");
       setDueDate("");
-      setSelectedDate(undefined);
     }
     onOpenChange(v);
   };
@@ -147,38 +140,12 @@ export function TodoEditDialog({ open, onOpenChange, todo, onSubmit }: EditDialo
           </div>
           <div className="space-y-2">
             <Label>期日</Label>
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate ? formatDateJp(selectedDate) : "期日を選択"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => {
-                    setSelectedDate(date);
-                    if (date) {
-                      const y = date.getFullYear();
-                      const m = String(date.getMonth() + 1).padStart(2, "0");
-                      const d = String(date.getDate()).padStart(2, "0");
-                      setDueDate(`${y}-${m}-${d}`);
-                      setCalendarOpen(false);
-                    }
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <DatePicker
+              value={dueDate || null}
+              onChange={(val) => setDueDate(val || "")}
+              placeholder="期日を選択"
+              className="w-full"
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

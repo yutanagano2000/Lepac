@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,8 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -20,9 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format } from "date-fns";
-import { ja } from "date-fns/locale";
-import { cn } from "@/lib/utils";
 import type { MeetingFormData } from "../_types";
 import { CATEGORY_OPTIONS } from "../_constants";
 
@@ -31,10 +27,7 @@ interface MeetingDialogProps {
   onOpenChange: (open: boolean) => void;
   form: MeetingFormData;
   onFormChange: (updates: Partial<MeetingFormData>) => void;
-  selectedDate: Date | undefined;
-  onDateSelect: (date: Date | undefined) => void;
-  calendarOpen: boolean;
-  onCalendarOpenChange: (open: boolean) => void;
+  onDateChange: (val: string | null) => void;
   isSubmitting: boolean;
   onSubmit: (e: React.FormEvent) => Promise<void>;
 }
@@ -44,10 +37,7 @@ export function MeetingDialog({
   onOpenChange,
   form,
   onFormChange,
-  selectedDate,
-  onDateSelect,
-  calendarOpen,
-  onCalendarOpenChange,
+  onDateChange,
   isSubmitting,
   onSubmit,
 }: MeetingDialogProps) {
@@ -70,32 +60,12 @@ export function MeetingDialog({
           </div>
           <div className="space-y-2">
             <Label>日付</Label>
-            <Popover open={calendarOpen} onOpenChange={onCalendarOpenChange}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDate
-                    ? format(selectedDate, "yyyy年M月d日", { locale: ja })
-                    : "選択してください"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={onDateSelect}
-                  locale={ja}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <DatePicker
+              value={form.meetingDate || null}
+              onChange={onDateChange}
+              placeholder="選択してください"
+              className="w-full"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="meeting-category">カテゴリ</Label>

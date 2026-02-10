@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
 import { asc, sql } from "drizzle-orm";
-import { calculateTimeline } from "@/lib/timeline";
+import { calculateWorkflowTimelineFromCompletion } from "@/lib/timeline";
 import ProjectsView from "./ProjectsView";
 
 // DBアクセスが必要なため動的レンダリング（ビルド時の静的生成を防止）
@@ -52,8 +52,11 @@ export default async function ProjectsPage() {
         return dueDate.getTime() < now.getTime();
       });
     } else if (project.completionMonth) {
-      const timeline = calculateTimeline(project.completionMonth, false);
-      hasOverdue = timeline.some((phase) => phase.date.getTime() < now.getTime());
+      const timeline = calculateWorkflowTimelineFromCompletion(project.completionMonth);
+      hasOverdue = timeline.some((phase) => {
+        const phaseDate = phase.startDate || phase.endDate;
+        return phaseDate ? phaseDate.getTime() < now.getTime() : false;
+      });
     }
 
     return { ...project, hasOverdue };
