@@ -12,11 +12,12 @@ import {
   MessageSquare,
   Loader2,
   AlertTriangle,
-  CalendarClock,
   Activity,
   Construction,
   MapPin,
   AlertCircle,
+  CalendarClock,
+  Clock,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,24 +25,81 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { SearchResult, DashboardData } from "@/components/home-search/types";
 import { useDebounce } from "@/components/home-search/useDebounce";
+import { useSearchQuery } from "@/components/home-search/useSearchQuery";
+import { HighlightText } from "@/components/home-search/HighlightText";
+
+const SEARCH_HISTORY_KEY = "home_search_recent";
+const MAX_HISTORY = 3;
+
+function getSearchHistory(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as unknown;
+    return Array.isArray(arr)
+      ? arr.filter((x): x is string => typeof x === "string").slice(0, MAX_HISTORY)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function addSearchHistory(query: string): string[] {
+  const q = query.trim();
+  if (!q) return getSearchHistory();
+  const prev = getSearchHistory();
+  const next = [q, ...prev.filter((x) => x !== q)].slice(0, MAX_HISTORY);
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return next;
+}
 
 export function HomeSearchView() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
 
   // ダッシュボード用state
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [searchError, setSearchError] = useState<string | null>(null);
 
-  // 300msのデバウンス
-  const debouncedQuery = useDebounce(query, 300);
+  // 適応型デバウンス（delay省略→文字数ベースで自動調整）
+  const debouncedQuery = useDebounce(query);
+
+  // SWRベース検索（キャッシュ + 重複排除 + keepPreviousData）
+  const { results, isSearching, searchError } = useSearchQuery(debouncedQuery);
+
+  // 検索履歴を初期ロード
+  useEffect(() => {
+    setSearchHistory(getSearchHistory());
+  }, []);
+
+  // 検索実行時に履歴保存
+  useEffect(() => {
+    if (debouncedQuery.trim()) {
+      setSearchHistory(addSearchHistory(debouncedQuery));
+    }
+  }, [debouncedQuery]);
+
+  // Ctrl+K / Cmd+K グローバルショートカット
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   // ダッシュボードデータ取得
   useEffect(() => {
@@ -57,7 +115,6 @@ export function HomeSearchView() {
           throw new Error(`HTTP ${res.status}`);
         }
         const data: unknown = await res.json();
-        // 基本的な型チェック
         if (data && typeof data === "object" && "overdueTodos" in data) {
           setDashboard(data as DashboardData);
         } else {
@@ -79,51 +136,6 @@ export function HomeSearchView() {
       abortController.abort();
     };
   }, []);
-
-  // デバウンスされたクエリで検索を実行
-  useEffect(() => {
-    const abortController = new AbortController();
-
-    const search = async () => {
-      if (!debouncedQuery.trim()) {
-        setResults([]);
-        setSearchError(null);
-        return;
-      }
-
-      setIsSearching(true);
-      setSearchError(null);
-
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery.trim())}`, {
-          signal: abortController.signal,
-        });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data: unknown = await res.json();
-        if (Array.isArray(data)) {
-          setResults(data as SearchResult[]);
-        } else {
-          setResults([]);
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          return;
-        }
-        console.error("検索エラー:", err);
-        setSearchError("検索に失敗しました");
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    search();
-
-    return () => {
-      abortController.abort();
-    };
-  }, [debouncedQuery]);
 
   // 結果をカテゴリごとに分類
   const categorizedResults = useMemo(() => {
@@ -166,12 +178,17 @@ export function HomeSearchView() {
     router.push(href);
   };
 
+  const handleHistoryClick = (text: string) => {
+    setQuery(text);
+  };
+
   // 選択インデックスをリセット
   useEffect(() => {
     setSelectedIndex(-1);
   }, [results]);
 
   const showSuggestions = isFocused && query.trim().length > 0;
+  const showHistory = isFocused && query.trim().length === 0 && searchHistory.length > 0;
 
   // カテゴリのレンダリング用ヘルパー
   const renderCategory = (
@@ -196,7 +213,10 @@ export function HomeSearchView() {
             return (
               <button
                 key={`${result.type}-${result.id}`}
-                onClick={() => handleResultClick(result.href)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleResultClick(result.href);
+                }}
                 onMouseEnter={() => setSelectedIndex(globalIndex)}
                 className={cn(
                   "w-full text-left px-4 py-2.5 transition-colors",
@@ -206,10 +226,12 @@ export function HomeSearchView() {
               >
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate text-sm">{result.title}</p>
+                    <p className="font-medium truncate text-sm">
+                      <HighlightText text={result.title} query={query.trim()} />
+                    </p>
                     {result.subtitle && (
                       <p className="text-xs text-muted-foreground truncate">
-                        {result.subtitle}
+                        <HighlightText text={result.subtitle} query={query.trim()} />
                       </p>
                     )}
                   </div>
@@ -240,7 +262,7 @@ export function HomeSearchView() {
         <div className="relative">
           <div className={cn(
             "relative flex items-end border bg-card shadow-sm transition-all",
-            showSuggestions && results.length > 0
+            (showSuggestions && results.length > 0) || showHistory
               ? "rounded-t-2xl border-b-0"
               : "rounded-2xl",
             isFocused && "ring-2 ring-ring border-transparent"
@@ -254,15 +276,47 @@ export function HomeSearchView() {
               onFocus={() => setIsFocused(true)}
               onBlur={() => setTimeout(() => setIsFocused(false), 150)}
               placeholder="管理番号、地権者名、現地住所、TODOなどを検索..."
-              className="min-h-[56px] max-h-[56px] resize-none border-0 bg-transparent pl-12 pr-14 py-4 focus-visible:ring-0 focus-visible:ring-offset-0 text-base placeholder:text-muted-foreground/60"
+              className="min-h-[56px] max-h-[56px] resize-none border-0 bg-transparent pl-12 pr-20 py-4 focus-visible:ring-0 focus-visible:ring-offset-0 text-base placeholder:text-muted-foreground/60"
               rows={1}
             />
-            {isSearching && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+              {isSearching && (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            )}
+              )}
+              {!isSearching && (
+                <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground border">
+                  {typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl"}K
+                </kbd>
+              )}
+            </div>
           </div>
+
+          {/* 検索履歴ドロップダウン（未入力＋フォーカス時） */}
+          {showHistory && (
+            <div className={cn(
+              "absolute left-0 right-0 top-full z-50 bg-card border border-t-0 rounded-b-2xl shadow-lg overflow-hidden",
+              isFocused && "ring-2 ring-ring ring-t-0 border-transparent"
+            )}>
+              <div className="px-4 py-2 text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Clock className="h-3 w-3" />
+                最近の検索
+              </div>
+              <div className="space-y-0.5 pb-2">
+                {searchHistory.map((text) => (
+                  <button
+                    key={text}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleHistoryClick(text);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-muted/70 transition-colors"
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* サジェストドロップダウン */}
           {showSuggestions && (
@@ -283,7 +337,7 @@ export function HomeSearchView() {
                       検索中...
                     </div>
                   ) : (
-                    <>「{query}」に一致する結果がありません</>
+                    <>「<HighlightText text={query} query={query.trim()} />」に一致する結果がありません</>
                   )}
                 </div>
               ) : (
@@ -336,7 +390,7 @@ export function HomeSearchView() {
           )}
 
           {/* ヒント（サジェストが表示されていない時のみ） */}
-          {!showSuggestions && (
+          {!showSuggestions && !showHistory && (
             <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
               <span>入力すると候補が表示されます</span>
             </div>
@@ -344,7 +398,7 @@ export function HomeSearchView() {
         </div>
 
         {/* ダッシュボード */}
-        {!showSuggestions && (
+        {!showSuggestions && !showHistory && (
           <div className="mt-8 w-full">
             {isDashboardLoading ? (
               <div className="flex items-center justify-center py-12">

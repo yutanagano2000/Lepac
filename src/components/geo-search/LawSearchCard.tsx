@@ -2,6 +2,7 @@
 
 import { Check, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { safeWindowOpen } from "@/lib/sanitize";
 
 // 追加ボタンの型定義
 interface AdditionalButton {
@@ -95,7 +96,7 @@ export const LawSearchCard: React.FC<LawSearchCardProps> = ({
               key={index}
               variant="outline"
               size="sm"
-              onClick={() => window.open(button.url, '_blank', 'noopener,noreferrer')}
+              onClick={() => safeWindowOpen(button.url)}
               className="w-full"
             >
               <ExternalLink className="h-3 w-3 mr-2" />

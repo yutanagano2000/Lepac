@@ -3,14 +3,25 @@
  * GET /api/mobile/organizations
  *
  * 利用可能な組織一覧を取得
+ *
+ * セキュリティ対策:
+ * - JWT認証必須
+ * - レート制限（DoS対策）
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { getMobileAuthFromRequest } from "@/lib/jwt";
+import { rateLimitGuard } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
+  // レート制限チェック（認証済みAPIはstrictモード）
+  const rateLimitError = await rateLimitGuard(request, "mobile-organizations", "strict");
+  if (rateLimitError) {
+    return rateLimitError;
+  }
+
   try {
     // JWT認証チェック
     const auth = await getMobileAuthFromRequest(request);
@@ -35,9 +46,10 @@ export async function GET(request: NextRequest) {
       organizations: allOrganizations,
     });
   } catch (error) {
-    console.error("[Organizations API] Error:", error);
+    // エラーログには詳細を記録するが、クライアントには一般的なメッセージのみ返す
+    console.error("[Organizations API] Error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to fetch organizations" },
       { status: 500 }
     );
   }

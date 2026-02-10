@@ -93,3 +93,70 @@ export function parseDateAsLocal(dateStr: string | null | undefined): Date | nul
 export function isValidDate(dateStr: string | null | undefined): boolean {
   return parseDateAsLocal(dateStr) !== null;
 }
+
+/**
+ * ファイルパスのパストラバーサル攻撃を検証
+ * @param filePath - 検証するファイルパス
+ * @returns 安全なパスの場合はtrue、危険な場合はfalse
+ */
+export function isPathSafe(filePath: string): boolean {
+  if (!filePath || typeof filePath !== "string") {
+    return false;
+  }
+
+  // 親ディレクトリへのトラバーサルを検出
+  if (filePath.includes("..")) {
+    return false;
+  }
+
+  // 絶対パスを拒否（Unix/Windows両方）
+  if (filePath.startsWith("/") || /^[A-Za-z]:/.test(filePath)) {
+    return false;
+  }
+
+  // NULLバイトインジェクションを検出
+  if (filePath.includes("\0")) {
+    return false;
+  }
+
+  // 制御文字を検出（改行、タブ等）
+  if (/[\x00-\x1f\x7f]/.test(filePath)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * [number, number] 形式の座標ペアか検証
+ * @param coord - 検証する座標
+ * @returns 有効な座標ペアかどうか
+ */
+export function isValidCoordinate(coord: unknown): coord is [number, number] {
+  if (!Array.isArray(coord) || coord.length !== 2) {
+    return false;
+  }
+  const [lon, lat] = coord;
+  return (
+    typeof lon === "number" &&
+    typeof lat === "number" &&
+    Number.isFinite(lon) &&
+    Number.isFinite(lat)
+  );
+}
+
+/**
+ * 座標配列（ポリゴン等）の検証
+ * @param coords - 検証する座標配列
+ * @param minLength - 最小要素数（デフォルト: 1）
+ * @returns 有効な座標配列かどうか
+ */
+export function isValidCoordinateArray(
+  coords: unknown,
+  minLength = 1
+): coords is [number, number][] {
+  if (!Array.isArray(coords) || coords.length < minLength) {
+    return false;
+  }
+  return coords.every(isValidCoordinate);
+}

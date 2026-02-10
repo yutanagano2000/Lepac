@@ -19,6 +19,36 @@ export function parseReplies(repliesStr: string | null): ReplyMessage[] {
   }
 }
 
+// IDバリデーション関数
+function validateId(id: number): void {
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("無効なIDです");
+  }
+}
+
+// ステータス値のホワイトリスト（page.tsxのSTATUS_CONFIGと一致させる）
+const VALID_STATUSES = ["pending", "in_progress", "completed", "rejected"] as const;
+
+function validateStatus(status: string): void {
+  if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
+    throw new Error("無効なステータスです");
+  }
+}
+
+// 返信内容のバリデーション
+const MAX_REPLY_LENGTH = 5000;
+
+function validateReplyContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    throw new Error("返信内容を入力してください");
+  }
+  if (trimmed.length > MAX_REPLY_LENGTH) {
+    throw new Error(`返信は${MAX_REPLY_LENGTH}文字以内で入力してください`);
+  }
+  return trimmed;
+}
+
 interface UseFeedbacksActionsProps {
   onRefresh: () => Promise<void>;
   userId: number | null;
@@ -27,6 +57,7 @@ interface UseFeedbacksActionsProps {
 
 export function useFeedbacksActions({ onRefresh, userId, userName }: UseFeedbacksActionsProps) {
   const handleLike = useCallback(async (id: number) => {
+    validateId(id);
     try {
       const res = await fetch(`/api/feedbacks/${id}/like`, { method: "POST" });
       if (!res.ok) {
@@ -40,6 +71,8 @@ export function useFeedbacksActions({ onRefresh, userId, userName }: UseFeedback
   }, [onRefresh]);
 
   const handleStatusChange = useCallback(async (id: number, status: string) => {
+    validateId(id);
+    validateStatus(status);
     try {
       const res = await fetch(`/api/feedbacks/${id}`, {
         method: "PUT",
@@ -57,13 +90,14 @@ export function useFeedbacksActions({ onRefresh, userId, userName }: UseFeedback
   }, [onRefresh]);
 
   const handleReply = useCallback(async (feedback: Feedback, replyContent: string) => {
-    if (!replyContent.trim()) return;
+    validateId(feedback.id);
+    const validatedContent = validateReplyContent(replyContent);
 
     const currentReplies = parseReplies(feedback.replies);
     const newReplies = [
       ...currentReplies,
       {
-        message: replyContent.trim(),
+        message: validatedContent,
         createdAt: new Date().toISOString(),
         userId,
         userName,
@@ -87,6 +121,7 @@ export function useFeedbacksActions({ onRefresh, userId, userName }: UseFeedback
   }, [onRefresh, userId, userName]);
 
   const handleDelete = useCallback(async (id: number) => {
+    validateId(id);
     try {
       const res = await fetch(`/api/feedbacks/${id}`, { method: "DELETE" });
       if (!res.ok) {

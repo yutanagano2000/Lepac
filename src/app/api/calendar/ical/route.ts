@@ -228,9 +228,12 @@ function formatDateTimeForICal(date: Date): string {
  * iCalテキストのエスケープ
  * RFC 5545準拠: バックスラッシュ、セミコロン、カンマ、改行をエスケープ
  * CRLF（\r\n）も適切に処理
+ * セキュリティ: 制御文字を除去してインジェクション防止
  */
 function escapeICalText(text: string): string {
   return text
+    // 制御文字を除去（CR/LFを除く）- インジェクション防止
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
     .replace(/\\/g, "\\\\")
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")

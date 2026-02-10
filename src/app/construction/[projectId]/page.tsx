@@ -35,8 +35,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useConstructionData, useConstructionActions, type Photo } from "./_hooks";
-import { PHOTO_CATEGORIES } from "./_constants";
+import { PHOTO_CATEGORIES, ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB } from "./_constants";
 
 export default function ConstructionDetailPage() {
   const params = useParams();
@@ -84,9 +85,41 @@ export default function ConstructionDetailPage() {
   ).length;
   const progressPercent = (completedCategories / PHOTO_CATEGORIES.length) * 100;
 
+  // ファイルバリデーション
+  const validateFile = (file: File): string | null => {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type as typeof ALLOWED_IMAGE_TYPES[number])) {
+      return "サポートされていないファイル形式です。JPEG、PNG、GIF、WebP、HEIC形式のみ対応しています。";
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return `ファイルサイズが大きすぎます。${MAX_FILE_SIZE_MB}MB以下のファイルを選択してください。`;
+    }
+    return null;
+  };
+
+  // ファイル選択時のバリデーション
+  const handleFileChange = (file: File | null) => {
+    if (!file) {
+      setUploadFile(null);
+      return;
+    }
+    const error = validateFile(file);
+    if (error) {
+      toast.warning(error);
+      return;
+    }
+    setUploadFile(file);
+  };
+
   // アップロード処理
   const handleUpload = async () => {
     if (!uploadingCategory || !uploadFile) return;
+
+    // 再度バリデーション（セキュリティ対策）
+    const error = validateFile(uploadFile);
+    if (error) {
+      toast.warning(error);
+      return;
+    }
 
     setUploading(true);
     try {
@@ -95,7 +128,7 @@ export default function ConstructionDetailPage() {
       setUploadNote("");
       setUploadingCategory(null);
     } catch {
-      alert("写真のアップロードに失敗しました");
+      toast.error("写真のアップロードに失敗しました");
     } finally {
       setUploading(false);
     }
@@ -109,7 +142,7 @@ export default function ConstructionDetailPage() {
       await deletePhoto(photoId);
       setLightboxPhoto(null);
     } catch {
-      alert("写真の削除に失敗しました");
+      toast.error("写真の削除に失敗しました");
     }
   };
 
@@ -344,8 +377,8 @@ export default function ConstructionDetailPage() {
               <div>
                 <Input
                   type="file"
-                  accept="image/*"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  accept={ALLOWED_IMAGE_TYPES.join(",")}
+                  onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
                 />
               </div>
 

@@ -198,7 +198,9 @@ export const projects = sqliteTable("projects", {
   completionMonth: text("completion_month"), // 完成月
   constructionComplete: text("construction_complete"), // 完工
 
-  // 既存フィールド（互換性維持）
+  // 個別地権者フィールド（複数筆対応）
+  // ※ landowner（上部）はスプレッドシート同期用の代表地権者サマリー
+  // ※ landowner1-3は個別筆ごとの詳細情報（UI入力用）
   address: text("address"), // 現地住所
   coordinates: text("coordinates"), // 座標
   landowner1: text("landowner_1"), // 地権者1

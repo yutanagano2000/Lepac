@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Pencil, Loader2, Eye, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,7 +38,7 @@ export function MeetingMinutesSection({ meetingId, initialContent }: MeetingMinu
       router.refresh();
     } catch (e) {
       console.error("Meeting save error:", e);
-      alert(e instanceof Error ? e.message : "保存に失敗しました");
+      toast.error(e instanceof Error ? e.message : "保存に失敗しました");
     } finally {
       setSaving(false);
     }

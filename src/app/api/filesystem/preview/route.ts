@@ -64,7 +64,9 @@ async function findProjectFolder(managementNumber: string): Promise<string | nul
       }
     }
   } catch (error) {
-    console.error("フォルダ検索エラー:", error);
+    // セキュリティ: 内部詳細を漏洩させない
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("フォルダ検索エラー:", errorMessage);
   }
 
   return null;
@@ -89,9 +91,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "managementNumber and path are required" }, { status: 400 });
   }
 
-  // 入力バリデーション
+  // 入力バリデーション: 長さ制限
   if (managementNumber.length > 10 || filePath.length > 500) {
     return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
+  }
+
+  // セキュリティ: 管理番号は数字のみ許可（インジェクション防止）
+  if (!/^\d+$/.test(managementNumber)) {
+    return NextResponse.json({ error: "Invalid management number format" }, { status: 400 });
+  }
+
+  // セキュリティ: subfolderは英数字のみ許可
+  if (subfolder && !/^[a-zA-Z0-9]+$/.test(subfolder)) {
+    return NextResponse.json({ error: "Invalid subfolder format" }, { status: 400 });
   }
 
   // ファイル拡張子チェック
@@ -202,7 +214,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("File read error:", error);
+    // セキュリティ: 内部詳細を漏洩させない
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("File read error:", errorMessage);
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Loader2, Check, Shield } from "lucide-react";
 import { useOrganizations, useOrganizationSelection } from "./_hooks";
 
 export default function SelectOrganizationPage() {
+  const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
 
@@ -27,7 +29,7 @@ export default function SelectOrganizationPage() {
     handleSubmit,
   } = useOrganizationSelection({
     onSuccess: () => {
-      window.location.href = "/";
+      router.push("/");
     },
   });
 

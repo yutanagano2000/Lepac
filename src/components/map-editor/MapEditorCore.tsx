@@ -12,6 +12,7 @@ import type { TileLayerType } from "./constants";
 export type { TileLayerType } from "./constants";
 import type { MapEditorCoreProps } from "./types";
 import { useMapEditorState, useMapEditorDialogs, useImageOverlay } from "./_hooks";
+import { toast } from "sonner";
 
 // Leaflet default icon fix for Next.js/Webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -543,7 +544,7 @@ export default function MapEditorCore({
       editorState.setHasUnsavedChanges(false);
     } catch (e) {
       console.error("Save failed:", e);
-      alert("保存に失敗しました");
+      toast.error("保存に失敗しました");
     } finally {
       editorState.setSaving(false);
     }

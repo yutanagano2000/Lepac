@@ -11,6 +11,7 @@ import {
   Search,
   ListTodo,
   CheckCircle2,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -250,7 +251,7 @@ export default function TodosView({ initialTodos }: TodosViewProps) {
   }: {
     title: string;
     description: string;
-    icon: React.ElementType;
+    icon: LucideIcon;
     items: TodoWithProject[];
     emptyMessage: string;
     badge?: React.ReactNode;

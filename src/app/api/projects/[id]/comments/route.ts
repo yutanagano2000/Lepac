@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { comments } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { createCommentSchema, validateBody } from "@/lib/validations";
-import { requireProjectAccess, getUserId } from "@/lib/auth-guard";
+import { requireProjectAccess, requireProjectAccessWithCsrf, getUserId } from "@/lib/auth-guard";
 
 export async function GET(
   _request: Request,
@@ -27,14 +27,14 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const projectId = Number(id);
 
   // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
@@ -71,14 +71,14 @@ export async function POST(
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const projectId = Number(id);
 
   // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
@@ -98,6 +98,9 @@ export async function PATCH(
   }
 
   const commentId = Number(body.commentId);
+  if (isNaN(commentId)) {
+    return NextResponse.json({ error: "Invalid comment ID" }, { status: 400 });
+  }
 
   // コメントの存在確認と所有者チェック
   const [existingComment] = await db
@@ -129,14 +132,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const projectId = Number(id);
 
   // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
@@ -150,6 +153,9 @@ export async function DELETE(
   }
 
   const commentId = Number(commentIdParam);
+  if (isNaN(commentId)) {
+    return NextResponse.json({ error: "Invalid comment ID" }, { status: 400 });
+  }
 
   // コメントの存在確認と所有者チェック
   const [existingComment] = await db

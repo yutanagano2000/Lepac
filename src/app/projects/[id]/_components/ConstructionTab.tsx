@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Project, ConstructionProgress, ConstructionPhoto } from "@/db/schema";
 import { CONSTRUCTION_PROGRESS_CATEGORIES, CONSTRUCTION_PHOTO_CATEGORIES } from "@/db/schema";
 import { DatePickerField } from "./DatePickerField";
@@ -114,7 +115,7 @@ function ConstructionTabContent({ project, projectId, onProjectUpdate }: Constru
   // 写真アップロード
   const handlePhotoUpload = async (file: File) => {
     if (!photoUploadCategory) {
-      alert("写真カテゴリを選択してください");
+      toast.warning("写真カテゴリを選択してください");
       return;
     }
     setUploadingPhoto(true);

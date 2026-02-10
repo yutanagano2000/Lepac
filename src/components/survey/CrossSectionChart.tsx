@@ -5,7 +5,7 @@ import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { CrossSectionPoint } from "@/lib/slope-analysis";
 
 const Plot = dynamic(
-  () => import("react-plotly.js").then((mod) => mod.default),
+  () => import("./PlotlyPlot"),
   {
     ssr: false,
     loading: () => (

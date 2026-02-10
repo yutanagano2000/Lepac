@@ -568,4 +568,11 @@ export async function runMigrations(client: { execute: (sql: string, args?: unkn
       duration_ms INTEGER NOT NULL
     )
   `);
+
+  // 検索高速化用インデックス（organization_idとの複合でスキャン範囲を限定）
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_projects_org_management_number ON projects (organization_id, management_number)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_projects_org_client ON projects (organization_id, client)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_projects_org_address ON projects (organization_id, address)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_todos_org_content ON todos (organization_id, content)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_meetings_org_title ON meetings (organization_id, title)`); } catch (e) {}
 }

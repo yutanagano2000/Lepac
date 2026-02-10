@@ -148,7 +148,7 @@ export async function GET(request: Request) {
       count: constructionProjects.length,
     });
   } catch (error) {
-    console.error("Failed to fetch construction projects:", error);
+    console.error("Failed to fetch construction projects:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "工事案件の取得に失敗しました" }, { status: 500 });
   }
 }

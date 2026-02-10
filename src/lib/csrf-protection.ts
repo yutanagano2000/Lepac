@@ -34,10 +34,12 @@ function getAllowedOrigins(): string[] {
     origins.push(...process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()));
   }
 
-  // 開発環境
+  // 開発環境（ポートフォールバック対応）
   if (process.env.NODE_ENV === "development") {
-    origins.push("http://localhost:3000");
-    origins.push("http://127.0.0.1:3000");
+    for (const port of [3000, 3001, 3002]) {
+      origins.push(`http://localhost:${port}`);
+      origins.push(`http://127.0.0.1:${port}`);
+    }
   }
 
   return origins;
@@ -63,10 +65,25 @@ export function validateCsrf(request: NextRequest): CsrfValidationResult {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
 
+  // Hostヘッダーも検証に使用
+  const host = request.headers.get("host");
+
   // Originヘッダーがある場合は優先して検証
   if (origin) {
     const allowedOrigins = getAllowedOrigins();
     if (allowedOrigins.some((allowed) => origin === allowed)) {
+      // OriginとHostの整合性もチェック
+      if (host) {
+        try {
+          const originHost = new URL(origin).host;
+          if (originHost !== host && !allowedOrigins.some((o) => {
+            try { return new URL(o).host === host; } catch { return false; }
+          })) {
+            console.warn(`[CSRF] Origin/Host mismatch: origin=${origin}, host=${host}`);
+            return { valid: false, error: "オリジンとホストが一致しません" };
+          }
+        } catch { /* originのパースに失敗した場合はスキップ */ }
+      }
       return { valid: true };
     }
 

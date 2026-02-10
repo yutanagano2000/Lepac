@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import type { JudgmentResult } from "../_types";
 
 interface SearchParams {
@@ -34,7 +35,7 @@ export function useLegalSearch({ searchParams }: UseLegalSearchProps) {
       setResult(data);
     } catch (error) {
       console.error("判定エラー:", error);
-      alert("判定に失敗しました。もう一度お試しください。");
+      toast.error("判定に失敗しました。もう一度お試しください。");
     } finally {
       setIsLoading(false);
     }

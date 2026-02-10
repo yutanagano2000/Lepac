@@ -9,19 +9,24 @@ import { logMeetingCreate } from "@/lib/audit-log";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  // 認証・組織チェック
-  const authResult = await requireOrganization();
-  if (!authResult.success) {
-    return authResult.response;
-  }
-  const { organizationId } = authResult;
+  try {
+    // 認証・組織チェック
+    const authResult = await requireOrganization();
+    if (!authResult.success) {
+      return authResult.response;
+    }
+    const { organizationId } = authResult;
 
-  const list = await db
-    .select()
-    .from(meetings)
-    .where(eq(meetings.organizationId, organizationId))
-    .orderBy(desc(meetings.meetingDate));
-  return NextResponse.json(list);
+    const list = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.organizationId, organizationId))
+      .orderBy(desc(meetings.meetingDate));
+    return NextResponse.json(list);
+  } catch (error) {
+    console.error("Failed to get meetings:", error instanceof Error ? error.message : "Unknown error");
+    return NextResponse.json({ error: "会議一覧の取得に失敗しました" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Failed to create meeting:", error);
+    console.error("Failed to create meeting:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "会議の作成に失敗しました" }, { status: 500 });
   }
 }

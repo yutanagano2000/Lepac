@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { requireOrganizationWithCsrf } from "@/lib/auth-guard";
 import { createErrorResponse } from "@/lib/api-error";
 import { parseCoordinateString } from "@/lib/coordinates";
-import { performLegalAutoCheck, type LegalCheckResults } from "@/lib/legal-checker";
+import { performLegalAutoCheck } from "@/lib/legal-checker";
 
 export async function POST(
   request: NextRequest,

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
 const Plot = dynamic(
-  () => import("react-plotly.js").then((mod) => mod.default),
+  () => import("./PlotlyPlot"),
   {
     ssr: false,
     loading: () => (

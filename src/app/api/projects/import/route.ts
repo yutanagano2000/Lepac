@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { requireOrganization } from "@/lib/auth-guard";
+import { NextRequest, NextResponse } from "next/server";
+import { requireOrganization, requireOrganizationWithCsrf } from "@/lib/auth-guard";
 import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -115,16 +115,22 @@ export async function GET(request: Request) {
  * POST /api/projects/import
  * Body: { folders: FolderInfo[] }
  */
-export async function POST(request: Request) {
-  const authResult = await requireOrganization();
+export async function POST(request: NextRequest) {
+  const authResult = await requireOrganizationWithCsrf(request);
   if (!authResult.success) {
     return authResult.response;
   }
 
   const { organizationId } = authResult;
 
+  let body: unknown;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  try {
     const { folders } = body as { folders: unknown[] };
 
     if (!folders || !Array.isArray(folders) || folders.length === 0) {

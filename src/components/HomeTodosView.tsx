@@ -30,10 +30,10 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDateJp } from "@/lib/timeline";
-import { cn } from "@/lib/utils";
+import { cn, addTodoMessage } from "@/lib/utils";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { TodoItem } from "@/components/home-todos/TodoItem";
 import { TodoSection } from "@/components/home-todos/TodoSection";
+import { TodoCompleteDialog, TodoEditDialog, TodoAddMessageDialog } from "@/components/home-todos/TodoDialogs";
 
 export type TodoWithProject = {
   id: number;
@@ -88,7 +88,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
   const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [newTodoAssigneeId, setNewTodoAssigneeId] = useState<string>("__self__"); // 担当者ID（"__self__"は自分を意味する）
+  const [newTodoAssigneeId, setNewTodoAssigneeId] = useState<string>("__self__");
 
   // 組織内ユーザー一覧
   const [orgUsers, setOrgUsers] = useState<OrganizationUser[]>([]);
@@ -110,6 +110,14 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [todoToDelete, setTodoToDelete] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // 完了・編集・メッセージ追加ダイアログ用
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [completingTodo, setCompletingTodo] = useState<TodoWithProject | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingTodo, setEditingTodo] = useState<TodoWithProject | null>(null);
+  const [addMessageDialogOpen, setAddMessageDialogOpen] = useState(false);
+  const [addingMessageTodo, setAddingMessageTodo] = useState<TodoWithProject | null>(null);
 
   // 日本時間で現在日時を取得
   const nowJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
@@ -152,6 +160,73 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
       setIsDeleting(false);
       setDeleteDialogOpen(false);
       setTodoToDelete(null);
+    }
+  };
+
+  // 完了処理
+  const openCompleteDialog = (todo: TodoWithProject) => {
+    setCompletingTodo(todo);
+    setCompleteDialogOpen(true);
+  };
+
+  const handleComplete = async (todoId: number, memo: string) => {
+    try {
+      const existingTodo = todos.find((t) => t.id === todoId);
+      const existingMemo = existingTodo?.completedMemo ?? null;
+      const completedMemo = memo.trim() ? addTodoMessage(existingMemo, memo.trim()) : existingMemo;
+      const res = await fetch(`/api/todos/${todoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedAt: new Date().toISOString(), completedMemo }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCompletingTodo(null);
+      fetchTodos();
+    } catch (err) {
+      console.error("TODO完了処理に失敗しました:", err);
+    }
+  };
+
+  // 編集処理
+  const openEditDialog = (todo: TodoWithProject) => {
+    setEditingTodo(todo);
+    setEditDialogOpen(true);
+  };
+
+  const handleEdit = async (todoId: number, content: string, dueDate: string) => {
+    try {
+      const res = await fetch(`/api/todos/${todoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, dueDate }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditingTodo(null);
+      fetchTodos();
+    } catch (err) {
+      console.error("TODO編集に失敗しました:", err);
+    }
+  };
+
+  // メッセージ追加処理
+  const openAddMessageDialog = (todo: TodoWithProject) => {
+    setAddingMessageTodo(todo);
+    setAddMessageDialogOpen(true);
+  };
+
+  const handleAddMessage = async (todoId: number, message: string, existingMemo: string | null) => {
+    try {
+      const updatedMemo = addTodoMessage(existingMemo, message);
+      const res = await fetch(`/api/todos/${todoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completedMemo: updatedMemo }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setAddingMessageTodo(null);
+      fetchTodos();
+    } catch (err) {
+      console.error("メッセージ追加に失敗しました:", err);
     }
   };
 
@@ -216,7 +291,6 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
     if (!newTodoContent.trim() || !newTodoDueDate) return;
     setIsCreating(true);
     try {
-      // 担当者情報を取得（"__self__"は自分を意味する）
       const assignee = newTodoAssigneeId && newTodoAssigneeId !== "__self__"
         ? orgUsers.find((u) => u.id === parseInt(newTodoAssigneeId, 10))
         : null;
@@ -242,6 +316,15 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
     } finally {
       setIsCreating(false);
     }
+  };
+
+  // 共通のセクションprops
+  const sectionActions = {
+    onReopen: handleReopen,
+    onDelete: openDeleteDialog,
+    onComplete: openCompleteDialog,
+    onEdit: openEditDialog,
+    onAddMessage: openAddMessageDialog,
   };
 
   return (
@@ -458,13 +541,12 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
               icon={AlertCircle}
               items={grouped.overdue}
               emptyMessage="超過したTODOはありません"
-              onReopen={handleReopen}
-              onDelete={openDeleteDialog}
               badge={
                 grouped.overdue.length > 0 ? (
                   <span className="text-xs font-bold text-destructive">優先</span>
                 ) : undefined
               }
+              {...sectionActions}
             />
             <TodoSection
               title="今日"
@@ -472,8 +554,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
               icon={CalendarIcon}
               items={grouped.today}
               emptyMessage="本日のTODOはありません"
-              onReopen={handleReopen}
-              onDelete={openDeleteDialog}
+              {...sectionActions}
             />
             <TodoSection
               title="３日以内"
@@ -481,8 +562,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
               icon={Clock}
               items={grouped.upcoming}
               emptyMessage="３日以内のTODOはありません"
-              onReopen={handleReopen}
-              onDelete={openDeleteDialog}
+              {...sectionActions}
             />
           </div>
 
@@ -493,8 +573,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
               icon={ListTodo}
               items={grouped.later}
               emptyMessage=""
-              onReopen={handleReopen}
-              onDelete={openDeleteDialog}
+              {...sectionActions}
             />
           )}
 
@@ -505,8 +584,7 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
               icon={CheckCircle2}
               items={grouped.completed}
               emptyMessage=""
-              onReopen={handleReopen}
-              onDelete={openDeleteDialog}
+              {...sectionActions}
             />
           )}
         </div>
@@ -520,6 +598,30 @@ export function HomeTodosView({ initialTodos, showCreateForm = false, currentUse
         title="TODOの削除"
         description="このTODOを削除してもよろしいですか？"
         isLoading={isDeleting}
+      />
+
+      {/* 完了ダイアログ */}
+      <TodoCompleteDialog
+        open={completeDialogOpen}
+        onOpenChange={setCompleteDialogOpen}
+        todo={completingTodo}
+        onSubmit={handleComplete}
+      />
+
+      {/* 編集ダイアログ */}
+      <TodoEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        todo={editingTodo}
+        onSubmit={handleEdit}
+      />
+
+      {/* メッセージ追加ダイアログ */}
+      <TodoAddMessageDialog
+        open={addMessageDialogOpen}
+        onOpenChange={setAddMessageDialogOpen}
+        todo={addingMessageTodo}
+        onSubmit={handleAddMessage}
       />
     </div>
   );

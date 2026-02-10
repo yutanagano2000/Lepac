@@ -59,7 +59,10 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Timeline bundle fetch failed:", error);
+    // 本番環境では詳細を隠す（情報漏洩対策）
+    if (process.env.NODE_ENV !== "production") {
+      console.error("Timeline bundle fetch failed:", error);
+    }
     return NextResponse.json(
       { error: "データの取得に失敗しました" },
       { status: 500 }

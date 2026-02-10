@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { db } from "@/db";
-import { projects } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { projects, sheetsSyncLogs } from "@/db/schema";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { buildColumnIndexMap } from "./sheets-column-map";
 
 // ── 型定義 ──
@@ -158,6 +158,35 @@ export async function syncFromSheets(organizationId: number): Promise<SyncResult
     const dataRows = rows;
     result.totalRows = dataRows.length;
 
+    // N+1 クエリ防止: 管理番号を先に全件収集し、一括でDB検索
+    const managementNumbers: string[] = [];
+    for (const row of dataRows) {
+      const mn = row[managementNumberIdx]?.toString().trim();
+      if (mn) managementNumbers.push(mn);
+    }
+
+    // 既存プロジェクトを一括取得してマップ化
+    const existingMap = new Map<string, number>();
+    if (managementNumbers.length > 0) {
+      // バッチサイズ 500 で分割クエリ
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < managementNumbers.length; i += BATCH_SIZE) {
+        const batch = managementNumbers.slice(i, i + BATCH_SIZE);
+        const existingRows = await db
+          .select({ id: projects.id, managementNumber: projects.managementNumber })
+          .from(projects)
+          .where(
+            and(
+              inArray(projects.managementNumber, batch),
+              eq(projects.organizationId, organizationId)
+            )
+          );
+        for (const row of existingRows) {
+          existingMap.set(row.managementNumber, row.id);
+        }
+      }
+    }
+
     for (let rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
       const row = dataRows[rowIdx];
       try {
@@ -180,25 +209,16 @@ export async function syncFromSheets(organizationId: number): Promise<SyncResult
           rowData[colName] = isDateColumn(colName) ? normalizeDate(cellValue) : cellValue;
         }
 
-        // DB 検索（管理番号 + organization_id）
-        const existing = await db
-          .select({ id: projects.id })
-          .from(projects)
-          .where(
-            and(
-              eq(projects.managementNumber, managementNumber),
-              eq(projects.organizationId, organizationId)
-            )
-          )
-          .limit(1);
+        // メモリ上のマップで既存チェック（DBアクセス不要）
+        const existingId = existingMap.get(managementNumber);
 
-        if (existing.length > 0) {
+        if (existingId !== undefined) {
           // UPDATE（値があるフィールドのみ）
           if (Object.keys(rowData).length > 0) {
             await db
               .update(projects)
               .set(rowData as Partial<typeof projects.$inferInsert>)
-              .where(eq(projects.id, existing[0].id));
+              .where(eq(projects.id, existingId));
           }
           result.updatedCount++;
         } else {
@@ -238,59 +258,41 @@ export async function syncFromSheets(organizationId: number): Promise<SyncResult
   return result;
 }
 
-// ── 同期結果をログテーブルに記録 ──
+// ── 同期結果をログテーブルに記録（Drizzle ORM使用） ──
 
 export async function saveSyncLog(result: SyncResult): Promise<void> {
-  const c = (await import("@/db")).db;
-  // raw SQL で INSERT（テーブルが initDb で作成済みの前提）
-  const client = (c as unknown as { _: { client: { execute: (sql: string, args?: unknown[]) => Promise<unknown> } } })._;
-  // Drizzle の rawSQL を直接使えないため libsql client を直接利用
-  const { createClient } = await import("@libsql/client");
-  const rawClient = createClient({
-    url: process.env.TURSO_DATABASE_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN,
-  });
-
-  await rawClient.execute({
-    sql: `INSERT INTO sheets_sync_logs (synced_at, total_rows, updated_count, inserted_count, skipped_count, error_count, errors, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
-      new Date().toISOString(),
-      result.totalRows,
-      result.updatedCount,
-      result.insertedCount,
-      result.skippedCount,
-      result.errorCount,
-      JSON.stringify(result.errors),
-      result.durationMs,
-    ],
+  await db.insert(sheetsSyncLogs).values({
+    syncedAt: new Date().toISOString(),
+    totalRows: result.totalRows,
+    updatedCount: result.updatedCount,
+    insertedCount: result.insertedCount,
+    skippedCount: result.skippedCount,
+    errorCount: result.errorCount,
+    errors: JSON.stringify(result.errors),
+    durationMs: result.durationMs,
   });
 }
 
-// ── 最終同期ステータス取得 ──
+// ── 最終同期ステータス取得（Drizzle ORM使用） ──
 
 export async function getLastSyncStatus() {
-  const { createClient } = await import("@libsql/client");
-  const rawClient = createClient({
-    url: process.env.TURSO_DATABASE_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN,
-  });
+  const [row] = await db
+    .select()
+    .from(sheetsSyncLogs)
+    .orderBy(desc(sheetsSyncLogs.id))
+    .limit(1);
 
-  const res = await rawClient.execute(
-    `SELECT * FROM sheets_sync_logs ORDER BY id DESC LIMIT 1`
-  );
+  if (!row) return null;
 
-  if (res.rows.length === 0) return null;
-
-  const row = res.rows[0];
   return {
     id: row.id,
-    syncedAt: row.synced_at,
-    totalRows: row.total_rows,
-    updatedCount: row.updated_count,
-    insertedCount: row.inserted_count,
-    skippedCount: row.skipped_count,
-    errorCount: row.error_count,
-    errors: row.errors ? JSON.parse(row.errors as string) : [],
-    durationMs: row.duration_ms,
+    syncedAt: row.syncedAt,
+    totalRows: row.totalRows,
+    updatedCount: row.updatedCount,
+    insertedCount: row.insertedCount,
+    skippedCount: row.skippedCount,
+    errorCount: row.errorCount,
+    errors: row.errors ? JSON.parse(row.errors) : [],
+    durationMs: row.durationMs,
   };
 }

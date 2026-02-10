@@ -188,7 +188,8 @@ export async function uploadFile(formData: FormData) {
 
     if (uploadError) {
       console.error("Supabase upload error:", uploadError);
-      return { error: `Upload failed: ${uploadError.message}` };
+      // セキュリティ: 内部エラー詳細をクライアントに漏洩させない
+      return { error: "Upload failed. Please try again later." };
     }
 
     // DBに保存（ファイルパスを保存、署名付きURLは都度生成）
@@ -216,7 +217,7 @@ export async function uploadFile(formData: FormData) {
     }
   } catch (error) {
     console.error("File upload error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return { error: `Failed to upload: ${errorMessage}` };
+    // セキュリティ: 内部エラー詳細をクライアントに漏洩させない
+    return { error: "Failed to upload. Please try again later." };
   }
 }

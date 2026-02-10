@@ -1,16 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { requireProjectAccess, getUserId } from "@/lib/auth-guard";
+import { requireProjectAccess, requireProjectAccessWithCsrf, getUserId } from "@/lib/auth-guard";
+import { parseValidId } from "@/lib/validation";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const projectId = Number(id);
-  if (isNaN(projectId)) {
+  const projectId = parseValidId(id);
+  if (projectId === null) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
@@ -30,25 +31,32 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const projectId = Number(id);
-  if (isNaN(projectId)) {
+  const projectId = parseValidId(id);
+  if (projectId === null) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
-  // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  // CSRF + 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
   const { user, organizationId } = authResult;
 
-  const body = await request.json();
-  const content = body.content?.trim() ?? "";
-  const dueDate = body.dueDate ?? "";
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const bodyObj = body as Record<string, unknown>;
+  const content = typeof bodyObj.content === "string" ? bodyObj.content.trim() : "";
+  const dueDate = typeof bodyObj.dueDate === "string" ? bodyObj.dueDate : "";
   if (!content || !dueDate) {
     return NextResponse.json(
       { error: "content and dueDate are required" },
@@ -76,29 +84,25 @@ export async function POST(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const projectId = Number(id);
-  if (isNaN(projectId)) {
+  const projectId = parseValidId(id);
+  if (projectId === null) {
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
-  // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  // CSRF + 認証・組織・プロジェクト所有権チェック
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }
 
   const { searchParams } = new URL(request.url);
   const todoIdParam = searchParams.get("todoId");
-  if (!todoIdParam) {
-    return NextResponse.json({ error: "todoId is required" }, { status: 400 });
-  }
-
-  const todoId = Number(todoIdParam);
-  if (isNaN(todoId) || todoId <= 0) {
+  const todoId = parseValidId(todoIdParam);
+  if (todoId === null) {
     return NextResponse.json({ error: "Invalid todoId" }, { status: 400 });
   }
 

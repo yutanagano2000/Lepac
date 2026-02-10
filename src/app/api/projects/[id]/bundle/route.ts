@@ -35,18 +35,20 @@ export async function GET(
     return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
 
-  // 全データを並列取得（DBへの1回のラウンドトリップで複数クエリ実行）
-  const [
-    [project],
-    progressList,
-    commentsList,
-    todosList,
-    filesList,
-  ] = await Promise.all([
-    // 案件基本情報（組織チェック付き）
-    db.select().from(projects).where(
+  // まずプロジェクトの存在と所有権を確認
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(
       and(eq(projects.id, projectId), eq(projects.organizationId, organizationId))
-    ),
+    );
+
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  // プロジェクトが確認できた後、関連データを並列取得
+  const [progressList, commentsList, todosList, filesList] = await Promise.all([
     // 進捗一覧
     db.select().from(progress)
       .where(eq(progress.projectId, projectId))
@@ -64,10 +66,6 @@ export async function GET(
       .where(eq(projectFiles.projectId, projectId))
       .orderBy(desc(projectFiles.createdAt)),
   ]);
-
-  if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  }
 
   return NextResponse.json({
     project,

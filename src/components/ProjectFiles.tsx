@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { ProjectFile } from "@/db/schema";
 
 // ファイルカテゴリの定義
@@ -121,11 +122,11 @@ export function ProjectFiles({ projectId, initialFiles = [] }: ProjectFilesProps
 
         if (result.error) {
           console.error("Server error:", result.error);
-          alert(`アップロード失敗: ${result.error}`);
+          toast.error(`アップロード失敗: ${result.error}`);
         }
       } catch (err) {
         console.error("Upload error:", err);
-        alert(`アップロードに失敗しました: ${err instanceof Error ? err.message : "Unknown error"}`);
+        toast.error(`アップロードに失敗しました: ${err instanceof Error ? err.message : "Unknown error"}`);
       }
     }
 
@@ -145,11 +146,11 @@ export function ProjectFiles({ projectId, initialFiles = [] }: ProjectFilesProps
       if (res.ok) {
         await fetchFiles();
       } else {
-        alert("削除に失敗しました");
+        toast.error("削除に失敗しました");
       }
     } catch (err) {
       console.error("Delete error:", err);
-      alert("削除に失敗しました");
+      toast.error("削除に失敗しました");
     }
 
     setDeleteFile(null);

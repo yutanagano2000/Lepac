@@ -58,8 +58,8 @@ const nextConfig: NextConfig = {
     ];
   },
   // Turbopackを使用（Next.js 16デフォルト）
-  // Cesiumアセットは prebuild スクリプトでコピー
   turbopack: {},
+  serverExternalPackages: ["pngjs"],
 };
 
 export default nextConfig;

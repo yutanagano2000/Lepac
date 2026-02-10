@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, ArrowRight, FolderKanban, MessageSquare, AlertCircle } from "lucide-react";
@@ -179,41 +179,44 @@ export function HomeProjectSearch({ size = "default" }: HomeProjectSearchProps) 
   }, []);
 
   const query = searchQuery.trim().toLowerCase();
-  const filteredProjects = query
-    ? projects.filter((project) => {
-        const addr = (project.address ?? "").toLowerCase();
-        const l1 = (project.landowner1 ?? "").toLowerCase();
-        const l2 = (project.landowner2 ?? "").toLowerCase();
-        const l3 = (project.landowner3 ?? "").toLowerCase();
-        const commentText = (project.commentSearchText ?? "").toLowerCase();
-        const todoText = (project.todoSearchText ?? "").toLowerCase();
-        return (
-          project.managementNumber.toLowerCase().includes(query) ||
-          (project.projectNumber ?? "").toLowerCase().includes(query) ||
-          addr.includes(query) ||
-          l1.includes(query) ||
-          l2.includes(query) ||
-          l3.includes(query) ||
-          commentText.includes(query) ||
-          todoText.includes(query)
-        );
-      })
-    : [];
 
-  const filteredMeetings = query
-    ? meetings.filter((meeting) => {
-        const title = (meeting.title ?? "").toLowerCase();
-        const content = (meeting.content ?? "").toLowerCase();
-        const agenda = (meeting.agenda ?? "").toLowerCase();
-        const category = (meeting.category ?? "").toLowerCase();
-        return (
-          title.includes(query) ||
-          content.includes(query) ||
-          agenda.includes(query) ||
-          category.includes(query)
-        );
-      })
-    : [];
+  const filteredProjects = useMemo(() => {
+    if (!query) return [];
+    return projects.filter((project) => {
+      const addr = (project.address ?? "").toLowerCase();
+      const l1 = (project.landowner1 ?? "").toLowerCase();
+      const l2 = (project.landowner2 ?? "").toLowerCase();
+      const l3 = (project.landowner3 ?? "").toLowerCase();
+      const commentText = (project.commentSearchText ?? "").toLowerCase();
+      const todoText = (project.todoSearchText ?? "").toLowerCase();
+      return (
+        project.managementNumber.toLowerCase().includes(query) ||
+        (project.projectNumber ?? "").toLowerCase().includes(query) ||
+        addr.includes(query) ||
+        l1.includes(query) ||
+        l2.includes(query) ||
+        l3.includes(query) ||
+        commentText.includes(query) ||
+        todoText.includes(query)
+      );
+    });
+  }, [projects, query]);
+
+  const filteredMeetings = useMemo(() => {
+    if (!query) return [];
+    return meetings.filter((meeting) => {
+      const title = (meeting.title ?? "").toLowerCase();
+      const content = (meeting.content ?? "").toLowerCase();
+      const agenda = (meeting.agenda ?? "").toLowerCase();
+      const category = (meeting.category ?? "").toLowerCase();
+      return (
+        title.includes(query) ||
+        content.includes(query) ||
+        agenda.includes(query) ||
+        category.includes(query)
+      );
+    });
+  }, [meetings, query]);
 
   const hasResults = filteredProjects.length > 0 || filteredMeetings.length > 0;
   const totalCount = filteredProjects.length + filteredMeetings.length;

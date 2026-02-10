@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { projects, progress, comments } from "@/db/schema";
+import {
+  projects,
+  progress,
+  comments,
+  todos,
+  projectFiles,
+  constructionProgress,
+  constructionPhotos,
+  mapAnnotations,
+  slopeAnalyses,
+} from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { updateProjectSchema, validateBody } from "@/lib/validations";
 import { ApiError, createErrorResponse } from "@/lib/api-error";
@@ -112,14 +122,36 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // 関連するコメントを先に削除
-    await db.delete(comments).where(eq(comments.projectId, projectId));
+    // 関連データをすべて削除（外部キー制約を考慮した順序）
+    // トランザクションを使用してデータ整合性を保証
+    await db.transaction(async (tx) => {
+      // 関連するコメントを削除
+      await tx.delete(comments).where(eq(comments.projectId, projectId));
 
-    // 関連する進捗を削除
-    await db.delete(progress).where(eq(progress.projectId, projectId));
+      // 関連する進捗を削除
+      await tx.delete(progress).where(eq(progress.projectId, projectId));
 
-    // 案件を削除
-    await db.delete(projects).where(eq(projects.id, projectId));
+      // 関連するTODOを削除
+      await tx.delete(todos).where(eq(todos.projectId, projectId));
+
+      // 関連するファイルを削除
+      await tx.delete(projectFiles).where(eq(projectFiles.projectId, projectId));
+
+      // 関連する工事進捗を削除
+      await tx.delete(constructionProgress).where(eq(constructionProgress.projectId, projectId));
+
+      // 関連する工事写真を削除
+      await tx.delete(constructionPhotos).where(eq(constructionPhotos.projectId, projectId));
+
+      // 関連する地図アノテーションを削除
+      await tx.delete(mapAnnotations).where(eq(mapAnnotations.projectId, projectId));
+
+      // 関連する傾斜解析を削除
+      await tx.delete(slopeAnalyses).where(eq(slopeAnalyses.projectId, projectId));
+
+      // 最後に案件本体を削除
+      await tx.delete(projects).where(eq(projects.id, projectId));
+    });
 
     // 監査ログ記録
     await logProjectDelete(user, projectId, project.managementNumber, request);
