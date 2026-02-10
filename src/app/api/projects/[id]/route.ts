@@ -146,8 +146,12 @@ export async function DELETE(
       // 関連する地図アノテーションを削除
       await tx.delete(mapAnnotations).where(eq(mapAnnotations.projectId, projectId));
 
-      // 関連する傾斜解析を削除
-      await tx.delete(slopeAnalyses).where(eq(slopeAnalyses.projectId, projectId));
+      // 関連する傾斜解析を削除（テーブルが未作成の場合はスキップ）
+      try {
+        await tx.delete(slopeAnalyses).where(eq(slopeAnalyses.projectId, projectId));
+      } catch (e) {
+        // slope_analyses テーブルが未作成の場合は無視
+      }
 
       // 最後に案件本体を削除
       await tx.delete(projects).where(eq(projects.id, projectId));

@@ -39,11 +39,9 @@ export function DatePicker({
     for (const fmt of formats) {
       const parsed = parse(value, fmt, new Date())
       if (isValid(parsed)) {
-        console.log("[DatePicker] Parsed value:", value, "->", parsed)
         return parsed
       }
     }
-    console.log("[DatePicker] Failed to parse value:", value)
     return undefined
   }, [value])
 

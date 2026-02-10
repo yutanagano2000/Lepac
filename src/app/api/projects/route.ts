@@ -169,6 +169,43 @@ export async function POST(request: NextRequest) {
 
     await logProjectCreate(user, result.id, result.managementNumber, request);
 
+    // 完工月が設定されている場合、進捗レコードを自動生成
+    if (result.completionMonth) {
+      try {
+        const timeline = calculateWorkflowTimelineFromCompletion(result.completionMonth);
+        const newProgress: { title: string; date: Date }[] = [];
+
+        for (const phase of timeline) {
+          if (phase.subPhases && phase.subPhases.length > 0) {
+            for (const sub of phase.subPhases) {
+              if (sub.date) {
+                newProgress.push({ title: sub.title, date: sub.date });
+              }
+            }
+          } else {
+            const phaseDate = phase.startDate || phase.endDate;
+            if (phaseDate) {
+              newProgress.push({ title: phase.title, date: phaseDate });
+            }
+          }
+        }
+
+        if (newProgress.length > 0) {
+          await db.insert(progress).values(
+            newProgress.map((item) => ({
+              projectId: result.id,
+              title: item.title,
+              description: null,
+              status: "planned" as const,
+              createdAt: item.date.toISOString(),
+            }))
+          );
+        }
+      } catch (progressError) {
+        console.error("Auto-generate progress error:", progressError);
+      }
+    }
+
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return createErrorResponse(error, "プロジェクトの作成に失敗しました");

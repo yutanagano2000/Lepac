@@ -326,9 +326,16 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "案件の登録に失敗しました");
       }
+      const newProject = await res.json();
       setForm({ managementNumber: "", manager: "", client: "", projectNumber: "", completionMonth: "" });
       setOpen(false);
-      fetchPage(pagination.page);
+      toast.success("案件を登録しました");
+      // 完工月がある場合は案件詳細に遷移してタイムラインを即表示
+      if (form.completionMonth && newProject?.id) {
+        router.push(`/projects/${newProject.id}`);
+      } else {
+        fetchPage(pagination.page);
+      }
     } catch (error) {
       console.error("handleSubmit error:", error);
       toast.error(error instanceof Error ? error.message : "案件の登録に失敗しました");
@@ -815,24 +822,29 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                 <div className="flex-shrink-0 border-r border-border bg-background z-10">
                   <Table>
                     <TableHeader>
-                      <TableRow className="h-12 bg-muted/30">
-                        <TableHead className="px-2 bg-muted/30" style={{ minWidth: "120px" }}>
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-xs font-semibold whitespace-nowrap">管理番号</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={toggleSort}>
-                              {sortOrder === "asc" ? <ArrowUp className="h-3 w-3 text-primary" /> : <ArrowDown className="h-3 w-3 text-primary" />}
+                      <TableRow className="h-14 bg-muted/40">
+                        {isEditMode && (
+                          <TableHead className="px-2 bg-muted/40 text-center" style={{ minWidth: "50px" }}>
+                            <span className="text-sm font-bold">削除</span>
+                          </TableHead>
+                        )}
+                        <TableHead className="px-3 bg-muted/40" style={{ minWidth: "130px" }}>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm font-bold whitespace-nowrap">管理番号</span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={toggleSort}>
+                              {sortOrder === "asc" ? <ArrowUp className="h-4 w-4 text-primary" /> : <ArrowDown className="h-4 w-4 text-primary" />}
                             </Button>
                           </div>
                         </TableHead>
-                        <TableHead className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: "80px" }}>担当</TableHead>
-                        <TableHead className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: "120px" }}>販売先</TableHead>
-                        <TableHead className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: "140px" }}>販売店 案件番号</TableHead>
+                        <TableHead className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: "90px" }}>担当</TableHead>
+                        <TableHead className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: "130px" }}>販売先</TableHead>
+                        <TableHead className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: "150px" }}>販売店 案件番号</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {projects.length === 0 ? (
                         <TableRow className="h-16">
-                          <TableCell colSpan={4} className="text-center text-muted-foreground text-sm py-8">
+                          <TableCell colSpan={isEditMode ? 5 : 4} className="text-center text-muted-foreground text-base py-8">
                             {searchQuery ? "検索結果がありません" : selectedProjectIds.size > 0 ? "フィルター条件に一致する案件がありません" : "案件がありません"}
                           </TableCell>
                         </TableRow>
@@ -840,20 +852,32 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                         projects.map((project) => (
                           <TableRow
                             key={project.id}
-                            className={cn("h-12", !isEditMode && "cursor-pointer hover:bg-muted/50")}
+                            className={cn("h-14", !isEditMode && "cursor-pointer hover:bg-muted/50")}
                             onClick={() => { if (!isEditMode) router.push(`/projects/${project.id}`); }}
                             onMouseEnter={() => { if (!isEditMode) router.prefetch(`/projects/${project.id}`); }}
                           >
-                            <TableCell className="font-medium text-sm py-2 px-2 bg-background">
+                            {isEditMode && (
+                              <TableCell className="py-2.5 px-2 bg-background text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  onClick={(e) => openDeleteDialog(project, e)}
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                </Button>
+                              </TableCell>
+                            )}
+                            <TableCell className="font-semibold text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "managementNumber", "flex items-center gap-1")}
                             </TableCell>
-                            <TableCell className="text-sm py-2 px-2 bg-background">
+                            <TableCell className="text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "manager")}
                             </TableCell>
-                            <TableCell className="text-sm py-2 px-2 bg-background">
+                            <TableCell className="text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "client")}
                             </TableCell>
-                            <TableCell className="text-sm py-2 px-2 bg-background">
+                            <TableCell className="text-base py-2.5 px-3 bg-background">
                               {renderEditableCell(project, "projectNumber")}
                             </TableCell>
                           </TableRow>
@@ -868,9 +892,9 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                   <div className="min-w-max">
                     <Table>
                       <TableHeader>
-                        <TableRow className="h-12 bg-muted/30">
+                        <TableRow className="h-14 bg-muted/40">
                           {TABLE_COLUMNS.slice(FIXED_COLUMNS_COUNT).map((col) => (
-                            <TableHead key={col.key} className="px-2 whitespace-nowrap text-xs font-semibold bg-muted/30" style={{ minWidth: col.width }}>
+                            <TableHead key={col.key} className="px-3 whitespace-nowrap text-sm font-bold bg-muted/40" style={{ minWidth: col.width }}>
                               {col.label}
                             </TableHead>
                           ))}
@@ -879,17 +903,17 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
                       <TableBody>
                         {projects.length === 0 ? (
                           <TableRow className="h-16">
-                            <TableCell colSpan={TABLE_COLUMNS.length - FIXED_COLUMNS_COUNT} className="text-center text-muted-foreground text-sm py-8">&nbsp;</TableCell>
+                            <TableCell colSpan={TABLE_COLUMNS.length - FIXED_COLUMNS_COUNT} className="text-center text-muted-foreground text-base py-8">&nbsp;</TableCell>
                           </TableRow>
                         ) : (
                           projects.map((project) => (
                             <TableRow
                               key={project.id}
-                              className="h-12 hover:bg-muted/50"
+                              className="h-14 hover:bg-muted/50"
                               onMouseEnter={() => { if (!isEditMode) router.prefetch(`/projects/${project.id}`); }}
                             >
                               {TABLE_COLUMNS.slice(FIXED_COLUMNS_COUNT).map((col) => (
-                                <TableCell key={col.key} className="text-sm py-2 px-2 whitespace-nowrap">
+                                <TableCell key={col.key} className="text-base py-2.5 px-3 whitespace-nowrap">
                                   {renderEditableCell(project, col.key)}
                                 </TableCell>
                               ))}

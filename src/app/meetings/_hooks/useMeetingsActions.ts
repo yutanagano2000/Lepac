@@ -13,12 +13,8 @@ export function useMeetingsActions({ onRefresh }: UseMeetingsActionsProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<MeetingFormData>({ ...INITIAL_FORM_DATA });
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-
   const resetForm = useCallback(() => {
     setForm({ ...INITIAL_FORM_DATA });
-    setSelectedDate(undefined);
   }, []);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -58,15 +54,8 @@ export function useMeetingsActions({ onRefresh }: UseMeetingsActionsProps) {
     }
   }, [form, onRefresh, resetForm]);
 
-  const handleDateSelect = useCallback((date: Date | undefined) => {
-    setSelectedDate(date);
-    if (date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, "0");
-      const d = String(date.getDate()).padStart(2, "0");
-      setForm((prev) => ({ ...prev, meetingDate: `${y}-${m}-${d}` }));
-      setCalendarOpen(false);
-    }
+  const handleDateChange = useCallback((val: string | null) => {
+    setForm((prev) => ({ ...prev, meetingDate: val || "" }));
   }, []);
 
   const updateForm = useCallback((updates: Partial<MeetingFormData>) => {
@@ -76,13 +65,10 @@ export function useMeetingsActions({ onRefresh }: UseMeetingsActionsProps) {
   return {
     form,
     updateForm,
-    selectedDate,
-    calendarOpen,
-    setCalendarOpen,
     dialogOpen,
     setDialogOpen,
     isSubmitting,
     handleSubmit,
-    handleDateSelect,
+    handleDateChange,
   };
 }

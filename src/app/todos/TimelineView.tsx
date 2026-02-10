@@ -25,6 +25,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
+import { format as formatDate } from "date-fns";
 import { PHASES } from "./_constants";
 import type { ProjectWithProgress, TimelineViewProps } from "./_types";
 import { ProjectRow, FilterPanel, ProjectFormDialog } from "./_components";
@@ -689,24 +691,20 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">予定日</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={plannedDate ? plannedDate.toISOString().split("T")[0] : ""}
-                  onChange={(e) =>
-                    setPlannedDate(e.target.value ? new Date(e.target.value) : undefined)
-                  }
+                <DatePicker
+                  value={plannedDate ? formatDate(plannedDate, "yyyy-MM-dd") : null}
+                  onChange={(val) => setPlannedDate(val ? new Date(val + "T00:00:00") : undefined)}
+                  placeholder="予定日を選択"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">完了日</label>
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 border rounded-md"
-                  value={completedDate ? completedDate.toISOString().split("T")[0] : ""}
-                  onChange={(e) =>
-                    setCompletedDate(e.target.value ? new Date(e.target.value) : undefined)
-                  }
+                <DatePicker
+                  value={completedDate ? formatDate(completedDate, "yyyy-MM-dd") : null}
+                  onChange={(val) => setCompletedDate(val ? new Date(val + "T00:00:00") : undefined)}
+                  placeholder="完了日を選択"
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
