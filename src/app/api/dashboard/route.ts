@@ -7,11 +7,18 @@ import { requireOrganization } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
-// タイムラインと同じフェーズ定義
-const PHASES = [
-  "合意書", "案件提出", "現調", "土地売買契約", "土地契約",
-  "法令申請", "法令許可", "電力申請", "電力回答", "SS依頼",
-  "SS実施", "土地決済", "発注", "着工", "連系", "完工"
+// WORKFLOW_PHASESのサブフェーズタイトル（進捗アラート判定用）
+const PROGRESS_PHASE_TITLES = [
+  "案件取得", "初期撮影",
+  "現場案内図作成", "法令チェック", "ハザードマップ確認", "ラフ図面作成",
+  "現調（不足分の写真撮影）",
+  "提出可否チェック",
+  "図面修正", "電力シミュレーション", "近隣挨拶・伐採範囲の許可取得", "土地契約", "地目変更",
+  "DD", "電力申請", "法令申請",
+  "法令回答", "電力回答",
+  "本設計（再シミュレーション実施）",
+  "地盤調査依頼", "決済（名義変更）",
+  "工事着工～完了",
 ];
 
 // 完工月から月初の日付を取得するヘルパー
@@ -195,7 +202,7 @@ export async function GET() {
       // 進捗をタイトルでインデックス化
       const progressByTitle = new Map(projectProgress.map((p) => [p.title, p]));
 
-      for (const phaseTitle of PHASES) {
+      for (const phaseTitle of PROGRESS_PHASE_TITLES) {
         const phaseProgress = progressByTitle.get(phaseTitle);
 
         // statusが"completed"なら完了とみなす（completedAtが欠落していても対応）
@@ -240,7 +247,7 @@ export async function GET() {
     // 5. 進行中案件（最適化版）
     const activeProjects = allProjects.filter((p) => {
       const projectProgress = progressByProject.get(p.id) || [];
-      const completionProgress = projectProgress.find((prog) => prog.title === "完工");
+      const completionProgress = projectProgress.find((prog) => prog.title === "工事着工～完了");
       return !completionProgress || completionProgress.status !== "completed";
     });
 

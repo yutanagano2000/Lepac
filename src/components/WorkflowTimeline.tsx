@@ -1,40 +1,33 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WORKFLOW_PHASES, type WorkflowSubPhase } from "@/lib/timeline";
 import type { Progress } from "@/db/schema";
-import { PhaseDetail, responsibleColors, type PhaseGroupData } from "./workflow-timeline/PhaseDetail";
+import { PhaseDetail, responsibleColors } from "./workflow-timeline/PhaseDetail";
 
-// フェーズグループ定義
-const PHASE_GROUPS = [
-  { id: "01", label: "開始", color: "blue" as const },
-  { id: "02", label: "判断", color: "amber" as const },
-  { id: "03", label: "申請", color: "purple" as const },
-  { id: "04", label: "決済", color: "emerald" as const },
-  { id: "05", label: "完了", color: "green" as const },
-];
+// フェーズグループ→色マッピング
+const PHASE_COLOR_MAP: Record<string, string> = {
+  "01 開始": "blue",
+  "02 判断": "amber",
+  "03 申請": "purple",
+  "04 決済": "emerald",
+  "05 完了": "green",
+};
 
-type PhaseColor = typeof PHASE_GROUPS[number]["color"];
 type PhaseStatus = "pending" | "in_progress" | "completed";
 
-// フェーズカラー取得（メインバー用）
-function getPhaseColors(color: PhaseColor, status: PhaseStatus) {
-  if (status === "completed") {
-    return { bg: "bg-green-500", light: "border-green-400 bg-green-50 dark:bg-green-950/50" };
-  }
-  if (status === "in_progress") {
-    const map: Record<PhaseColor, { bg: string; light: string }> = {
-      blue: { bg: "bg-blue-500", light: "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800" },
-      amber: { bg: "bg-amber-500", light: "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800" },
-      purple: { bg: "bg-purple-500", light: "bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800" },
-      emerald: { bg: "bg-emerald-500", light: "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800" },
-      green: { bg: "bg-green-500", light: "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" },
-    };
-    return map[color];
-  }
-  return { bg: "bg-muted", light: "border-muted-foreground/20 bg-muted/20" };
+// 各フェーズの算出データ
+export interface PhaseData {
+  key: string;
+  title: string;
+  phase: string;
+  color: string;
+  status: PhaseStatus;
+  totalSubs: number;
+  completedSubs: number;
+  subPhases?: readonly WorkflowSubPhase[];
 }
 
 interface WorkflowTimelineProps {
@@ -42,64 +35,72 @@ interface WorkflowTimelineProps {
 }
 
 export function WorkflowTimeline({ progressList }: WorkflowTimelineProps) {
-  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
 
   const completedTitles = useMemo(
     () => new Set(progressList.filter((p) => p.status === "completed").map((p) => p.title)),
     [progressList]
   );
 
-  const groupedPhases = useMemo(() => {
-    return PHASE_GROUPS.map((group) => {
-      const phases = WORKFLOW_PHASES.filter((wp) => wp.phase === `${group.id} ${group.label}`);
+  // 10個の個別フェーズのステータスを算出
+  const phases = useMemo(() => {
+    return WORKFLOW_PHASES.map((wp) => {
+      const color = PHASE_COLOR_MAP[wp.phase] || "blue";
+      const subs = "subPhases" in wp ? (wp.subPhases as readonly WorkflowSubPhase[]) : undefined;
       let totalSubs = 0;
       let completedSubs = 0;
 
-      phases.forEach((phase) => {
-        const subs = "subPhases" in phase ? (phase.subPhases as readonly WorkflowSubPhase[]) : undefined;
-        if (subs) {
-          subs.forEach((sub: WorkflowSubPhase) => {
-            totalSubs++;
-            if (completedTitles.has(sub.title) || completedTitles.has(phase.title)) completedSubs++;
-          });
-        } else {
+      if (subs && subs.length > 0) {
+        subs.forEach((sub) => {
           totalSubs++;
-          if (completedTitles.has(phase.title)) completedSubs++;
-        }
-      });
+          if (completedTitles.has(sub.title)) completedSubs++;
+        });
+      } else {
+        totalSubs = 1;
+        if (completedTitles.has(wp.title)) completedSubs = 1;
+      }
 
       let status: PhaseStatus = "pending";
       if (completedSubs > 0 && completedSubs >= totalSubs) status = "completed";
       else if (completedSubs > 0) status = "in_progress";
 
-      return { ...group, phases, status, totalSubs, completedSubs } as PhaseGroupData;
+      return {
+        key: wp.key,
+        title: wp.title,
+        phase: wp.phase,
+        color,
+        status,
+        totalSubs,
+        completedSubs,
+        subPhases: subs,
+      } as PhaseData;
     });
   }, [completedTitles]);
 
-  const activeGroupId = useMemo(() => {
-    const inProgress = groupedPhases.find((g) => g.status === "in_progress");
-    return inProgress?.id ?? null;
-  }, [groupedPhases]);
+  // 自動展開: 最初のin_progressフェーズ
+  const activePhaseKey = useMemo(() => {
+    const inProgress = phases.find((p) => p.status === "in_progress");
+    return inProgress?.key ?? null;
+  }, [phases]);
 
-  const effectiveExpanded = expandedGroup ?? activeGroupId;
+  const effectiveExpanded = expandedPhase ?? activePhaseKey;
 
   // 次に行うべきこと
   const nextAction = useMemo(() => {
-    for (const group of groupedPhases) {
-      if (group.status === "completed") continue;
-      for (const phase of group.phases) {
-        const subs = "subPhases" in phase ? (phase.subPhases as readonly WorkflowSubPhase[]) : undefined;
-        if (subs) {
-          for (const sub of subs) {
-            if (!completedTitles.has(sub.title)) return { title: sub.title, group: group.label };
+    for (const phase of phases) {
+      if (phase.status === "completed") continue;
+      if (phase.subPhases && phase.subPhases.length > 0) {
+        for (const sub of phase.subPhases) {
+          if (!completedTitles.has(sub.title)) {
+            return { title: sub.title, phase: phase.phase.split(" ")[1] };
           }
-        } else if (!completedTitles.has(phase.title)) {
-          return { title: phase.title, group: group.label };
         }
+      } else if (!completedTitles.has(phase.title)) {
+        return { title: phase.title, phase: phase.phase.split(" ")[1] };
       }
     }
     return null;
-  }, [groupedPhases, completedTitles]);
+  }, [phases, completedTitles]);
 
   return (
     <div className="space-y-3">
@@ -108,67 +109,92 @@ export function WorkflowTimeline({ progressList }: WorkflowTimelineProps) {
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
           <span className="text-sm font-medium text-blue-700 dark:text-blue-300">次の工程:</span>
           <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">{nextAction.title}</span>
-          <span className="text-xs text-blue-500 dark:text-blue-400">({nextAction.group})</span>
+          <span className="text-xs text-blue-500 dark:text-blue-400">({nextAction.phase})</span>
         </div>
       )}
 
-      {/* 横型フェーズバー */}
-      <div className="flex items-center gap-0">
-        {groupedPhases.map((group, index) => {
-          const colors = getPhaseColors(group.color, group.status);
-          const isExpanded = effectiveExpanded === group.id;
+      {/* 横型10フェーズノード（モバイル横スクロール対応） */}
+      <div className="overflow-x-auto -mx-2 px-2 pb-2">
+        <div className="flex items-center min-w-[640px]">
+          {phases.map((phase, index) => {
+            const isExpanded = effectiveExpanded === phase.key;
+            const isWaiting = phase.key === "waiting_period";
 
-          return (
-            <div key={group.id} className="flex items-center flex-1 min-w-0">
-              <button
-                type="button"
-                onClick={() => setExpandedGroup(isExpanded ? null : group.id)}
-                className={cn(
-                  "flex flex-col items-center justify-center w-full py-3 px-2 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md",
-                  isExpanded ? "ring-2 ring-offset-2 ring-primary/50" : "",
-                  group.status === "completed" ? colors.light : group.status === "in_progress" ? colors.light : "border-muted-foreground/20 bg-muted/20"
-                )}
-              >
-                <div className={cn("flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full mb-2", colors.bg)}>
-                  {group.status === "completed" ? (
-                    <Check className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-                  ) : (
-                    <span className={cn("text-base sm:text-lg font-bold", group.status === "in_progress" ? "text-white" : "text-muted-foreground")}>
-                      {group.id}
+            return (
+              <div key={phase.key} className="flex items-center flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setExpandedPhase(isExpanded ? null : phase.key)}
+                  className="flex flex-col items-center flex-1 group"
+                >
+                  {/* サークルノード */}
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all",
+                      isExpanded && "ring-2 ring-offset-1 ring-primary/50",
+                      isWaiting && phase.status !== "completed"
+                        ? "border-secondary bg-secondary"
+                        : phase.status === "completed"
+                        ? "border-green-500 bg-green-500"
+                        : phase.status === "in_progress"
+                        ? "border-primary bg-primary/10"
+                        : "border-muted-foreground/30 bg-muted/30",
+                      "group-hover:shadow-md"
+                    )}
+                  >
+                    {isWaiting && phase.status !== "completed" ? (
+                      <Clock className="h-4 w-4 text-white" />
+                    ) : phase.status === "completed" ? (
+                      <Check className="h-4 w-4 text-white" />
+                    ) : phase.status === "in_progress" ? (
+                      <span className="text-xs font-bold text-primary">{index + 1}</span>
+                    ) : (
+                      <span className="text-xs font-bold text-muted-foreground">{index + 1}</span>
+                    )}
+                  </div>
+
+                  {/* タイトル */}
+                  <span className={cn(
+                    "text-[10px] sm:text-xs mt-1.5 text-center leading-tight line-clamp-2 max-w-[72px] sm:max-w-[80px]",
+                    phase.status === "completed" ? "text-green-700 dark:text-green-300 font-medium"
+                      : phase.status === "in_progress" ? "text-foreground font-medium"
+                      : "text-muted-foreground"
+                  )}>
+                    {phase.title}
+                  </span>
+
+                  {/* 進捗カウント */}
+                  {phase.totalSubs > 1 && (
+                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                      {phase.completedSubs}/{phase.totalSubs}
                     </span>
                   )}
-                </div>
-                <span className={cn(
-                  "text-sm sm:text-base font-semibold",
-                  group.status === "completed" ? "text-green-700 dark:text-green-300"
-                    : group.status === "in_progress" ? "text-foreground"
-                    : "text-muted-foreground"
-                )}>
-                  {group.label}
-                </span>
-                {group.totalSubs > 0 && (
-                  <span className="text-xs text-muted-foreground mt-0.5">
-                    {group.completedSubs}/{group.totalSubs}
-                  </span>
+                </button>
+
+                {/* 接続線 */}
+                {index < phases.length - 1 && (
+                  <div className={cn(
+                    "h-0.5 w-3 -mx-0.5 shrink-0",
+                    phase.status === "completed" ? "bg-green-500" : "bg-muted-foreground/20"
+                  )} />
                 )}
-              </button>
-              {index < groupedPhases.length - 1 && (
-                <div className={cn("flex items-center mx-1 shrink-0", group.status === "completed" ? "text-green-500" : "text-muted-foreground/30")}>
-                  <ChevronRight className="h-5 w-5" />
-                </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* 展開されたフェーズグループの詳細 */}
-      {effectiveExpanded && (
-        <PhaseDetail
-          group={groupedPhases.find((g) => g.id === effectiveExpanded)!}
-          completedTitles={completedTitles}
-        />
-      )}
+      {/* 展開されたフェーズの詳細 */}
+      {effectiveExpanded && (() => {
+        const selectedPhase = phases.find((p) => p.key === effectiveExpanded);
+        if (!selectedPhase || !selectedPhase.subPhases || selectedPhase.subPhases.length === 0) return null;
+        return (
+          <PhaseDetail
+            phase={selectedPhase}
+            completedTitles={completedTitles}
+          />
+        );
+      })()}
 
       {/* 凡例 */}
       {effectiveExpanded && (

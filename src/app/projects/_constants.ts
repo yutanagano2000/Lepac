@@ -19,7 +19,7 @@ export const TABLE_COLUMNS: { key: keyof Project | string; label: string; width?
   { key: "sales", label: "営業", width: "80px" },
   { key: "parcelCount", label: "筆数", width: "60px" },
   { key: "prefecture", label: "都道府県", width: "100px" },
-  { key: "blank1", label: "(空白)", width: "60px" },
+  { key: "address", label: "現地住所", width: "160px" },
   { key: "link", label: "リンク", width: "80px" },
   { key: "agreementMonth", label: "合意書 計上月", width: "120px" },
   { key: "projectSubmissionScheduled", label: "案件提出 予定日", width: "130px" },

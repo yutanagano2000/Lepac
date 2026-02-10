@@ -29,16 +29,33 @@ import { PHASES } from "./_constants";
 import type { ProjectWithProgress, TimelineViewProps } from "./_types";
 import { ProjectRow, FilterPanel, ProjectFormDialog } from "./_components";
 
-// フェーズ状況を取得
-function getPhaseStatus(project: ProjectWithProgress, phaseTitle: string) {
-  const progressItem = project.progressItems.find((p) => p.title === phaseTitle);
-  if (!progressItem) return { status: "pending" as const, date: null };
+// フェーズ状況をサブフェーズから集約して取得
+function getPhaseStatus(project: ProjectWithProgress, phase: (typeof PHASES)[number]) {
+  const subTitles = phase.subTitles;
+  let completedCount = 0;
+  let latestDate: Date | null = null;
+  let hasAnyProgress = false;
 
-  if (progressItem.status === "completed" && progressItem.completedAt) {
-    return { status: "completed" as const, date: new Date(progressItem.completedAt) };
+  for (const subTitle of subTitles) {
+    const item = project.progressItems.find((p) => p.title === subTitle);
+    if (!item) continue;
+    hasAnyProgress = true;
+
+    if (item.status === "completed" && item.completedAt) {
+      completedCount++;
+      const d = new Date(item.completedAt);
+      if (!latestDate || d > latestDate) latestDate = d;
+    } else if (item.createdAt) {
+      const d = new Date(item.createdAt);
+      if (!latestDate || d > latestDate) latestDate = d;
+    }
   }
-  if (progressItem.createdAt) {
-    return { status: "planned" as const, date: new Date(progressItem.createdAt) };
+
+  if (completedCount === subTitles.length && subTitles.length > 0) {
+    return { status: "completed" as const, date: latestDate };
+  }
+  if (hasAnyProgress) {
+    return { status: "planned" as const, date: latestDate };
   }
   return { status: "pending" as const, date: null };
 }
@@ -46,7 +63,7 @@ function getPhaseStatus(project: ProjectWithProgress, phaseTitle: string) {
 // 赤アラートかどうか
 function isPhaseAlert(project: ProjectWithProgress, phaseIndex: number, today: Date): boolean {
   const phase = PHASES[phaseIndex];
-  const phaseStatus = getPhaseStatus(project, phase.title);
+  const phaseStatus = getPhaseStatus(project, phase);
 
   if (phaseStatus.status === "completed") return false;
   if (!phaseStatus.date) return true;
@@ -613,10 +630,11 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
                       {PHASES.map((phase) => (
                         <th
                           key={phase.key}
-                          className="px-0 py-3 text-center font-semibold text-muted-foreground text-xs"
-                          title={phase.title}
+                          className="px-0 py-2 text-center text-muted-foreground"
+                          title={phase.subTitles.join("、")}
                         >
-                          <span className="block truncate leading-tight">{phase.title}</span>
+                          <span className="block text-xs font-semibold leading-tight">{phase.title}</span>
+                          <span className="block text-[10px] font-normal leading-tight mt-0.5 opacity-70">{phase.subtitle}</span>
                         </th>
                       ))}
                     </tr>

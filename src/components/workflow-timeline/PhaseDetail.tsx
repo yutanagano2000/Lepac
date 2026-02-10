@@ -3,10 +3,7 @@
 import { Check, ChevronDown, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkflowSubPhase, ResponsibleType } from "@/lib/timeline";
-
-// フェーズの状態
-type PhaseStatus = "pending" | "in_progress" | "completed";
-type PhaseColor = "blue" | "amber" | "purple" | "emerald" | "green";
+import type { PhaseData } from "../WorkflowTimeline";
 
 // 担当者バッジの色定義
 const responsibleColors: Record<ResponsibleType, string> = {
@@ -16,74 +13,40 @@ const responsibleColors: Record<ResponsibleType, string> = {
   '営業': 'bg-orange-600',
 };
 
-// フェーズカラー取得
-function getPhaseColors(_color: PhaseColor, status: PhaseStatus) {
-  if (status === "completed") {
-    return { light: "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" };
-  }
-  if (status === "in_progress") {
-    const map: Record<PhaseColor, { light: string }> = {
-      blue: { light: "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800" },
-      amber: { light: "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800" },
-      purple: { light: "bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800" },
-      emerald: { light: "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800" },
-      green: { light: "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800" },
-    };
-    return map[_color];
-  }
-  return { light: "bg-muted/30 border-border" };
-}
-
-export interface PhaseGroupData {
-  id: string;
-  label: string;
-  color: PhaseColor;
-  phases: readonly { key: string; title: string; phase: string; subPhases?: readonly WorkflowSubPhase[] }[];
-  status: PhaseStatus;
-  totalSubs: number;
-  completedSubs: number;
-}
-
-export function PhaseDetail({ group, completedTitles }: {
-  group: PhaseGroupData;
+export function PhaseDetail({ phase, completedTitles }: {
+  phase: PhaseData;
   completedTitles: Set<string>;
 }) {
-  const colors = getPhaseColors(group.color, group.status);
+  const statusBg = phase.status === "completed"
+    ? "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
+    : phase.status === "in_progress"
+    ? "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800"
+    : "bg-muted/30 border-border";
 
   return (
     <div className={cn(
       "rounded-xl border-2 p-4 animate-in fade-in slide-in-from-top-2 duration-300",
-      colors.light,
+      statusBg,
     )}>
       <div className="flex items-center gap-2 mb-3">
         <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-base font-semibold">{group.id} {group.label} の工程</h3>
+        <h3 className="text-base font-semibold">{phase.title}</h3>
+        <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+          {phase.phase}
+        </span>
+        {phase.totalSubs > 0 && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            {phase.completedSubs}/{phase.totalSubs} 完了
+          </span>
+        )}
       </div>
-      <div className="space-y-2">
-        {group.phases.map((phase) => {
-          const subs = phase.subPhases;
-          return (
-            <div key={phase.key} className="space-y-1.5">
-              <div className="flex items-center gap-2 py-1">
-                <StatusIcon completed={completedTitles.has(phase.title)} />
-                <span className={cn(
-                  "text-sm sm:text-base font-medium",
-                  completedTitles.has(phase.title) ? "text-green-700 dark:text-green-300" : "text-foreground"
-                )}>
-                  {phase.title}
-                </span>
-              </div>
-              {subs && subs.length > 0 && (
-                <div className="ml-6 space-y-1 border-l-2 border-muted-foreground/20 pl-3">
-                  {subs.map((sub) => (
-                    <SubPhaseItem key={sub.key} sub={sub} completed={completedTitles.has(sub.title)} />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {phase.subPhases && phase.subPhases.length > 0 && (
+        <div className="space-y-1 border-l-2 border-muted-foreground/20 pl-4 ml-1">
+          {phase.subPhases.map((sub) => (
+            <SubPhaseItem key={sub.key} sub={sub} completed={completedTitles.has(sub.title)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -94,7 +57,7 @@ function SubPhaseItem({ sub, completed }: { sub: WorkflowSubPhase; completed: bo
       "flex items-center gap-2 py-1.5 px-2 rounded-lg",
       completed ? "bg-green-100/50 dark:bg-green-900/20" : "hover:bg-muted/50"
     )}>
-      <StatusIcon completed={completed} size="sm" />
+      <StatusIcon completed={completed} />
       <span className={cn(
         "text-sm flex-1",
         completed ? "text-green-700 dark:text-green-300 line-through" : "text-foreground"
@@ -125,16 +88,15 @@ function SubPhaseItem({ sub, completed }: { sub: WorkflowSubPhase; completed: bo
   );
 }
 
-function StatusIcon({ completed, size = "md" }: { completed: boolean; size?: "sm" | "md" }) {
-  const sizeClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+function StatusIcon({ completed }: { completed: boolean }) {
   if (completed) {
     return (
-      <div className={cn("flex items-center justify-center rounded-full bg-green-500 shrink-0", sizeClass)}>
-        <Check className={cn(size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3", "text-white")} />
+      <div className="flex items-center justify-center h-4 w-4 rounded-full bg-green-500 shrink-0">
+        <Check className="h-2.5 w-2.5 text-white" />
       </div>
     );
   }
-  return <Circle className={cn(sizeClass, "text-muted-foreground/40 shrink-0")} />;
+  return <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />;
 }
 
 export { responsibleColors };
