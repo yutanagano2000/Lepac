@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { projects } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { updateConstructionSchema, validateBody } from "@/lib/validations";
-import { requireProjectAccess } from "@/lib/auth-guard";
+import { requireProjectAccessWithCsrf } from "@/lib/auth-guard";
 
 export async function PATCH(
   request: NextRequest,
@@ -23,7 +23,7 @@ export async function PATCH(
   }
 
   // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }

@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { del } from "@vercel/blob";
 import { db } from "@/db";
 import { constructionPhotos } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { requireProjectAccess } from "@/lib/auth-guard";
+import { requireProjectAccessWithCsrf } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 // 工事写真削除
 export async function DELETE(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; photoId: string }> }
 ) {
   const { id, photoId } = await params;
@@ -21,7 +21,7 @@ export async function DELETE(
   }
 
   // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }

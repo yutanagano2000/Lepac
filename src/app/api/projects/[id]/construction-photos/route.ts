@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { db } from "@/db";
 import { constructionPhotos, CONSTRUCTION_PHOTO_CATEGORIES } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { requireProjectAccess } from "@/lib/auth-guard";
+import { requireProjectAccess, requireProjectAccessWithCsrf } from "@/lib/auth-guard";
 import crypto from "crypto";
 import path from "path";
 
@@ -71,7 +71,7 @@ export async function GET(
 
 // 工事写真アップロード
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -82,7 +82,7 @@ export async function POST(
   }
 
   // 認証・組織・プロジェクト所有権チェック
-  const authResult = await requireProjectAccess(projectId);
+  const authResult = await requireProjectAccessWithCsrf(request, projectId);
   if (!authResult.success) {
     return authResult.response;
   }

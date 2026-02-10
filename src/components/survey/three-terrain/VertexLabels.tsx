@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Html } from "@react-three/drei";
 import { latLonToLocalXZ } from "./geo-utils";
-import { VERTICAL_EXAGGERATION, VERTEX_LABELS } from "./types";
+import { VERTEX_LABELS } from "./types";
 
 interface VertexLabelsProps {
   polygon: [number, number][];
@@ -15,9 +15,10 @@ interface VertexLabelsProps {
     rows: number;
     cols: number;
   };
+  verticalExaggeration: number;
 }
 
-export function VertexLabels({ polygon, elevationMatrix, gridInfo }: VertexLabelsProps) {
+export function VertexLabels({ polygon, elevationMatrix, gridInfo, verticalExaggeration }: VertexLabelsProps) {
   const { originLat, originLon, interval, rows, cols } = gridInfo;
 
   // 標高の基準値（TerrainMeshと同じ計算）
@@ -41,7 +42,7 @@ export function VertexLabels({ polygon, elevationMatrix, gridInfo }: VertexLabel
 
   // 各頂点の3D位置を計算
   const labels = useMemo(() => {
-    return polygon.map(([lat, lon], i) => {
+    return polygon.map(([lon, lat], i) => {
       if (i >= VERTEX_LABELS.length) return null;
 
       const local = latLonToLocalXZ(lat, lon, originLat, originLon);
@@ -61,7 +62,7 @@ export function VertexLabels({ polygon, elevationMatrix, gridInfo }: VertexLabel
           ? (elevationMatrix[r]?.[c] ?? baseElevation)
           : baseElevation;
 
-      const y = (elev - baseElevation) * VERTICAL_EXAGGERATION + 3; // ラベルを少し浮かせる
+      const y = (elev - baseElevation) * verticalExaggeration + 3; // ラベルを少し浮かせる
 
       return {
         label: VERTEX_LABELS[i],
@@ -72,7 +73,7 @@ export function VertexLabels({ polygon, elevationMatrix, gridInfo }: VertexLabel
         ] as [number, number, number],
       };
     }).filter(Boolean) as { label: string; position: [number, number, number] }[];
-  }, [polygon, originLat, originLon, interval, rows, cols, elevationMatrix, baseElevation, meshCenterOffset]);
+  }, [polygon, originLat, originLon, interval, rows, cols, elevationMatrix, baseElevation, meshCenterOffset, verticalExaggeration]);
 
   return (
     <>

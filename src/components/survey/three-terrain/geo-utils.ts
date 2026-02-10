@@ -32,8 +32,19 @@ function latLonToPixelInTile(lat: number, lon: number, zoom: number) {
   return { px, py };
 }
 
+/** GSIタイルレイヤーのURL生成 */
+function getTileUrl(layer: string, zoom: number, tx: number, ty: number): string {
+  const layerMap: Record<string, { path: string; ext: string }> = {
+    photo: { path: "seamlessphoto", ext: "jpg" },
+    std: { path: "std", ext: "png" },
+    pale: { path: "pale", ext: "png" },
+  };
+  const { path, ext } = layerMap[layer] ?? layerMap.photo;
+  return `https://cyberjapandata.gsi.go.jp/xyz/${path}/${zoom}/${tx}/${ty}.${ext}`;
+}
+
 /**
- * グリッド範囲をカバーするGSI航空写真タイルを取得し
+ * グリッド範囲をカバーするGSIタイルを取得し
  * 1枚のCanvasに合成して返す
  */
 export async function fetchGsiPhotoTiles(
@@ -41,7 +52,8 @@ export async function fetchGsiPhotoTiles(
   originLon: number,
   interval: number,
   rows: number,
-  cols: number
+  cols: number,
+  layer: string = "photo"
 ): Promise<TileTextureResult | null> {
   const EARTH_RADIUS = 6371000;
   const dLat = (interval / EARTH_RADIUS) * (180 / Math.PI);
@@ -79,7 +91,7 @@ export async function fetchGsiPhotoTiles(
   const promises: Promise<void>[] = [];
   for (let ty = minTileY; ty <= maxTileY; ty++) {
     for (let tx = minTileX; tx <= maxTileX; tx++) {
-      const url = `https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/${zoom}/${tx}/${ty}.jpg`;
+      const url = getTileUrl(layer, zoom, tx, ty);
       const offsetX = (tx - minTileX) * TILE_SIZE;
       const offsetY = (ty - minTileY) * TILE_SIZE;
       promises.push(

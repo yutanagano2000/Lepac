@@ -11,24 +11,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TerrainMesh } from "./three-terrain/TerrainMesh";
+import { TerrainMesh, type TileLayerType } from "./three-terrain/TerrainMesh";
 import { VertexLabels } from "./three-terrain/VertexLabels";
 import type { ThreeTerrainViewerProps } from "./three-terrain/types";
+import { computeDynamicExaggeration } from "./three-terrain/types";
 
 function TerrainScene({
   elevationMatrix,
   gridInfo,
   polygon,
+  tileLayer,
 }: {
   elevationMatrix: (number | null)[][];
   gridInfo: NonNullable<ThreeTerrainViewerProps["gridInfo"]>;
   polygon?: [number, number][];
+  tileLayer: TileLayerType;
 }) {
-  const cameraDistance = useMemo(() => {
+  const horizontalExtent = useMemo(() => {
     const width = (gridInfo.cols - 1) * gridInfo.interval;
     const depth = (gridInfo.rows - 1) * gridInfo.interval;
-    return Math.max(width, depth) * 1.2;
+    return Math.max(width, depth);
   }, [gridInfo]);
+
+  const verticalExaggeration = useMemo(
+    () => computeDynamicExaggeration(elevationMatrix, horizontalExtent),
+    [elevationMatrix, horizontalExtent]
+  );
+
+  const cameraDistance = horizontalExtent * 1.2;
 
   return (
     <>
@@ -36,13 +46,19 @@ function TerrainScene({
       <directionalLight position={[50, 100, 50]} intensity={0.8} />
       <directionalLight position={[-30, 60, -30]} intensity={0.3} />
 
-      <TerrainMesh elevationMatrix={elevationMatrix} gridInfo={gridInfo} />
+      <TerrainMesh
+        elevationMatrix={elevationMatrix}
+        gridInfo={gridInfo}
+        verticalExaggeration={verticalExaggeration}
+        tileLayer={tileLayer}
+      />
 
       {polygon && polygon.length >= 3 && (
         <VertexLabels
           polygon={polygon}
           elevationMatrix={elevationMatrix}
           gridInfo={gridInfo}
+          verticalExaggeration={verticalExaggeration}
         />
       )}
 
@@ -75,19 +91,39 @@ export function ThreeTerrainViewer({
   elevationMatrix,
   gridInfo,
 }: ThreeTerrainViewerProps) {
-  const [imageLayer, setImageLayer] = useState<"photo" | "std" | "pale">("photo");
+  const [imageLayer, setImageLayer] = useState<TileLayerType>("photo");
 
   // 標高データがない場合のプレースホルダー
   const hasData = elevationMatrix && gridInfo;
 
-  // カメラ初期位置の計算
+  // カメラ初期位置の計算（地形起伏が見えやすい斜め上方から）
   const cameraPosition = useMemo<[number, number, number]>(() => {
-    if (!gridInfo) return [50, 80, 80];
+    if (!gridInfo || !elevationMatrix) return [50, 80, 80];
     const width = (gridInfo.cols - 1) * gridInfo.interval;
     const depth = (gridInfo.rows - 1) * gridInfo.interval;
-    const dist = Math.max(width, depth) * 0.8;
-    return [dist * 0.5, dist * 0.6, dist * 0.5];
-  }, [gridInfo]);
+    const horizontalExtent = Math.max(width, depth);
+    const exag = computeDynamicExaggeration(elevationMatrix, horizontalExtent);
+
+    // 誇張後の概算鉛直レンジ
+    const vals: number[] = [];
+    for (const row of elevationMatrix) {
+      for (const v of row) {
+        if (v !== null) vals.push(v);
+      }
+    }
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (const v of vals) {
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    const elevRange = vals.length > 0 ? (maxV - minV) * exag : 0;
+
+    // 水平距離の0.6倍の位置から、鉛直レンジ+水平距離の0.4倍の高さで見下ろす
+    const dist = horizontalExtent * 0.6;
+    const height = Math.max(elevRange * 0.8, horizontalExtent * 0.4);
+    return [dist * 0.7, height, dist * 0.7];
+  }, [gridInfo, elevationMatrix]);
 
   if (!hasData) {
     const msg = center
@@ -125,6 +161,7 @@ export function ThreeTerrainViewer({
             elevationMatrix={elevationMatrix}
             gridInfo={gridInfo}
             polygon={polygon}
+            tileLayer={imageLayer}
           />
         </Suspense>
       </Canvas>

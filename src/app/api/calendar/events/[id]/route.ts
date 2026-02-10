@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { calendarEvents } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { requireOrganization } from "@/lib/auth-guard";
+import { requireOrganizationWithCsrf } from "@/lib/auth-guard";
 
 // カスタムイベントを削除
 export async function DELETE(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   // 認証・組織チェック
-  const authResult = await requireOrganization();
+  const authResult = await requireOrganizationWithCsrf(request);
   if (!authResult.success) {
     return authResult.response;
   }

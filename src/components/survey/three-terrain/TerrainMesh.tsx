@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { fetchGsiPhotoTiles } from "./geo-utils";
-import { VERTICAL_EXAGGERATION } from "./types";
+
+export type TileLayerType = "photo" | "std" | "pale";
 
 interface TerrainMeshProps {
   elevationMatrix: (number | null)[][];
@@ -14,9 +15,11 @@ interface TerrainMeshProps {
     rows: number;
     cols: number;
   };
+  verticalExaggeration: number;
+  tileLayer?: TileLayerType;
 }
 
-export function TerrainMesh({ elevationMatrix, gridInfo }: TerrainMeshProps) {
+export function TerrainMesh({ elevationMatrix, gridInfo, verticalExaggeration, tileLayer = "photo" }: TerrainMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const { rows, cols, interval } = gridInfo;
 
@@ -46,7 +49,7 @@ export function TerrainMesh({ elevationMatrix, gridInfo }: TerrainMeshProps) {
         const idx = r * cols + c;
         const elev = elevationMatrix[r]?.[c];
         const y = elev !== null && elev !== undefined
-          ? (elev - baseElevation) * VERTICAL_EXAGGERATION
+          ? (elev - baseElevation) * verticalExaggeration
           : 0;
         posAttr.setY(idx, y);
       }
@@ -55,7 +58,7 @@ export function TerrainMesh({ elevationMatrix, gridInfo }: TerrainMeshProps) {
     geo.computeVertexNormals();
     geo.center();
     return geo;
-  }, [elevationMatrix, rows, cols, interval, baseElevation]);
+  }, [elevationMatrix, rows, cols, interval, baseElevation, verticalExaggeration]);
 
   // GSI航空写真テクスチャをロード
   useEffect(() => {
@@ -66,7 +69,8 @@ export function TerrainMesh({ elevationMatrix, gridInfo }: TerrainMeshProps) {
       gridInfo.originLon,
       gridInfo.interval,
       gridInfo.rows,
-      gridInfo.cols
+      gridInfo.cols,
+      tileLayer
     ).then((result) => {
       if (cancelled || !result || !meshRef.current) return;
 
@@ -92,7 +96,7 @@ export function TerrainMesh({ elevationMatrix, gridInfo }: TerrainMeshProps) {
     });
 
     return () => { cancelled = true; };
-  }, [gridInfo, geometry]);
+  }, [gridInfo, geometry, tileLayer]);
 
   return (
     <mesh ref={meshRef} geometry={geometry}>

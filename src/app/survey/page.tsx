@@ -77,6 +77,16 @@ function SurveyPageContent() {
   const [projectInfo, setProjectInfo] = useState<{ id: string; name: string } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [resetTrigger, setResetTrigger] = useState(0);
+  const [viewer3dTab, setViewer3dTab] = useState<string>("terrain3d");
+
+  // 解析完了時に3D解析タブへ自動切替
+  useEffect(() => {
+    if (gridResult) {
+      setViewer3dTab("surface");
+    } else {
+      setViewer3dTab("terrain3d");
+    }
+  }, [gridResult]);
 
   // ─── エクスポート用 Ref ───────────────────────────────
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -391,7 +401,7 @@ function SurveyPageContent() {
             </Card>
 
             <Card className="overflow-hidden" ref={surfaceContainerRef}>
-              <Tabs defaultValue={gridResult ? "surface" : "terrain3d"}>
+              <Tabs value={viewer3dTab} onValueChange={setViewer3dTab}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">3D地形ビューワー</CardTitle>

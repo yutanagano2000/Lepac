@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { requireOrganization } from "@/lib/auth-guard";
+import { requireOrganization, requireOrganizationWithCsrf } from "@/lib/auth-guard";
 import { syncFromSheets, saveSyncLog, getLastSyncStatus } from "@/lib/sheets-sync";
 
 /**
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       organizationId = 1;
     } else {
       // ブラウザからの手動同期
-      const authResult = await requireOrganization();
+      const authResult = await requireOrganizationWithCsrf(request);
       if (!authResult.success) return authResult.response;
       organizationId = authResult.organizationId;
     }

@@ -59,36 +59,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 開発用admin認証（NODE_ENV=developmentの場合のみ有効）
-    // セキュリティ: 環境変数でさらに明示的に有効化が必要
-    if (
-      process.env.NODE_ENV === "development" &&
-      process.env.ENABLE_DEV_AUTH === "true" &&
-      body.username === "admin" &&
-      body.password === "admin123"
-    ) {
-      // JWT発行（開発用admin）
-      const token = await signMobileToken({
-        userId: 999,
-        username: "admin",
-        organizationId: null,
-        role: "admin",
-      });
-
-      return NextResponse.json({
-        token,
-        user: {
-          id: 999,
-          name: "管理者",
-          username: "admin",
-          image: null,
-          role: "admin",
-          organizationId: null,
-        },
-        organization: null,
-      });
-    }
-
     // ユーザー検索
     const [user] = await db
       .select()

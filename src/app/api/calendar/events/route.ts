@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos, projects, progress, meetings, calendarEvents } from "@/db/schema";
 import { eq, and, gte, lt, or, isNull, isNotNull, inArray, asc } from "drizzle-orm";
 import { createCalendarEventSchema, validateBody } from "@/lib/validations";
-import { requireOrganization, getUserId } from "@/lib/auth-guard";
+import { requireOrganization, requireOrganizationWithCsrf, getUserId } from "@/lib/auth-guard";
 
 // 各種別の最大件数（DoS防止）
 const MAX_EVENTS_PER_TYPE = 500;
@@ -252,9 +252,9 @@ export async function GET(request: Request) {
 }
 
 // カスタムイベントを作成
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   // 認証・組織チェック
-  const authResult = await requireOrganization();
+  const authResult = await requireOrganizationWithCsrf(request);
   if (!authResult.success) {
     return authResult.response;
   }

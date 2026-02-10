@@ -25,57 +25,74 @@ export async function GET(request: Request) {
   const escapedQuery = query.replace(/[%_\\]/g, (char) => `\\${char}`);
   const searchPattern = `%${escapedQuery}%`;
 
-  // 案件を検索（組織フィルタリング）
-  const projectResults = await db
-    .select()
-    .from(projects)
-    .where(
-      and(
-        eq(projects.organizationId, organizationId),
-        or(
-          like(projects.managementNumber, searchPattern),
-          like(projects.client, searchPattern),
-          like(projects.manager, searchPattern),
-          like(projects.address, searchPattern),
-          like(projects.projectNumber, searchPattern),
-          like(projects.landowner1, searchPattern),
-          like(projects.landowner2, searchPattern),
-          like(projects.landowner3, searchPattern)
+  // 3クエリを並列実行（Promise.all）で高速化
+  const [projectResults, todoResults, meetingResults] = await Promise.all([
+    // 案件を検索（必要カラムのみselect）
+    db
+      .select({
+        id: projects.id,
+        managementNumber: projects.managementNumber,
+        client: projects.client,
+      })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.organizationId, organizationId),
+          or(
+            like(projects.managementNumber, searchPattern),
+            like(projects.client, searchPattern),
+            like(projects.manager, searchPattern),
+            like(projects.address, searchPattern),
+            like(projects.projectNumber, searchPattern),
+            like(projects.landowner1, searchPattern),
+            like(projects.landowner2, searchPattern),
+            like(projects.landowner3, searchPattern)
+          )
         )
       )
-    )
-    .orderBy(asc(projects.managementNumber))
-    .limit(10);
+      .orderBy(asc(projects.managementNumber))
+      .limit(10),
 
-  // TODOを検索（組織フィルタリング）
-  const todoResults = await db
-    .select()
-    .from(todos)
-    .where(
-      and(
-        eq(todos.organizationId, organizationId),
-        like(todos.content, searchPattern)
-      )
-    )
-    .orderBy(asc(todos.dueDate))
-    .limit(10);
-
-  // 会議を検索（組織フィルタリング）
-  const meetingResults = await db
-    .select()
-    .from(meetings)
-    .where(
-      and(
-        eq(meetings.organizationId, organizationId),
-        or(
-          like(meetings.title, searchPattern),
-          like(meetings.content, searchPattern),
-          like(meetings.agenda, searchPattern)
+    // TODOを検索（必要カラムのみselect）
+    db
+      .select({
+        id: todos.id,
+        content: todos.content,
+        dueDate: todos.dueDate,
+        projectId: todos.projectId,
+      })
+      .from(todos)
+      .where(
+        and(
+          eq(todos.organizationId, organizationId),
+          like(todos.content, searchPattern)
         )
       )
-    )
-    .orderBy(desc(meetings.meetingDate))
-    .limit(10);
+      .orderBy(asc(todos.dueDate))
+      .limit(10),
+
+    // 会議を検索（必要カラムのみselect）
+    db
+      .select({
+        id: meetings.id,
+        title: meetings.title,
+        meetingDate: meetings.meetingDate,
+        category: meetings.category,
+      })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.organizationId, organizationId),
+          or(
+            like(meetings.title, searchPattern),
+            like(meetings.content, searchPattern),
+            like(meetings.agenda, searchPattern)
+          )
+        )
+      )
+      .orderBy(desc(meetings.meetingDate))
+      .limit(10),
+  ]);
 
   // 結果を統合
   const results = [

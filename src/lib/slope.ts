@@ -26,7 +26,7 @@ export interface SlopeClassification {
   color: string;
 }
 
-const EARTH_RADIUS_M = 6371000;
+export const EARTH_RADIUS_M = 6371000;
 
 /**
  * 中心座標から東西南北に offsetMeters だけ離れた4点を算出

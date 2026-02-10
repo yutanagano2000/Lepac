@@ -31,6 +31,8 @@ function getDbInstance(): LibSQLDatabase<typeof schema> {
   return dbInstance;
 }
 
+let initError: Error | null = null;
+
 export const db: LibSQLDatabase<typeof schema> = new Proxy({} as LibSQLDatabase<typeof schema>, {
   get(_, prop) {
     const instance = getDbInstance();
@@ -38,6 +40,7 @@ export const db: LibSQLDatabase<typeof schema> = new Proxy({} as LibSQLDatabase<
     if (!initPromise) {
       initPromise = initDb().catch((err) => {
         console.error("[DB] Migration error:", err);
+        initError = err instanceof Error ? err : new Error(String(err));
         initPromise = null; // 失敗時は再試行可能に
       });
     }
@@ -62,10 +65,14 @@ export async function ensureDbReady(): Promise<void> {
   if (!initPromise) {
     initPromise = initDb().catch((err) => {
       console.error("[DB] Migration error:", err);
+      initError = err instanceof Error ? err : new Error(String(err));
       initPromise = null;
     });
   }
   await initPromise;
+  if (initError) {
+    throw new Error(`[DB] Database migration failed: ${initError.message}`);
+  }
 }
 
 // 初期化関数をエクスポート
