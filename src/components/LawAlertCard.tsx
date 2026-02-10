@@ -2,6 +2,7 @@
 
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { safeWindowOpen } from "@/lib/sanitize";
 
 export interface LawAlertCardProps {
   /** 法令名（カードのタイトル） */
@@ -47,7 +48,7 @@ export function LawAlertCard({
           <Button
             variant="outline"
             size="lg"
-            onClick={() => window.open(detailUrl, "_blank", "noopener,noreferrer")}
+            onClick={() => safeWindowOpen(detailUrl)}
             className="h-12 px-6 text-base"
           >
             <ExternalLink className="h-4 w-4 mr-2" />

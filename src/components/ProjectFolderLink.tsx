@@ -27,6 +27,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface FileInfo {
   name: string;
@@ -140,7 +141,7 @@ export function ProjectFolderLink({ managementNumber }: ProjectFolderLinkProps) 
       setCopySuccess(folderPath);
       setTimeout(() => setCopySuccess(null), 2000);
     } catch {
-      alert("コピーに失敗しました");
+      toast.error("コピーに失敗しました");
     }
   };
 
@@ -369,6 +370,7 @@ export function ProjectFolderLink({ managementNumber }: ProjectFolderLinkProps) 
                                 copyPath(sf.path);
                               }}
                               title="パスをコピー"
+                              aria-label="パスをコピー"
                             >
                               {copySuccess === sf.path ? (
                                 <CheckCircle2 className="h-3 w-3" />
@@ -385,6 +387,7 @@ export function ProjectFolderLink({ managementNumber }: ProjectFolderLinkProps) 
                                 openInExplorer(sf.path);
                               }}
                               title="フォルダを開く"
+                              aria-label="フォルダを開く"
                             >
                               <ExternalLink className="h-3 w-3" />
                             </Button>
@@ -425,6 +428,7 @@ export function ProjectFolderLink({ managementNumber }: ProjectFolderLinkProps) 
                                         copyPath(filePath);
                                       }}
                                       title="パスをコピー"
+                                      aria-label="パスをコピー"
                                     >
                                       {copySuccess === filePath ? (
                                         <CheckCircle2 className="h-3 w-3" />
@@ -441,6 +445,7 @@ export function ProjectFolderLink({ managementNumber }: ProjectFolderLinkProps) 
                                         openInExplorer(sf.path);
                                       }}
                                       title="フォルダを開く"
+                                      aria-label="フォルダを開く"
                                     >
                                       <ExternalLink className="h-3 w-3" />
                                     </Button>

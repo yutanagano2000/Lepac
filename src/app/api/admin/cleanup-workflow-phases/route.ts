@@ -8,39 +8,29 @@ import { validateCsrf } from "@/lib/csrf-protection";
 /**
  * POST /api/admin/cleanup-workflow-phases
  *
- * WORKFLOW_PHASESベースの不要な進捗項目を全案件から削除
- * これらは以前のバージョンで誤って追加されたもの
+ * 旧PHASE_OFFSETSベースの不要な進捗項目を全案件から削除
+ * WORKFLOW_PHASESへの移行に伴い不要になった項目を対象とする
  */
 
-// WORKFLOW_PHASESベースの項目（削除対象）
-const WORKFLOW_PHASE_TITLES = [
-  "現地詳細確認",
-  "初期調査・設計",
-  "最終調整",
-  "回答待ち",
-  "申請",
-  "契約・詳細設計",
-  "工事着工～完了",
-  "最終判断・決済",
-  // 以下はWORKFLOW_PHASESのサブフェーズ
-  "案件スタート",
-  "案件取得",
-  "初期撮影",
-  "現場案内図作成",
-  "法令チェック",
-  "ハザードマップ確認",
-  "ラフ図面作成",
-  "現調（不足分の写真撮影）",
-  "提出可否チェック",
-  "図面修正",
-  "電力シミュレーション",
-  "近隣挨拶・伐採範囲の許可取得",
-  "地目変更",
-  "DD",
-  "法令回答",
-  "本設計（再シミュレーション実施）",
-  "地盤調査依頼",
-  "決済（名義変更）",
+// 旧PHASE_OFFSETSベースの項目（削除対象）
+const OLD_PHASE_TITLES = [
+  "農振申請",
+  "電力申請",
+  "現調",
+  "案件提出",
+  "SS依頼",
+  "電力回答",
+  "法令申請",
+  "土地契約",
+  "着工",
+  "SS実施",
+  "土地決済",
+  "完工",
+  "連系",
+  // レガシー名称
+  "現地調査",
+  "農転・地目申請",
+  "連系（発電開始）",
 ];
 
 export async function POST(request: NextRequest) {
@@ -71,7 +61,7 @@ export async function POST(request: NextRequest) {
       .from(progress)
       .where(
         and(
-          inArray(progress.title, WORKFLOW_PHASE_TITLES),
+          inArray(progress.title, OLD_PHASE_TITLES),
           sql`${progress.projectId} IN (${orgProjectSubquery})`
         )
       );
@@ -91,7 +81,7 @@ export async function POST(request: NextRequest) {
       .delete(progress)
       .where(
         and(
-          inArray(progress.title, WORKFLOW_PHASE_TITLES),
+          inArray(progress.title, OLD_PHASE_TITLES),
           sql`${progress.projectId} IN (${orgProjectSubquery})`
         )
       );
@@ -140,7 +130,7 @@ export async function GET(request: NextRequest) {
       .from(progress)
       .where(
         and(
-          inArray(progress.title, WORKFLOW_PHASE_TITLES),
+          inArray(progress.title, OLD_PHASE_TITLES),
           sql`${progress.projectId} IN (${orgProjectSubquery})`
         )
       )

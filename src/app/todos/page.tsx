@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { projects, progress } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { requireOrganization } from "@/lib/auth-guard";
 import { redirect } from "next/navigation";
 import TimelineView from "./TimelineView";
@@ -24,7 +24,8 @@ export default async function TimelinePage() {
     })
     .from(projects)
     .leftJoin(progress, eq(progress.projectId, projects.id))
-    .where(eq(projects.organizationId, organizationId));
+    .where(eq(projects.organizationId, organizationId))
+    .orderBy(asc(projects.managementNumber));
 
   // プロジェクトごとにグループ化（サーバーサイドで処理）
   const projectMap = new Map<number, ProjectWithProgress>();

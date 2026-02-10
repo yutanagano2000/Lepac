@@ -45,6 +45,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { PHOTO_CATEGORIES } from "@/app/construction/[projectId]/_constants";
 import type {
   PhotoMatrixProject,
@@ -142,11 +143,11 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
       } else {
         const errorData = await res.json().catch(() => ({}));
         console.error("Upload failed:", errorData);
-        alert("写真のアップロードに失敗しました");
+        toast.error("写真のアップロードに失敗しました");
       }
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("写真のアップロードに失敗しました");
+      toast.error("写真のアップロードに失敗しました");
     } finally {
       setUploading(false);
     }
@@ -167,11 +168,11 @@ export default function PhotoMatrix({ year, month }: PhotoMatrixProps) {
         fetchData();
       } else {
         console.error("Delete failed: HTTP", res.status);
-        alert("写真の削除に失敗しました");
+        toast.error("写真の削除に失敗しました");
       }
     } catch (error) {
       console.error("Delete failed:", error);
-      alert("写真の削除に失敗しました");
+      toast.error("写真の削除に失敗しました");
     }
   };
 

@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { parseCoordinateString, normalizeCoordinateString } from "@/lib/coordinates";
+import { toast } from "sonner";
 
 interface LocationInfo {
   prefecture: string;
@@ -116,7 +117,7 @@ export function useGeoSearch() {
         setResult(data);
       } catch (error) {
         console.error("Judgment error:", error);
-        alert("判定に失敗しました。もう一度お試しください。");
+        toast.error("判定に失敗しました。もう一度お試しください。");
       } finally {
         setIsLoading(false);
       }

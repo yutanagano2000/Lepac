@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Check, Circle, Calendar as CalendarIcon, Clock, Pencil, Trash2, MessageCircle, Send, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, HardHat, Camera, Upload, Image as ImageIcon, PenTool, Mountain } from "lucide-react";
+import { ArrowLeft, Plus, Check, Pencil, Trash2, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, PenTool, Mountain } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
+import { WorkflowTimeline } from "@/components/WorkflowTimeline";
 import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
+import { isSafeUrl } from "@/lib/sanitize";
 import {
   parseCoordinateString,
   normalizeCoordinateString,
@@ -16,13 +18,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -48,22 +48,14 @@ import {
 import { ProjectFolderLink } from "@/components/ProjectFolderLink";
 import { ProjectPhotoGallery } from "@/components/ProjectPhotoGallery";
 import { ProjectDashboard } from "@/components/ProjectDashboard";
-import { PROGRESS_TITLES } from "./_constants";
 import { laws } from "./_constants";
 import type { LegalStatuses } from "./_types";
 import LegalSearchTab from "./_components/LegalSearchTab";
 import { ConstructionTab, CommentsTab } from "./_components";
 
-function formatYyyyMd(date: Date | undefined) {
-  if (!date) return "";
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
-  return `${y}.${m}.${d}`;
-}
-
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
@@ -73,14 +65,10 @@ export default function ProjectDetailPage() {
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [newTodoContent, setNewTodoContent] = useState("");
   const [newTodoDueDate, setNewTodoDueDate] = useState<string>("");
-  const [newTodoCalendarOpen, setNewTodoCalendarOpen] = useState(false);
-  const [newTodoSelectedDate, setNewTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [todoEditOpen, setTodoEditOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [editTodoContent, setEditTodoContent] = useState("");
   const [editTodoDueDate, setEditTodoDueDate] = useState("");
-  const [editTodoCalendarOpen, setEditTodoCalendarOpen] = useState(false);
-  const [editTodoSelectedDate, setEditTodoSelectedDate] = useState<Date | undefined>(undefined);
   const [todoCompleteOpen, setTodoCompleteOpen] = useState(false);
   const [completingTodo, setCompletingTodo] = useState<Todo | null>(null);
   const [completeTodoMemo, setCompleteTodoMemo] = useState("");
@@ -88,6 +76,7 @@ export default function ProjectDetailPage() {
   const [addingMessageTodo, setAddingMessageTodo] = useState<Todo | null>(null);
   const [newTodoMessage, setNewTodoMessage] = useState("");
   const [todoDeleteOpen, setTodoDeleteOpen] = useState(false);
+  const [projectDeleteOpen, setProjectDeleteOpen] = useState(false);
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [legalSearchParams, setLegalSearchParams] = useState<{ lat: string; lon: string; prefecture: string } | null>(null);
@@ -176,41 +165,6 @@ export default function ProjectDetailPage() {
     };
   }, []);
 
-  const [open, setOpen] = useState(false);
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [form, setForm] = useState<{
-    title: string;
-    description: string;
-    date: Date | undefined;
-    status: "planned" | "completed";
-  }>({
-    title: "",
-    description: "",
-    date: undefined,
-    status: "planned",
-  });
-  const [dateText, setDateText] = useState("");
-
-  // 編集用の状態
-  const [editOpen, setEditOpen] = useState(false);
-  const [editCalendarOpen, setEditCalendarOpen] = useState(false);
-  const [editingProgress, setEditingProgress] = useState<Progress | null>(null);
-  const [editForm, setEditForm] = useState<{
-    title: string;
-    description: string;
-    date: Date | undefined;
-    completedAt: Date | undefined;
-    status: "planned" | "completed";
-  }>({
-    title: "",
-    description: "",
-    date: undefined,
-    completedAt: undefined,
-    status: "planned",
-  });
-  const [editCompletedDateText, setEditCompletedDateText] = useState("");
-  const [editCompletedCalendarOpen, setEditCompletedCalendarOpen] = useState(false);
-  const [editDateText, setEditDateText] = useState("");
 
   const fetchProject = async () => {
     try {
@@ -419,7 +373,6 @@ export default function ProjectDetailPage() {
     });
     setNewTodoContent("");
     setNewTodoDueDate("");
-    setNewTodoSelectedDate(undefined);
     fetchTodos();
   };
 
@@ -442,7 +395,6 @@ export default function ProjectDetailPage() {
     setEditingTodo(todo);
     setEditTodoContent(todo.content);
     setEditTodoDueDate(todo.dueDate);
-    setEditTodoSelectedDate(new Date(todo.dueDate + "T00:00:00"));
     setTodoEditOpen(true);
   };
 
@@ -552,6 +504,18 @@ export default function ProjectDetailPage() {
     }
   };
 
+  // 案件削除
+  const handleDeleteProject = async () => {
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("削除に失敗しました");
+      setProjectDeleteOpen(false);
+      router.push("/projects");
+    } catch (error) {
+      console.error("handleDeleteProject error:", error);
+    }
+  };
+
   // Strict Modeでの二重呼び出しを防止
   const hasGeneratedRef = useRef(false);
 
@@ -581,122 +545,6 @@ export default function ProjectDetailPage() {
     }
   }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.date) return;
-    try {
-      const res = await fetch(`/api/projects/${id}/progress`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          status: form.status,
-          createdAt: form.date.toISOString(),
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to add progress");
-      setForm({ title: "", description: "", date: undefined, status: "planned" });
-      setDateText("");
-      setOpen(false);
-      fetchProgress();
-    } catch (error) {
-      console.error("handleSubmit error:", error);
-    }
-  };
-
-  const markAsCompleted = async (progressId: number) => {
-    try {
-      const res = await fetch(`/api/projects/${id}/progress`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          progressId,
-          status: "completed",
-          completedAt: new Date().toISOString(),
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to mark as completed");
-      fetchProgress();
-    } catch (error) {
-      console.error("markAsCompleted error:", error);
-    }
-  };
-
-  const markAsIncomplete = async (progressId: number) => {
-    try {
-      const res = await fetch(`/api/projects/${id}/progress`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          progressId,
-          status: "planned",
-          completedAt: null,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to mark as incomplete");
-      fetchProgress();
-    } catch (error) {
-      console.error("markAsIncomplete error:", error);
-    }
-  };
-
-  const openEditDialog = (p: Progress) => {
-    setEditingProgress(p);
-    const date = new Date(p.createdAt);
-    const completedAt = p.completedAt ? new Date(p.completedAt) : undefined;
-    setEditForm({
-      title: p.title,
-      description: p.description ?? "",
-      date,
-      completedAt,
-      status: p.status as "planned" | "completed",
-    });
-    setEditDateText(formatYyyyMd(date));
-    setEditCompletedDateText(completedAt ? formatYyyyMd(completedAt) : "");
-    setEditOpen(true);
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingProgress || !editForm.date) return;
-    try {
-      const res = await fetch(`/api/projects/${id}/progress`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          progressId: editingProgress.id,
-          title: editForm.title,
-          description: editForm.description,
-          status: editForm.status,
-          createdAt: editForm.date.toISOString(),
-          completedAt: editForm.completedAt ? editForm.completedAt.toISOString() : null,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to edit progress");
-      setEditOpen(false);
-      setEditingProgress(null);
-      fetchProgress();
-    } catch (error) {
-      console.error("handleEditSubmit error:", error);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!editingProgress) return;
-    if (!confirm("この進捗を削除しますか？")) return;
-    try {
-      const res = await fetch(`/api/projects/${id}/progress?progressId=${editingProgress.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete progress");
-      setEditOpen(false);
-      setEditingProgress(null);
-      fetchProgress();
-    } catch (error) {
-      console.error("handleDelete error:", error);
-    }
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -757,33 +605,6 @@ export default function ProjectDetailPage() {
     setLegalSearchParams({ lat: parsed.lat, lon: parsed.lon, prefecture: prefectureParam });
   }, [activeTab, legalSearchParams, project?.coordinates, project?.address]);
 
-  // PROGRESS_TITLESの全16フェーズを順番に表示（DBにデータがあればそれを使用、なければpending）
-  const sortedTimeline = useMemo(() => {
-    const progressByTitle = new Map(
-      progressList.map((p) => [p.title, p])
-    );
-    return PROGRESS_TITLES.map((title) => {
-      const p = progressByTitle.get(title);
-      if (p) {
-        return {
-          id: p.id,
-          title: p.title,
-          description: p.description ?? undefined,
-          date: new Date(p.createdAt),
-          completedAt: p.completedAt ? new Date(p.completedAt) : undefined,
-          status: p.status as "completed" | "planned",
-        };
-      }
-      return {
-        id: -1, // DBに存在しないフェーズ
-        title,
-        description: undefined,
-        date: new Date(), // 仮の日付（表示はpending扱い）
-        completedAt: undefined,
-        status: "planned" as const,
-      };
-    });
-  }, [progressList]);
 
   if (!project) return null;
 
@@ -792,497 +613,46 @@ export default function ProjectDetailPage() {
       <div className="mx-auto max-w-7xl py-6 sm:py-10">
         <div className="space-y-4 sm:space-y-6">
           {/* ヘッダー */}
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" className="shrink-0">
+          <div className="flex items-center gap-4">
+            <Button asChild variant="ghost" size="icon" className="shrink-0 h-10 w-10">
               <Link href="/projects">
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
-            <div className="space-y-1 min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold truncate">{project.managementNumber}</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+            <div className="space-y-1 min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl font-bold truncate">{project.managementNumber}</h1>
+              <p className="text-sm sm:text-base text-muted-foreground truncate">
                 {project.client} / {project.projectNumber}
               </p>
               {project.completionMonth && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm sm:text-base text-muted-foreground">
                   完成月: {project.completionMonth}
                 </p>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10"
+              onClick={() => setProjectDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              削除
+            </Button>
           </div>
 
           {/* 進捗ダッシュボード */}
           <ProjectDashboard project={project} progressList={progressList} />
 
-          {/* 進捗追加ダイアログ */}
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>進捗を追加</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>タイトル</Label>
-                  <Select
-                    value={form.title}
-                    onValueChange={(value) => setForm({ ...form, title: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="選択してください" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROGRESS_TITLES.map((title) => (
-                        <SelectItem key={title} value={title}>
-                          {title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">詳細（任意）</Label>
-                  <Textarea
-                    id="description"
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="例: 司法書士事務所へ郵送済み"
-                    rows={3}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>日付</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={dateText}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setDateText(value);
-                        const match = value.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
-                        if (match) {
-                          const [, y, m, d] = match;
-                          const parsed = new Date(Number(y), Number(m) - 1, Number(d));
-                          if (!isNaN(parsed.getTime())) {
-                            setForm({ ...form, date: parsed });
-                          }
-                        } else if (value === "") {
-                          setForm({ ...form, date: undefined });
-                        }
-                      }}
-                      placeholder="例: 2026.1.19"
-                      className="flex-1"
-                    />
-                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" size="icon">
-                          <CalendarIcon className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="end">
-                        <Calendar
-                          mode="single"
-                          required
-                          selected={form.date}
-                          onSelect={(d) => {
-                            if (d) {
-                              setForm({ ...form, date: d });
-                              setDateText(formatYyyyMd(d));
-                            }
-                            setIsCalendarOpen(false);
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>ステータス</Label>
-                  <Select
-                    value={form.status}
-                    onValueChange={(value: "planned" | "completed") =>
-                      setForm({ ...form, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="planned">予定</SelectItem>
-                      <SelectItem value="completed">完了</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                    キャンセル
-                  </Button>
-                  <Button type="submit" disabled={!form.date || !form.title}>
-                    追加
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          {/* 編集ダイアログ */}
-          <Dialog open={editOpen} onOpenChange={setEditOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>進捗を編集</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleEditSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>タイトル</Label>
-                  <Select
-                    value={editForm.title}
-                    onValueChange={(value) => setEditForm({ ...editForm, title: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="選択してください" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROGRESS_TITLES.map((title) => (
-                        <SelectItem key={title} value={title}>
-                          {title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-description">詳細（任意）</Label>
-                  <Textarea
-                    id="edit-description"
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                    placeholder="例: 司法書士事務所へ郵送済み"
-                    rows={3}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>予定日</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={editDateText}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setEditDateText(value);
-                        const match = value.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
-                        if (match) {
-                          const [, y, m, d] = match;
-                          const parsed = new Date(Number(y), Number(m) - 1, Number(d));
-                          if (!isNaN(parsed.getTime())) {
-                            setEditForm({ ...editForm, date: parsed });
-                          }
-                        } else if (value === "") {
-                          setEditForm({ ...editForm, date: undefined });
-                        }
-                      }}
-                      placeholder="例: 2026.1.19"
-                      className="flex-1"
-                    />
-                    <Popover open={editCalendarOpen} onOpenChange={setEditCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" size="icon">
-                          <CalendarIcon className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="end">
-                        <Calendar
-                          mode="single"
-                          required
-                          selected={editForm.date}
-                          onSelect={(d) => {
-                            if (d) {
-                              setEditForm({ ...editForm, date: d });
-                              setEditDateText(formatYyyyMd(d));
-                            }
-                            setEditCalendarOpen(false);
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>完了日（任意）</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={editCompletedDateText}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setEditCompletedDateText(value);
-                        const match = value.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
-                        if (match) {
-                          const [, y, m, d] = match;
-                          const parsed = new Date(Number(y), Number(m) - 1, Number(d));
-                          if (!isNaN(parsed.getTime())) {
-                            setEditForm({ ...editForm, completedAt: parsed });
-                          }
-                        } else if (value === "") {
-                          setEditForm({ ...editForm, completedAt: undefined });
-                        }
-                      }}
-                      placeholder="例: 2026.1.19"
-                      className="flex-1"
-                    />
-                    <Popover open={editCompletedCalendarOpen} onOpenChange={setEditCompletedCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" size="icon">
-                          <CalendarIcon className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="end">
-                        <Calendar
-                          mode="single"
-                          selected={editForm.completedAt}
-                          onSelect={(d) => {
-                            if (d) {
-                              setEditForm({ ...editForm, completedAt: d });
-                              setEditCompletedDateText(formatYyyyMd(d));
-                            } else {
-                              setEditForm({ ...editForm, completedAt: undefined });
-                              setEditCompletedDateText("");
-                            }
-                            setEditCompletedCalendarOpen(false);
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>ステータス</Label>
-                  <Select
-                    value={editForm.status}
-                    onValueChange={(value: "planned" | "completed") =>
-                      setEditForm({ ...editForm, status: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="planned">予定</SelectItem>
-                      <SelectItem value="completed">完了</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-between">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDelete}
-                  >
-                    <Trash2 className="mr-1 h-4 w-4" />
-                    削除
-                  </Button>
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
-                      キャンセル
-                    </Button>
-                    <Button type="submit" disabled={!editForm.date || !editForm.title}>
-                      保存
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          {/* 統合タイムライン（横型） */}
-          <div className="relative">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <h2 className="font-semibold">タイムライン</h2>
-              </div>
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4" />
-                    進捗を追加
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
-            </div>
-            {sortedTimeline.length === 0 ? (
-              <p className="text-sm text-muted-foreground">タイムラインがありません</p>
-            ) : (
-              <div className="w-full">
-                <div className="flex items-start gap-0 py-4">
-                  {(() => {
-                    // 直近の未完了項目のインデックスを計算（プレースホルダーを除外）
-                    const firstPendingIndex = sortedTimeline.findIndex(
-                      (item) => item.status !== "completed" && item.id !== -1
-                    );
-                    // DB登録済みの最後のインデックスを計算（placeholderを除外）
-                    const lastDbIndex = (() => {
-                      for (let i = sortedTimeline.length - 1; i >= 0; i--) {
-                        if (sortedTimeline[i].id !== -1) return i;
-                      }
-                      return -1;
-                    })();
-                    return sortedTimeline.map((item, index) => {
-                      const isCompleted = item.status === "completed";
-                      const isFirstPending = index === firstPendingIndex;
-                      const hasDbRecord = item.id !== -1;
-
-                      // 予定日までの日数を計算（DB登録済みの場合のみ）
-                      const now = new Date();
-                      const daysUntilDue = hasDbRecord ? Math.ceil((item.date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-                      const isOverdue = hasDbRecord && !isCompleted && daysUntilDue < 0;
-
-                      return (
-                        <div key={item.title} className="flex flex-col items-center flex-1 min-w-0">
-                          {/* 上部：タイトルと編集ボタン */}
-                          <div className="text-center mb-2 px-0.5">
-                            <div className="flex items-center justify-center gap-0.5">
-                              <p
-                                className={`text-[10px] sm:text-xs font-medium truncate max-w-full ${
-                                  isCompleted ? "" : hasDbRecord ? "text-muted-foreground" : "text-muted-foreground/50"
-                                }`}
-                                title={item.title}
-                              >
-                                {item.title}
-                              </p>
-                              {hasDbRecord && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const p = progressList.find((pr) => pr.id === item.id);
-                                    if (p) openEditDialog(p);
-                                  }}
-                                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground shrink-0"
-                                >
-                                  <Pencil className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* 中央：ノードと横線 */}
-                          <div className="flex items-center w-full">
-                            {/* 左側の線 */}
-                            {index > 0 && (
-                              <div
-                                className={`flex-1 h-0.5 ${
-                                  sortedTimeline[index - 1].status === "completed"
-                                    ? "bg-green-500"
-                                    : "border-t-2 border-dashed border-muted-foreground/30"
-                                }`}
-                              />
-                            )}
-                            {index === 0 && <div className="flex-1" />}
-
-                            {/* ノード */}
-                            <div
-                              className={`flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full border-2 ${
-                                isCompleted
-                                  ? "border-green-500 bg-green-500"
-                                  : !hasDbRecord
-                                  ? "border-muted-foreground/30 bg-background"
-                                  : isOverdue
-                                  ? "border-red-500 bg-background"
-                                  : "border-muted-foreground bg-background"
-                              }`}
-                            >
-                              {isCompleted ? (
-                                <Check className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
-                              ) : (
-                                <Circle className={`h-3 w-3 sm:h-4 sm:w-4 ${
-                                  !hasDbRecord ? "text-muted-foreground/30" : isOverdue ? "text-red-500" : "text-muted-foreground"
-                                }`} />
-                              )}
-                            </div>
-
-                            {/* 右側の線 */}
-                            {index < sortedTimeline.length - 1 && (
-                              <div
-                                className={`flex-1 h-0.5 ${
-                                  isCompleted
-                                    ? "bg-green-500"
-                                    : "border-t-2 border-dashed border-muted-foreground/30"
-                                }`}
-                              />
-                            )}
-                            {index === sortedTimeline.length - 1 && <div className="flex-1" />}
-                          </div>
-
-                          {/* 下部：日付と説明、アクションボタン */}
-                          <div className="text-center mt-2 px-0.5">
-                            {hasDbRecord ? (
-                              <>
-                                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                                  {formatDateJp(item.date)}
-                                </p>
-                                {item.completedAt && (
-                                  <p className={`text-[9px] sm:text-[10px] ${item.completedAt > item.date ? "text-red-500" : "text-green-500"}`}>
-                                    → {formatDateJp(item.completedAt)}
-                                  </p>
-                                )}
-                                {item.description && (
-                                  <p className="mt-1 text-[9px] sm:text-[10px] text-muted-foreground truncate max-w-full" title={item.description}>
-                                    {item.description}
-                                  </p>
-                                )}
-                              </>
-                            ) : (
-                              <p className="text-[10px] sm:text-xs text-muted-foreground/40 truncate">
-                                未設定
-                              </p>
-                            )}
-
-                            {/* アクションボタン（DB登録済みの場合のみ） */}
-                            {hasDbRecord && (
-                              <div className="mt-2 flex flex-col gap-1">
-                                {/* 未完了にするボタン（直近の完了タスク） */}
-                                {isCompleted && (
-                                  firstPendingIndex === -1
-                                    ? index === lastDbIndex
-                                    : index === firstPendingIndex - 1
-                                ) && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs h-7 px-2 border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                                    onClick={() => markAsIncomplete(item.id)}
-                                  >
-                                    未完了
-                                  </Button>
-                                )}
-                                {/* 完了にするボタン（直近の未完了タスク） */}
-                                {isFirstPending && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs h-7 px-2"
-                                    onClick={() => markAsCompleted(item.id)}
-                                  >
-                                    完了
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* ワークフロータイムライン */}
+          <WorkflowTimeline progressList={progressList} completionMonth={project?.completionMonth} />
 
           {/* TODO（この日までに行うリマインダー） */}
           <Card>
             <CardContent className="pt-6 space-y-4">
               <div className="flex items-center gap-2 mb-4">
-                <ListTodo className="h-4 w-4 text-muted-foreground" />
-                <h2 className="font-semibold">TODO</h2>
+                <ListTodo className="h-5 w-5 text-muted-foreground" />
+                <h2 className="font-semibold text-base sm:text-lg">TODO</h2>
               </div>
               <form onSubmit={handleTodoSubmit} className="space-y-3">
                 <div className="flex gap-2 flex-wrap items-end">
@@ -1299,40 +669,12 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">期日</Label>
-                    <Popover open={newTodoCalendarOpen} onOpenChange={setNewTodoCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            "w-[180px] justify-start text-left font-normal",
-                            !newTodoSelectedDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newTodoSelectedDate
-                            ? formatDateJp(newTodoSelectedDate)
-                            : "期日を選択"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={newTodoSelectedDate}
-                          onSelect={(date) => {
-                            setNewTodoSelectedDate(date);
-                            if (date) {
-                              const y = date.getFullYear();
-                              const m = String(date.getMonth() + 1).padStart(2, "0");
-                              const d = String(date.getDate()).padStart(2, "0");
-                              setNewTodoDueDate(`${y}-${m}-${d}`);
-                              setNewTodoCalendarOpen(false);
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DatePicker
+                      value={newTodoDueDate || null}
+                      onChange={(val) => setNewTodoDueDate(val || "")}
+                      placeholder="期日を選択"
+                      className="w-[180px]"
+                    />
                   </div>
                   <Button type="submit" size="default" disabled={!newTodoContent.trim() || !newTodoDueDate}>
                     追加
@@ -1453,17 +795,17 @@ export default function ProjectDetailPage() {
           {/* タブ UI */}
           <Tabs defaultValue="details" className="w-full" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
-              <TabsTrigger value="details" className="text-xs sm:text-sm py-2">案件情報</TabsTrigger>
-              <TabsTrigger value="legal" className="text-xs sm:text-sm py-2">法令</TabsTrigger>
-              <TabsTrigger value="construction" className="text-xs sm:text-sm py-2">工事</TabsTrigger>
-              <TabsTrigger value="comments" className="text-xs sm:text-sm py-2">コメント</TabsTrigger>
+              <TabsTrigger value="details" className="text-sm sm:text-base py-2.5">案件情報</TabsTrigger>
+              <TabsTrigger value="legal" className="text-sm sm:text-base py-2.5">法令</TabsTrigger>
+              <TabsTrigger value="construction" className="text-sm sm:text-base py-2.5">工事</TabsTrigger>
+              <TabsTrigger value="comments" className="text-sm sm:text-base py-2.5">コメント</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="mt-4 sm:mt-6">
               <Card>
-                <CardContent className="pt-4 sm:pt-6 space-y-3 sm:space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 items-start border-b pb-3 gap-1 sm:gap-0">
-                    <span className="text-sm font-medium text-muted-foreground">現地住所</span>
+                <CardContent className="pt-5 sm:pt-6 space-y-4 sm:space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 items-start border-b pb-4 gap-1 sm:gap-0">
+                    <span className="text-sm sm:text-base font-medium text-muted-foreground">現地住所</span>
                     <div className="col-span-2 flex items-center gap-2">
                       <span className="text-sm">{project.address || "未登録"}</span>
                       {project.address && (
@@ -1915,7 +1257,7 @@ export default function ProjectDetailPage() {
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">どこキャビ</span>
                     <div className="col-span-2 space-y-3">
-                      {project.dococabiLink ? (
+                      {project.dococabiLink && isSafeUrl(project.dococabiLink) ? (
                         <>
                           <Button variant="outline" size="sm" asChild className="h-8">
                             <a
@@ -1950,7 +1292,7 @@ export default function ProjectDetailPage() {
                                   className="h-7 justify-start text-xs px-2"
                                   onClick={() => {
                                     const url = `${project.dococabiLink}/${encodeURIComponent(folder.name)}`;
-                                    window.open(url, "_blank");
+                                    if (isSafeUrl(url)) window.open(url, "_blank", "noopener,noreferrer");
                                   }}
                                 >
                                   <span className="mr-1.5">{folder.icon}</span>
@@ -2446,6 +1788,27 @@ export default function ProjectDetailPage() {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* 案件削除確認ダイアログ */}
+          <AlertDialog open={projectDeleteOpen} onOpenChange={setProjectDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>案件を削除</AlertDialogTitle>
+                <AlertDialogDescription>
+                  「{project.managementNumber}」を削除しますか？<br />関連する進捗・TODO・コメントもすべて削除されます。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteProject}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  削除
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           {/* TODO完了ダイアログ */}
           <Dialog open={todoCompleteOpen} onOpenChange={setTodoCompleteOpen}>
             <DialogContent>
@@ -2561,40 +1924,12 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>期日</Label>
-                    <Popover open={editTodoCalendarOpen} onOpenChange={setEditTodoCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !editTodoSelectedDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {editTodoSelectedDate
-                            ? formatDateJp(editTodoSelectedDate)
-                            : "期日を選択"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={editTodoSelectedDate}
-                          onSelect={(date) => {
-                            setEditTodoSelectedDate(date);
-                            if (date) {
-                              const y = date.getFullYear();
-                              const m = String(date.getMonth() + 1).padStart(2, "0");
-                              const d = String(date.getDate()).padStart(2, "0");
-                              setEditTodoDueDate(`${y}-${m}-${d}`);
-                              setEditTodoCalendarOpen(false);
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DatePicker
+                      value={editTodoDueDate || null}
+                      onChange={(val) => setEditTodoDueDate(val || "")}
+                      placeholder="期日を選択"
+                      className="w-full"
+                    />
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button

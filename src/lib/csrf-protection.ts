@@ -34,10 +34,12 @@ function getAllowedOrigins(): string[] {
     origins.push(...process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()));
   }
 
-  // 開発環境
+  // 開発環境（ポートフォールバック対応）
   if (process.env.NODE_ENV === "development") {
-    origins.push("http://localhost:3000");
-    origins.push("http://127.0.0.1:3000");
+    for (const port of [3000, 3001, 3002]) {
+      origins.push(`http://localhost:${port}`);
+      origins.push(`http://127.0.0.1:${port}`);
+    }
   }
 
   return origins;

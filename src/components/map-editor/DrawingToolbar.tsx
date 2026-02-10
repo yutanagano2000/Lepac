@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { TileLayerType } from "./constants";
 import { captureMapAsPng, captureMapAsPdf, downloadBlob } from "@/lib/map-export";
+import { toast } from "sonner";
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -94,14 +95,14 @@ export function DrawingToolbar({
 
     // ファイルタイプ検証
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      alert("対応していないファイル形式です（JPEG, PNG, GIF, WebPのみ）");
+      toast.warning("対応していないファイル形式です（JPEG, PNG, GIF, WebPのみ）");
       e.target.value = "";
       return;
     }
 
     // ファイルサイズ検証
     if (file.size > MAX_IMAGE_SIZE) {
-      alert("ファイルサイズが大きすぎます（10MB以下）");
+      toast.warning("ファイルサイズが大きすぎます（10MB以下）");
       e.target.value = "";
       return;
     }
@@ -113,7 +114,7 @@ export function DrawingToolbar({
       }
     };
     reader.onerror = () => {
-      alert("ファイルの読み込みに失敗しました");
+      toast.error("ファイルの読み込みに失敗しました");
     };
     reader.readAsDataURL(file);
     // リセットして同じファイルも再選択可能に
@@ -130,7 +131,7 @@ export function DrawingToolbar({
       }
     } catch (e) {
       console.error("PNG export failed:", e);
-      alert("PNG出力に失敗しました");
+      toast.error("PNG出力に失敗しました");
     } finally {
       setExporting(false);
     }
@@ -146,7 +147,7 @@ export function DrawingToolbar({
       }
     } catch (e) {
       console.error("PDF export failed:", e);
-      alert("PDF出力に失敗しました");
+      toast.error("PDF出力に失敗しました");
     } finally {
       setExporting(false);
     }
@@ -170,14 +171,14 @@ export function DrawingToolbar({
       });
 
       if (res.ok) {
-        alert("案件ファイルに保存しました（図面カテゴリ）");
+        toast.success("案件ファイルに保存しました（図面カテゴリ）");
       } else {
         const data = await res.json();
-        alert(`保存失敗: ${data.error || "不明なエラー"}`);
+        toast.error(`保存失敗: ${data.error || "不明なエラー"}`);
       }
     } catch (e) {
       console.error("Save to project failed:", e);
-      alert("案件ファイルへの保存に失敗しました");
+      toast.error("案件ファイルへの保存に失敗しました");
     } finally {
       setExporting(false);
     }

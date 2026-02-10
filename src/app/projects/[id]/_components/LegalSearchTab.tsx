@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { parseCoordinateString, normalizeCoordinateString } from "@/lib/coordinates";
 import { parsePrefectureAndCity } from "@/lib/address";
 import { generateLegalExcel } from "@/lib/legal-excel-export";
@@ -152,7 +153,7 @@ function LegalSearchTab({
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Excel出力エラー:", error);
-      alert("Excel出力に失敗しました。");
+      toast.error("Excel出力に失敗しました。");
     } finally {
       setIsExporting(false);
     }

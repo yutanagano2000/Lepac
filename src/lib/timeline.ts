@@ -1,22 +1,4 @@
-// フェーズ定義（完工からの相対月数）
-// タイトルは PROGRESS_TITLES と統一（重複防止のため）
-export const PHASE_OFFSETS = [
-  { key: "noushin", title: "農振申請", monthsOffset: -10.1, optional: true },
-  { key: "denryoku", title: "電力申請", monthsOffset: -5.8 },
-  { key: "genchi", title: "現調", monthsOffset: -5.5 },
-  { key: "teishutsu", title: "案件提出", monthsOffset: -5.0 },
-  { key: "ss_irai", title: "SS依頼", monthsOffset: -2.7 },
-  { key: "denryoku_kaito", title: "電力回答", monthsOffset: -2.5 },
-  { key: "nouten", title: "法令申請", monthsOffset: -2.5 },
-  { key: "tochi_keiyaku", title: "土地契約", monthsOffset: -2.4 },
-  { key: "chakko", title: "着工", monthsOffset: -1.9 },
-  { key: "ss_jisshi", title: "SS実施", monthsOffset: -1.8 },
-  { key: "tochi_kessai", title: "土地決済", monthsOffset: -1.1 },
-  { key: "kanko", title: "完工", monthsOffset: 0 },
-  { key: "renkei", title: "連系", monthsOffset: 2.7 },
-] as const;
-
-// 新しいワークフロー工程定義（開始日からの順方向計算）
+// ワークフロー工程定義（スケジュール画面の正規フロー）
 export const WORKFLOW_PHASES = [
   {
     key: "initial_acquisition",
@@ -134,15 +116,6 @@ export const WORKFLOW_PHASES = [
   },
 ] as const;
 
-export type PhaseKey = (typeof PHASE_OFFSETS)[number]["key"];
-
-export interface TimelinePhase {
-  key: PhaseKey;
-  title: string;
-  date: Date;
-  optional?: boolean;
-}
-
 // 担当者タイプ
 export type ResponsibleType = '事務' | '工務' | '設計' | '営業';
 
@@ -190,6 +163,31 @@ function addMonths(date: Date, months: number): Date {
 }
 
 /**
+ * 営業日を減算（土日を除く・逆方向）
+ */
+function subtractBusinessDays(date: Date, businessDays: number): Date {
+  const result = new Date(date);
+  let subtracted = 0;
+  while (subtracted < businessDays) {
+    result.setDate(result.getDate() - 1);
+    const dayOfWeek = result.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      subtracted++;
+    }
+  }
+  return result;
+}
+
+/**
+ * 暦日を減算
+ */
+function subtractCalendarDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() - days);
+  return result;
+}
+
+/**
  * 営業日を加算（土日を除く）
  */
 function addBusinessDays(date: Date, businessDays: number): Date {
@@ -215,40 +213,6 @@ function addCalendarDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
-}
-
-/**
- * 完成月から各フェーズの予定日を計算
- *
- * @param completionMonth 完成月（例: "2026-03"）
- * @param includeNoushin 農振申請を含めるか（農振除外が必要な案件のみtrue）
- */
-export function calculateTimeline(
-  completionMonth: string,
-  includeNoushin: boolean = false
-): TimelinePhase[] {
-  // completionMonthのバリデーション（YYYY-MM形式を期待）
-  if (!completionMonth || !/^\d{4}-\d{2}$/.test(completionMonth)) {
-    return []; // 不正な形式の場合は空配列を返す
-  }
-
-  const [year, month] = completionMonth.split("-").map(Number);
-
-  // 年月の妥当性チェック
-  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-    return [];
-  }
-
-  const baseDate = new Date(year, month - 1, 15); // 完成月の15日を基準とする
-
-  return PHASE_OFFSETS.filter((phase) => !("optional" in phase) || includeNoushin).map(
-    (phase) => ({
-      key: phase.key,
-      title: phase.title,
-      date: addMonths(baseDate, phase.monthsOffset),
-      optional: "optional" in phase ? phase.optional : undefined,
-    })
-  );
 }
 
 /**
@@ -455,6 +419,82 @@ export function calculateWorkflowTimeline(startDate: Date): WorkflowTimelinePhas
   }
 
   return phases;
+}
+
+/**
+ * 完工月を起点としたワークフロー式スケジュール逆算
+ *
+ * @param completionMonth 完工月（例: "2026-06"）
+ * @returns 各工程の予定日リスト（WORKFLOW_PHASESベース）
+ */
+export function calculateWorkflowTimelineFromCompletion(
+  completionMonth: string
+): WorkflowTimelinePhase[] {
+  // completionMonthのバリデーション（YYYY-MM形式を期待）
+  if (!completionMonth || !/^\d{4}-\d{2}$/.test(completionMonth)) {
+    return [];
+  }
+
+  const [year, month] = completionMonth.split("-").map(Number);
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    return [];
+  }
+
+  // 完工月の15日 = construction（工事着工～完了）フェーズの終了日
+  const completionDate = new Date(year, month - 1, 15);
+
+  // パス1: 各フェーズの開始日・終了日を逆算
+  let currentEndDate = new Date(completionDate);
+  const reversedPhases = [...WORKFLOW_PHASES].reverse();
+  const phaseMap = new Map<string, { startDate: Date; endDate: Date }>();
+
+  for (const workflowPhase of reversedPhases) {
+    const endDate = new Date(currentEndDate);
+    let startDate: Date;
+
+    if (workflowPhase.duration > 0) {
+      if (workflowPhase.unit === "business_days") {
+        startDate = subtractBusinessDays(endDate, workflowPhase.duration);
+      } else {
+        startDate = subtractCalendarDays(endDate, workflowPhase.duration);
+      }
+    } else {
+      startDate = new Date(endDate);
+    }
+
+    phaseMap.set(workflowPhase.key, { startDate, endDate });
+    currentEndDate = new Date(startDate);
+  }
+
+  // パス2: サブフェーズ日付を順方向計算（フェーズ間依存を解決後）
+  const results: WorkflowTimelinePhase[] = [];
+  for (const workflowPhase of WORKFLOW_PHASES) {
+    const dates = phaseMap.get(workflowPhase.key)!;
+
+    // applicationフェーズのサブフェーズはapplication_contractの開始日から計算
+    let subPhaseBaseDate = dates.startDate;
+    if (workflowPhase.key === "application") {
+      const contractDates = phaseMap.get("application_contract");
+      if (contractDates) {
+        subPhaseBaseDate = contractDates.startDate;
+      }
+    }
+
+    const calculatedSubPhases = "subPhases" in workflowPhase
+      ? calculateSubPhaseDates(workflowPhase.key, subPhaseBaseDate, workflowPhase.subPhases)
+      : undefined;
+
+    results.push({
+      key: workflowPhase.key,
+      title: workflowPhase.title,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
+      phase: workflowPhase.phase,
+      subPhases: calculatedSubPhases,
+    });
+  }
+
+  return results;
 }
 
 /**

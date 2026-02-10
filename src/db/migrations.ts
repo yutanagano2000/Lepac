@@ -569,6 +569,35 @@ export async function runMigrations(client: { execute: (sql: string, args?: unkn
     )
   `);
 
+  // 傾斜解析テーブル
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS slope_analyses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      organization_id INTEGER NOT NULL,
+      name TEXT NOT NULL DEFAULT '傾斜解析',
+      polygon TEXT NOT NULL,
+      grid_interval INTEGER NOT NULL DEFAULT 2,
+      total_points INTEGER NOT NULL,
+      avg_slope REAL,
+      max_slope REAL,
+      min_slope REAL,
+      flat_percent REAL,
+      steep_percent REAL,
+      avg_elevation REAL,
+      max_elevation REAL,
+      min_elevation REAL,
+      elevation_matrix TEXT,
+      slope_matrix TEXT,
+      cross_section TEXT,
+      created_at TEXT NOT NULL,
+      created_by INTEGER
+    )
+  `);
+
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS slope_analyses_project_idx ON slope_analyses (project_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS slope_analyses_org_idx ON slope_analyses (organization_id)`); } catch (e) {}
+
   // 検索高速化用インデックス（organization_idとの複合でスキャン範囲を限定）
   try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_projects_org_management_number ON projects (organization_id, management_number)`); } catch (e) {}
   try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_projects_org_client ON projects (organization_id, client)`); } catch (e) {}

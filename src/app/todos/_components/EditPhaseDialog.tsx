@@ -1,19 +1,18 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Check, X, Loader2, Calendar as CalendarIcon, ListTodo } from "lucide-react";
+import { Check, X, Loader2, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
+import { format as formatDate } from "date-fns";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import type { ProjectWithProgress } from "../_types";
 import type { PHASES } from "../_constants";
 
@@ -33,14 +32,6 @@ interface EditPhaseDialogProps {
   showAlert: (title: string, message: string) => void;
 }
 
-function formatDateFull(date: Date | null): string {
-  if (!date) return "-";
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
-  return `${y}.${m}.${d}`;
-}
-
 export function EditPhaseDialog({
   open,
   onOpenChange,
@@ -55,8 +46,6 @@ export function EditPhaseDialog({
   const [plannedDate, setPlannedDate] = useState<Date | undefined>(undefined);
   const [completedDate, setCompletedDate] = useState<Date | undefined>(undefined);
   const [phaseMemo, setPhaseMemo] = useState("");
-  const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
-  const [completedCalendarOpen, setCompletedCalendarOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // ダイアログが開いた時に初期値を設定
@@ -140,59 +129,21 @@ export function EditPhaseDialog({
             </div>
             <div className="space-y-2">
               <Label>予定日</Label>
-              <Popover open={plannedCalendarOpen} onOpenChange={setPlannedCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !plannedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {plannedDate ? formatDateFull(plannedDate) : "予定日を選択"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={plannedDate}
-                    onSelect={(date) => {
-                      setPlannedDate(date);
-                      setPlannedCalendarOpen(false);
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <DatePicker
+                value={plannedDate ? formatDate(plannedDate, "yyyy-MM-dd") : null}
+                onChange={(val) => setPlannedDate(val ? new Date(val + "T00:00:00") : undefined)}
+                placeholder="予定日を選択"
+                className="w-full"
+              />
             </div>
             <div className="space-y-2">
               <Label>完了日</Label>
-              <Popover open={completedCalendarOpen} onOpenChange={setCompletedCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !completedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {completedDate ? formatDateFull(completedDate) : "完了日を選択"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={completedDate}
-                    onSelect={(date) => {
-                      setCompletedDate(date);
-                      setCompletedCalendarOpen(false);
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <DatePicker
+                value={completedDate ? formatDate(completedDate, "yyyy-MM-dd") : null}
+                onChange={(val) => setCompletedDate(val ? new Date(val + "T00:00:00") : undefined)}
+                placeholder="完了日を選択"
+                className="w-full"
+              />
             </div>
             <div className="space-y-2">
               <Label>メモ</Label>
