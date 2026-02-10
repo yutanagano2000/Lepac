@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 import { ApiError, createErrorResponse } from "@/lib/api-error";
 import { requireProjectAccessWithCsrf } from "@/lib/auth-guard";
+import { isPathSafe } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -49,14 +50,20 @@ export async function DELETE(
     const isRelativePath = !fileUrl.startsWith("http");
 
     if (isRelativePath) {
-      // 相対パスの場合: 直接Supabase Storageから削除
-      const { error: deleteError } = await getSupabaseAdmin().storage
-        .from(STORAGE_BUCKET)
-        .remove([fileUrl]);
+      // 相対パスの場合: パストラバーサル対策を適用
+      if (!isPathSafe(fileUrl)) {
+        console.error(`Path traversal attempt detected for file ID: ${fileIdNum}`);
+        // ストレージ削除をスキップ、DBからは削除を続行
+      } else {
+        // 直接Supabase Storageから削除
+        const { error: deleteError } = await getSupabaseAdmin().storage
+          .from(STORAGE_BUCKET)
+          .remove([fileUrl]);
 
-      if (deleteError) {
-        // ストレージの削除に失敗してもDBからは削除を続行（ログはfileIdのみ）
-        console.error(`Storage delete failed for file ID: ${fileIdNum}`);
+        if (deleteError) {
+          // ストレージの削除に失敗してもDBからは削除を続行（ログはfileIdのみ）
+          console.error(`Storage delete failed for file ID: ${fileIdNum}`);
+        }
       }
     } else {
       // フルURLの場合: URLをパースして適切に処理
@@ -99,6 +106,9 @@ export async function DELETE(
         if (bucketName !== STORAGE_BUCKET) {
           // 不正なバケットの場合はストレージ削除をスキップ
           console.error(`Bucket mismatch for file ID: ${fileIdNum}`);
+        } else if (!isPathSafe(filePath)) {
+          // パストラバーサル対策
+          console.error(`Path traversal attempt detected for file ID: ${fileIdNum}`);
         } else {
           const { error: deleteError } = await getSupabaseAdmin().storage
             .from(STORAGE_BUCKET)

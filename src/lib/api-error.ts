@@ -72,16 +72,16 @@ export function createErrorResponse(
 
   // 通常のErrorの場合
   if (error instanceof Error) {
-    // 本番環境では詳細を隠す
+    // 本番環境では詳細を隠す（スタックトレースは常にサーバーログのみ）
     const response: ApiErrorResponse = {
       error: isProduction ? defaultMessage : error.message,
     };
 
     if (!isProduction) {
-      response.details = error.stack;
+      response.details = error.message;
     }
 
-    // エラーをログ出力
+    // スタックトレースはサーバーログにのみ記録（クライアントには返さない）
     console.error("[API Error]", error.message, error.stack);
 
     return NextResponse.json(response, { status: 500 });

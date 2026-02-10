@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { todos, projects, progress, meetings, calendarEvents } from "@/db/schema";
 import { eq, and, gte, lt, or, isNull, isNotNull, inArray, asc } from "drizzle-orm";
 import { createCalendarEventSchema, validateBody } from "@/lib/validations";
-import { requireOrganization, getUserId } from "@/lib/auth-guard";
+import { requireOrganization, requireOrganizationWithCsrf, getUserId } from "@/lib/auth-guard";
 
 // 各種別の最大件数（DoS防止）
 const MAX_EVENTS_PER_TYPE = 500;
@@ -245,15 +245,16 @@ export async function GET(request: Request) {
 
     return NextResponse.json(events);
   } catch (error) {
-    console.error("カレンダーイベントの取得に失敗:", error);
+    // エラーログは内部詳細を記録（クライアントには一般的なメッセージのみ）
+    console.error("カレンダーイベントの取得に失敗");
     return NextResponse.json({ error: "データの取得に失敗しました" }, { status: 500 });
   }
 }
 
 // カスタムイベントを作成
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   // 認証・組織チェック
-  const authResult = await requireOrganization();
+  const authResult = await requireOrganizationWithCsrf(request);
   if (!authResult.success) {
     return authResult.response;
   }
@@ -304,7 +305,8 @@ export async function POST(request: Request) {
       userName: result.userName,
     }, { status: 201 });
   } catch (error) {
-    console.error("イベントの作成に失敗:", error);
+    // エラーログは内部詳細を記録（クライアントには一般的なメッセージのみ）
+    console.error("イベントの作成に失敗");
     return NextResponse.json({ error: "イベントの作成に失敗しました" }, { status: 500 });
   }
 }

@@ -17,13 +17,24 @@ const ALLOWED_IPS = [
 const IP_RESTRICTION_ENABLED = process.env.IP_RESTRICTION_ENABLED === "true";
 
 function getClientIp(request: NextRequest): string | null {
-  // Vercel/Cloudflareなどのプロキシ経由の場合
+  // Vercel が設定する信頼済みヘッダーを最優先（偽装不可）
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  if (vercelIp) {
+    return vercelIp.split(",")[0].trim();
+  }
+
+  // Cloudflare が設定する信頼済みヘッダー
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp) {
+    return cfIp.trim();
+  }
+
+  // フォールバック: x-forwarded-for（信頼できるプロキシ環境でのみ有効）
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
     return forwardedFor.split(",")[0].trim();
   }
 
-  // 直接接続の場合
   const realIp = request.headers.get("x-real-ip");
   if (realIp) {
     return realIp;

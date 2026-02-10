@@ -124,10 +124,15 @@ export async function PATCH(
     if (createdAt !== undefined) updateFields.createdAt = createdAt;
     if (completedAt !== undefined) updateFields.completedAt = completedAt;
 
+    // 更新フィールドが空の場合はエラー
+    if (Object.keys(updateFields).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
+
     const [result] = await db
       .update(progress)
       .set(updateFields)
-      .where(eq(progress.id, progressId))
+      .where(and(eq(progress.id, progressId), eq(progress.projectId, projectId)))
       .returning();
     return NextResponse.json(result);
   } catch (error) {
@@ -175,7 +180,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Progress not found" }, { status: 404 });
     }
 
-    await db.delete(progress).where(eq(progress.id, progressId));
+    // 削除時もprojectIdを含めて二重チェック（TOCTOU対策）
+    const result = await db
+      .delete(progress)
+      .where(and(eq(progress.id, progressId), eq(progress.projectId, projectId)))
+      .returning();
+
+    if (result.length === 0) {
+      return NextResponse.json({ error: "Progress already deleted or not found" }, { status: 404 });
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     return createErrorResponse(error, "進捗の削除に失敗しました");

@@ -54,7 +54,15 @@ export async function POST(req: NextRequest) {
       calculateSlope(elevations, OFFSET_METERS);
 
     const classification = classifySlope(slopeDegrees);
-    const centerPoint = elevations.find((p) => p.label === "center")!;
+    const centerPoint = elevations.find((p) => p.label === "center");
+
+    // centerPointは必ず存在するはずだが、型安全のためチェック
+    if (!centerPoint) {
+      return NextResponse.json(
+        { error: "標高データの取得に失敗しました" },
+        { status: 500 }
+      );
+    }
 
     const result: SlopeResult = {
       centerElevation: centerPoint.elevation,

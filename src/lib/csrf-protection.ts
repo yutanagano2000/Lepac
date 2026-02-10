@@ -63,10 +63,25 @@ export function validateCsrf(request: NextRequest): CsrfValidationResult {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
 
+  // Hostヘッダーも検証に使用
+  const host = request.headers.get("host");
+
   // Originヘッダーがある場合は優先して検証
   if (origin) {
     const allowedOrigins = getAllowedOrigins();
     if (allowedOrigins.some((allowed) => origin === allowed)) {
+      // OriginとHostの整合性もチェック
+      if (host) {
+        try {
+          const originHost = new URL(origin).host;
+          if (originHost !== host && !allowedOrigins.some((o) => {
+            try { return new URL(o).host === host; } catch { return false; }
+          })) {
+            console.warn(`[CSRF] Origin/Host mismatch: origin=${origin}, host=${host}`);
+            return { valid: false, error: "オリジンとホストが一致しません" };
+          }
+        } catch { /* originのパースに失敗した場合はスキップ */ }
+      }
       return { valid: true };
     }
 

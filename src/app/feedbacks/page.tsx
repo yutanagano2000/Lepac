@@ -90,7 +90,11 @@ export default function FeedbacksPage() {
   const { data: session } = useSession();
   const { feedbacks, isLoading, error, refetch } = useFeedbacksData();
 
-  const userId = session?.user?.id ? parseInt(session.user.id) : null;
+  const userId = (() => {
+    if (!session?.user?.id) return null;
+    const parsed = parseInt(session.user.id, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  })();
   const userName = session?.user?.name || session?.user?.username || null;
 
   const { handleLike, handleStatusChange, handleReply, handleDelete } = useFeedbacksActions({

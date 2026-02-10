@@ -67,7 +67,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Failed to create feedback:", error);
+    // セキュリティ: スタックトレースや内部詳細を漏洩させない
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Failed to create feedback:", errorMessage);
     return NextResponse.json({ error: "要望の投稿に失敗しました" }, { status: 500 });
   }
 }

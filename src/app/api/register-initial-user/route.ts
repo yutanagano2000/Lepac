@@ -26,8 +26,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid setup key" }, { status: 401 });
     }
     // 長さを揃えて比較（タイミング攻撃対策）
-    const keyBuffer = Buffer.from(setupKey.padEnd(64, "\0"));
-    const expectedBuffer = Buffer.from(expectedKey.padEnd(64, "\0"));
+    // 両方のキーをUTF-8バイト列に変換し、長い方に合わせてpadEndで統一
+    const maxLen = Math.max(setupKey.length, expectedKey.length, 64);
+    const keyBuffer = Buffer.from(setupKey.padEnd(maxLen, "\0"), "utf-8");
+    const expectedBuffer = Buffer.from(expectedKey.padEnd(maxLen, "\0"), "utf-8");
+    // timingSafeEqualは同じ長さのBufferが必要
+    if (keyBuffer.length !== expectedBuffer.length) {
+      return NextResponse.json({ error: "Invalid setup key" }, { status: 401 });
+    }
     if (!timingSafeEqual(keyBuffer, expectedBuffer)) {
       return NextResponse.json({ error: "Invalid setup key" }, { status: 401 });
     }

@@ -43,6 +43,17 @@ export interface AuditLogParams {
 function getIpAddress(request?: NextRequest | null): string | null {
   if (!request) return null;
 
+  // Vercel が設定する信頼済みヘッダーを最優先
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  if (vercelIp) {
+    return vercelIp.split(",")[0].trim();
+  }
+
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp) {
+    return cfIp.trim();
+  }
+
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
     return forwardedFor.split(",")[0].trim();
@@ -64,6 +75,27 @@ function getUserAgent(request?: NextRequest | null): string | null {
   return request.headers.get("user-agent");
 }
 
+/** 監査ログに保存すべきでない機密フィールドを除去 */
+const SENSITIVE_KEYS = new Set([
+  "password", "passwordHash", "token", "secret", "apiKey",
+  "authToken", "accessToken", "refreshToken", "creditCard",
+  "ssn", "pin",
+]);
+
+function scrubSensitiveData(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const scrubbed: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (SENSITIVE_KEYS.has(key) || SENSITIVE_KEYS.has(key.toLowerCase())) {
+      scrubbed[key] = "[REDACTED]";
+    } else {
+      scrubbed[key] = value;
+    }
+  }
+  return scrubbed;
+}
+
 /**
  * 監査ログを記録
  */
@@ -78,6 +110,8 @@ export async function logAudit(params: AuditLogParams): Promise<void> {
     request,
   } = params;
 
+  const safeDetails = details ? scrubSensitiveData(details) : null;
+
   try {
     await db.insert(auditLogs).values({
       organizationId: user?.organizationId ?? null,
@@ -87,7 +121,7 @@ export async function logAudit(params: AuditLogParams): Promise<void> {
       resourceType,
       resourceId: resourceId ?? null,
       resourceName: resourceName ?? null,
-      details: details ? JSON.stringify(details) : null,
+      details: safeDetails ? JSON.stringify(safeDetails) : null,
       ipAddress: getIpAddress(request),
       userAgent: getUserAgent(request),
       createdAt: new Date().toISOString(),

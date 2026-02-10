@@ -70,14 +70,18 @@ export async function POST(
       }
     }
 
-    // 重複を削除
+    // 重複を削除（一度に削除するIDの上限を設定してバッチ処理）
     if (idsToDelete.length > 0) {
-      await db
-        .delete(progress)
-        .where(and(
-          eq(progress.projectId, projectId),
-          inArray(progress.id, idsToDelete)
-        ));
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < idsToDelete.length; i += BATCH_SIZE) {
+        const batch = idsToDelete.slice(i, i + BATCH_SIZE);
+        await db
+          .delete(progress)
+          .where(and(
+            eq(progress.projectId, projectId),
+            inArray(progress.id, batch)
+          ));
+      }
 
       // 削除後の進捗を再取得
       existingProgress = await db
@@ -119,20 +123,21 @@ export async function POST(
       }
     }
 
-    // 新規進捗を挿入
-    const insertedProgress = [];
-    for (const item of newProgress) {
-      const [result] = await db
+    // 新規進捗を挿入（バッチ挿入で効率化）
+    let insertedProgress: typeof existingProgress = [];
+    if (newProgress.length > 0) {
+      const valuesToInsert = newProgress.map((item) => ({
+        projectId,
+        title: item.title,
+        description: null,
+        status: "planned" as const,
+        createdAt: item.date.toISOString(),
+      }));
+
+      insertedProgress = await db
         .insert(progress)
-        .values({
-          projectId,
-          title: item.title,
-          description: null,
-          status: "planned",
-          createdAt: item.date.toISOString(),
-        })
+        .values(valuesToInsert)
         .returning();
-      insertedProgress.push(result);
     }
 
     return NextResponse.json({

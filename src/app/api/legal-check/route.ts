@@ -50,6 +50,28 @@ function validateRequestBody(body: unknown): { valid: boolean; error?: string } 
     }
   }
 
+  // projectIdのバリデーション
+  if ("projectId" in bodyObj) {
+    const pid = bodyObj.projectId;
+    if (typeof pid !== "string" || pid.length > 100 || !/^[a-zA-Z0-9_-]*$/.test(pid)) {
+      return { valid: false, error: "無効なプロジェクトIDです" };
+    }
+  }
+
+  // checkTypesのバリデーション（配列型かつ文字列要素のみ）
+  if ("checkTypes" in bodyObj) {
+    const types = bodyObj.checkTypes;
+    if (!Array.isArray(types) || types.length > 20) {
+      return { valid: false, error: "checkTypesは配列で20件以内で指定してください" };
+    }
+    const validCheckTypes = ["flood", "landslide", "tsunami", "earthquake", "volcano", "soil"];
+    for (const t of types) {
+      if (typeof t !== "string" || !validCheckTypes.includes(t)) {
+        return { valid: false, error: "無効なチェックタイプが含まれています" };
+      }
+    }
+  }
+
   return { valid: true };
 }
 

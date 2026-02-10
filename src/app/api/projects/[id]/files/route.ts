@@ -163,9 +163,9 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     console.error("File upload error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    // セキュリティ: 内部エラー詳細をクライアントに公開しない
     return NextResponse.json(
-      { error: `Failed to upload file: ${errorMessage}` },
+      { error: "ファイルのアップロードに失敗しました" },
       { status: 500 }
     );
   }

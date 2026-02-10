@@ -95,11 +95,19 @@ export async function POST(request: NextRequest) {
       detached: true,
       stdio: "ignore",
     });
+
+    // 子プロセスのエラーを監視
+    child.on("error", (err) => {
+      console.error(`Spawn error for ${command}:`, err.message);
+    });
+
     child.unref();
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Open folder error:", error);
+    // セキュリティ: 内部エラー詳細を漏洩させない
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Open folder error:", errorMessage);
     return NextResponse.json({ error: "Failed to open folder" }, { status: 500 });
   }
 }

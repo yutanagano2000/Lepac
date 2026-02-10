@@ -2,10 +2,12 @@
 
 import { Suspense, useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Loader2, Mountain, Search, TriangleAlert, MapPin, Save, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { parseCoordinateString } from "@/lib/coordinates";
 import { PolygonDrawMap } from "@/components/survey/PolygonDrawMap";
 import { Surface3D } from "@/components/survey/Surface3D";
@@ -18,6 +20,15 @@ import { FullscreenSurface } from "@/components/survey/FullscreenSurface";
 import { AnalysisProgress } from "@/components/survey/AnalysisProgress";
 import type { DrawMode } from "@/components/survey/PolygonToolbar";
 import { extractCrossSection, type SlopeStats, type CrossSectionPoint } from "@/lib/slope-analysis";
+
+const ThreeTerrainViewer = dynamic(
+  () => import("@/components/survey/ThreeTerrainViewer"),
+  { ssr: false, loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  )}
+);
 
 // ─── ポリゴン解析の結果型 ────────────────────────────
 interface GridAnalysisResult {
@@ -66,6 +77,16 @@ function SurveyPageContent() {
   const [projectInfo, setProjectInfo] = useState<{ id: string; name: string } | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [resetTrigger, setResetTrigger] = useState(0);
+  const [viewer3dTab, setViewer3dTab] = useState<string>("terrain3d");
+
+  // 解析完了時に3D解析タブへ自動切替
+  useEffect(() => {
+    if (gridResult) {
+      setViewer3dTab("surface");
+    } else {
+      setViewer3dTab("terrain3d");
+    }
+  }, [gridResult]);
 
   // ─── エクスポート用 Ref ───────────────────────────────
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -379,49 +400,76 @@ function SurveyPageContent() {
               </div>
             </Card>
 
-            {gridResult ? (
-              <Card className="overflow-hidden" ref={surfaceContainerRef}>
+            <Card className="overflow-hidden" ref={surfaceContainerRef}>
+              <Tabs value={viewer3dTab} onValueChange={setViewer3dTab}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">3D地形ビューワー</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">3D地形ビューワー</CardTitle>
+                    <TabsList className="h-8">
+                      {gridResult && (
+                        <TabsTrigger value="surface" className="text-xs px-3 h-7">
+                          3D解析
+                        </TabsTrigger>
+                      )}
+                      <TabsTrigger value="terrain3d" className="text-xs px-3 h-7">
+                        航空写真3D
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
                 </CardHeader>
-                <div className="h-[400px] relative">
-                  <Surface3D
-                    z={gridResult.elevationMatrix}
-                    interval={gridResult.gridInfo.interval}
-                    gridOrigin={{
-                      lat: gridResult.gridInfo.originLat,
-                      lon: gridResult.gridInfo.originLon,
-                    }}
-                    polygonCoords={polygon}
-                    crossSectionLine={
-                      crossSectionLine.length >= 2
-                        ? crossSectionLine
-                        : gridResult?.autoCrossSectionLine ?? null
-                    }
-                  />
-                  <FullscreenSurface
-                    z={gridResult.elevationMatrix}
-                    interval={gridResult.gridInfo.interval}
-                    gridOrigin={{
-                      lat: gridResult.gridInfo.originLat,
-                      lon: gridResult.gridInfo.originLon,
-                    }}
-                    polygonCoords={polygon}
-                    crossSectionLine={
-                      crossSectionLine.length >= 2
-                        ? crossSectionLine
-                        : gridResult?.autoCrossSectionLine ?? null
-                    }
-                  />
-                </div>
-              </Card>
-            ) : (
-              <Card className="flex items-center justify-center h-[450px]">
-                <p className="text-sm text-muted-foreground">
-                  ポリゴンを描画して「解析」を押してください
-                </p>
-              </Card>
-            )}
+                {gridResult && (
+                  <TabsContent value="surface" className="mt-0">
+                    <div className="h-[400px] relative">
+                      <Surface3D
+                        z={gridResult.elevationMatrix}
+                        interval={gridResult.gridInfo.interval}
+                        gridOrigin={{
+                          lat: gridResult.gridInfo.originLat,
+                          lon: gridResult.gridInfo.originLon,
+                        }}
+                        polygonCoords={polygon}
+                        crossSectionLine={
+                          crossSectionLine.length >= 2
+                            ? crossSectionLine
+                            : gridResult?.autoCrossSectionLine ?? null
+                        }
+                      />
+                      <FullscreenSurface
+                        z={gridResult.elevationMatrix}
+                        interval={gridResult.gridInfo.interval}
+                        gridOrigin={{
+                          lat: gridResult.gridInfo.originLat,
+                          lon: gridResult.gridInfo.originLon,
+                        }}
+                        polygonCoords={polygon}
+                        crossSectionLine={
+                          crossSectionLine.length >= 2
+                            ? crossSectionLine
+                            : gridResult?.autoCrossSectionLine ?? null
+                        }
+                      />
+                    </div>
+                  </TabsContent>
+                )}
+                <TabsContent value="terrain3d" className="mt-0">
+                  <div className="h-[400px]">
+                    <ThreeTerrainViewer
+                      center={jumpTarget ?? undefined}
+                      polygon={gridResult ? polygon : undefined}
+                      elevationMatrix={gridResult?.elevationMatrix}
+                      slopeMatrix={gridResult?.slopeMatrix}
+                      gridInfo={gridResult ? {
+                        originLat: gridResult.gridInfo.originLat,
+                        originLon: gridResult.gridInfo.originLon,
+                        interval: gridResult.gridInfo.interval,
+                        rows: gridResult.gridInfo.rows,
+                        cols: gridResult.gridInfo.cols,
+                      } : undefined}
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </Card>
           </div>
 
           {/* 断面図 + 統計 */}

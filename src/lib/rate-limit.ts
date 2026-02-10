@@ -33,6 +33,17 @@ export type RateLimitType = keyof typeof RATE_LIMIT_CONFIG;
  * リクエストからIPアドレスを取得
  */
 function getIpAddress(request: NextRequest): string {
+  // Vercel が設定する信頼済みヘッダーを最優先
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  if (vercelIp) {
+    return vercelIp.split(",")[0].trim();
+  }
+
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp) {
+    return cfIp.trim();
+  }
+
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) {
     return forwardedFor.split(",")[0].trim();
@@ -72,7 +83,19 @@ export async function checkRateLimit(
   const windowStartStr = windowStart.toISOString();
 
   try {
-    // 現在のウィンドウ内のリクエスト数を取得
+    // アトミックにカウントをインクリメント（競合状態防止）
+    await db
+      .update(rateLimits)
+      .set({ requestCount: sql`${rateLimits.requestCount} + 1` })
+      .where(
+        and(
+          eq(rateLimits.identifier, identifier),
+          eq(rateLimits.endpoint, endpoint),
+          gte(rateLimits.windowStart, windowStartStr)
+        )
+      );
+
+    // 更新後の値を取得
     const [existing] = await db
       .select({
         id: rateLimits.id,
@@ -90,10 +113,7 @@ export async function checkRateLimit(
       .limit(1);
 
     if (existing) {
-      const newCount = existing.requestCount + 1;
-
-      if (newCount > config.maxRequests) {
-        // レート制限に達した
+      if (existing.requestCount > config.maxRequests) {
         const resetAt = new Date(
           new Date(existing.windowStart).getTime() + config.windowMs
         );
@@ -104,15 +124,9 @@ export async function checkRateLimit(
         };
       }
 
-      // カウントを更新
-      await db
-        .update(rateLimits)
-        .set({ requestCount: newCount })
-        .where(eq(rateLimits.id, existing.id));
-
       return {
         allowed: true,
-        remaining: config.maxRequests - newCount,
+        remaining: config.maxRequests - existing.requestCount,
         resetAt: new Date(
           new Date(existing.windowStart).getTime() + config.windowMs
         ),
@@ -135,10 +149,10 @@ export async function checkRateLimit(
     }
   } catch (error) {
     console.error("[RateLimit] Error checking rate limit:", error);
-    // エラー時は許可する（可用性優先）
+    // DB障害時はセキュリティ優先で拒否（fail-closed）
     return {
-      allowed: true,
-      remaining: config.maxRequests,
+      allowed: false,
+      remaining: 0,
       resetAt: new Date(now.getTime() + config.windowMs),
     };
   }

@@ -86,8 +86,12 @@ export function useOrganizationSelection({ onSuccess }: UseOrganizationSelection
 
       onSuccess();
     } catch (err) {
-      console.error("Organization update error:", err);
+      // セキュリティ: 本番環境ではスタックトレースを除外
+      if (process.env.NODE_ENV === "development") {
+        console.error("Organization update error:", err);
+      }
       setError(err instanceof Error ? err.message : "エラーが発生しました");
+    } finally {
       setIsSubmitting(false);
     }
   }, [isValid, selectedOrgId, isOther, customOrgName, update, onSuccess]);

@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { MapEditor } from "@/components/map-editor/MapEditor";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import type { TileLayerType } from "@/components/map-editor/MapEditorCore";
@@ -17,6 +17,12 @@ interface SavedAnnotation {
   tileLayer: string | null;
 }
 
+type ToastType = "success" | "error";
+interface Toast {
+  type: ToastType;
+  message: string;
+}
+
 function MapEditorContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get("projectId")
@@ -27,6 +33,12 @@ function MapEditorContent() {
 
   const [loading, setLoading] = useState(!!projectId);
   const [annotation, setAnnotation] = useState<SavedAnnotation | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const showToast = useCallback((type: ToastType, message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   // Load existing annotation
   useEffect(() => {
@@ -76,13 +88,13 @@ function MapEditorContent() {
       if (res.ok) {
         const saved = await res.json();
         setAnnotation(saved);
-        alert("保存しました");
+        showToast("success", "保存しました");
       } else {
         const err = await res.json();
-        throw new Error(err.error || "保存失敗");
+        showToast("error", err.error || "保存に失敗しました");
       }
     },
-    [projectId, annotation?.id]
+    [projectId, annotation?.id, showToast]
   );
 
   // Compute initial center with safe JSON parsing
@@ -119,6 +131,25 @@ function MapEditorContent() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)]">
+      {/* Toast notification */}
+      {toast && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg transition-all ${
+            toast.type === "success"
+              ? "bg-green-50 text-green-800 border border-green-200"
+              : "bg-red-50 text-red-800 border border-red-200"
+          }`}
+        >
+          {toast.type === "success" ? (
+            <CheckCircle className="h-5 w-5 text-green-600" />
+          ) : (
+            <XCircle className="h-5 w-5 text-red-600" />
+          )}
+          <span className="text-sm font-medium">{toast.message}</span>
+        </div>
+      )}
       <div className="flex items-center gap-3 px-4 py-2 border-b bg-background">
         <Link href={projectId ? `/projects/${projectId}` : "/tools"}>
           <Button variant="ghost" size="sm" className="h-8">

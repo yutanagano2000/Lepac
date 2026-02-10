@@ -7,6 +7,7 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -86,7 +87,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           } else {
             // 新規ユーザーを作成
             const username = `line_${lineId.substring(0, 8)}`;
-            const hashedPassword = await bcrypt.hash(lineId, 10); // ダミーパスワード
+            // セキュリティ: 推測不可能なランダムパスワードを生成（LINE認証では使用されない）
+            const randomPassword = randomBytes(32).toString("hex");
+            const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
             const [newUser] = await db
               .insert(users)
@@ -126,10 +129,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // これによりDB更新後のページリロードでも最新の値が反映される
       if (token.sub && (token.organizationId === null || token.organizationId === undefined || trigger === "update")) {
         try {
+          const userId = parseInt(token.sub, 10);
+          if (!Number.isFinite(userId) || userId <= 0) {
+            console.error("[JWT] Invalid user ID in token:", token.sub);
+            return token;
+          }
           const [currentUser] = await db
             .select()
             .from(users)
-            .where(eq(users.id, parseInt(token.sub)));
+            .where(eq(users.id, userId));
           if (currentUser) {
             token.organizationId = currentUser.organizationId ?? null;
             token.role = currentUser.role ?? "user";
