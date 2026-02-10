@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
 const Plot = dynamic(
-  () => import("react-plotly.js").then((mod) => mod.default),
+  () => import("./PlotlyPlot"),
   {
     ssr: false,
     loading: () => (
@@ -255,21 +255,6 @@ export function Surface3D({ z, interval, gridOrigin, polygonCoords, crossSection
               hovertemplate:
                 "東西: %{x:.0f}m<br>南北: %{y:.0f}m<br>標高: %{z:.1f}m<extra></extra>",
               connectgaps: false,
-              lighting: {
-                ambient: 0.6,
-                diffuse: 0.7,
-                specular: 0.3,
-                roughness: 0.5,
-                fresnel: 0.05,
-              },
-              contours: {
-                z: {
-                  show: true,
-                  usecolormap: true,
-                  highlightcolor: "rgba(255,255,255,0.3)",
-                  project: { z: false },
-                },
-              },
             } as any,
             ...extraTraces,
           ]}

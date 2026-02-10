@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { toast } from "sonner";
 import type { LegalStatuses } from "../_types";
 
 interface UseLegalAutoCheckProps {
@@ -33,7 +34,7 @@ export function useLegalAutoCheck({
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "自動チェックに失敗しました");
+        toast.error(data.error || "自動チェックに失敗しました");
         return;
       }
       const data = await res.json();
@@ -45,7 +46,7 @@ export function useLegalAutoCheck({
         skipped: data.skipped ?? 0,
       });
     } catch {
-      alert("自動チェック中にエラーが発生しました");
+      toast.error("自動チェック中にエラーが発生しました");
     } finally {
       setIsAutoChecking(false);
     }

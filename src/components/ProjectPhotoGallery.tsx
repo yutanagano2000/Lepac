@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface ProjectPhotoGalleryProps {
   managementNumber: string | null;
@@ -55,7 +56,7 @@ export function ProjectPhotoGallery({ managementNumber }: ProjectPhotoGalleryPro
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch {
-      alert("コピーに失敗しました");
+      toast.error("コピーに失敗しました");
     }
   };
 
@@ -166,6 +167,7 @@ export function ProjectPhotoGallery({ managementNumber }: ProjectPhotoGalleryPro
                 className={cn("h-7 px-2", copySuccess && "text-green-600")}
                 onClick={copyPath}
                 title="パスをコピー"
+                aria-label="パスをコピー"
               >
                 {copySuccess ? (
                   <CheckCircle2 className="h-3 w-3" />
@@ -179,6 +181,7 @@ export function ProjectPhotoGallery({ managementNumber }: ProjectPhotoGalleryPro
                 className="h-7 px-2"
                 onClick={openInExplorer}
                 title="フォルダを開く"
+                aria-label="フォルダを開く"
               >
                 <ExternalLink className="h-3 w-3" />
               </Button>

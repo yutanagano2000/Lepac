@@ -111,17 +111,15 @@ async function fetchTilePixels(x: number, y: number, z: number): Promise<Uint8Ar
  * 無効値: R=128, G=0, B=0
  */
 function rgbToElevation(r: number, g: number, b: number): number | null {
-  // GSI DEM無効値チェック
-  // R=128, G=0, B=0 は公式の無効値
-  if (r === 128 && g === 0 && b === 0) {
-    return null;
-  }
-  // R=0, G=0, B=0 (黒ピクセル) はタイル欠損・海域 → -100000になるため除外
-  if (r === 0 && g === 0 && b === 0) {
+  const x = r * 65536 + g * 256 + b;
+
+  // GSI DEM無効値: x = 2^23 (R=128, G=0, B=0)
+  if (x === 8388608) {
     return null;
   }
 
-  const elevation = (r * 256 * 256 + g * 256 + b) * 0.01 - 100000;
+  // x < 2^23: 正の標高, x > 2^23: 負の標高（海面下）
+  const elevation = x < 8388608 ? x * 0.01 : (x - 16777216) * 0.01;
 
   // 日本国内の標高範囲外（-500m〜4000m）は無効とみなす
   if (elevation < -500 || elevation > 4000) {

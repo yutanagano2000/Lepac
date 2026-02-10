@@ -35,6 +35,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useConstructionData, useConstructionActions, type Photo } from "./_hooks";
 import { PHOTO_CATEGORIES, ALLOWED_IMAGE_TYPES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB } from "./_constants";
 
@@ -103,7 +104,7 @@ export default function ConstructionDetailPage() {
     }
     const error = validateFile(file);
     if (error) {
-      alert(error);
+      toast.warning(error);
       return;
     }
     setUploadFile(file);
@@ -116,7 +117,7 @@ export default function ConstructionDetailPage() {
     // 再度バリデーション（セキュリティ対策）
     const error = validateFile(uploadFile);
     if (error) {
-      alert(error);
+      toast.warning(error);
       return;
     }
 
@@ -127,7 +128,7 @@ export default function ConstructionDetailPage() {
       setUploadNote("");
       setUploadingCategory(null);
     } catch {
-      alert("写真のアップロードに失敗しました");
+      toast.error("写真のアップロードに失敗しました");
     } finally {
       setUploading(false);
     }
@@ -141,7 +142,7 @@ export default function ConstructionDetailPage() {
       await deletePhoto(photoId);
       setLightboxPhoto(null);
     } catch {
-      alert("写真の削除に失敗しました");
+      toast.error("写真の削除に失敗しました");
     }
   };
 

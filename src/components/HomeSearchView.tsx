@@ -213,7 +213,10 @@ export function HomeSearchView() {
             return (
               <button
                 key={`${result.type}-${result.id}`}
-                onClick={() => handleResultClick(result.href)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleResultClick(result.href);
+                }}
                 onMouseEnter={() => setSelectedIndex(globalIndex)}
                 className={cn(
                   "w-full text-left px-4 py-2.5 transition-colors",

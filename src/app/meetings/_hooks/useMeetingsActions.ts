@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { toast } from "sonner";
 import type { MeetingFormData } from "../_types";
 import { INITIAL_FORM_DATA } from "../_constants";
 
@@ -23,11 +24,11 @@ export function useMeetingsActions({ onRefresh }: UseMeetingsActionsProps) {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) {
-      alert("タイトルを入力してください");
+      toast.warning("タイトルを入力してください");
       return;
     }
     if (!form.meetingDate) {
-      alert("日付を選択してください");
+      toast.warning("日付を選択してください");
       return;
     }
     setIsSubmitting(true);
@@ -51,7 +52,7 @@ export function useMeetingsActions({ onRefresh }: UseMeetingsActionsProps) {
       await onRefresh();
     } catch (err) {
       console.error("Meeting create error:", err);
-      alert(err instanceof Error ? err.message : "登録に失敗しました");
+      toast.error(err instanceof Error ? err.message : "登録に失敗しました");
     } finally {
       setIsSubmitting(false);
     }

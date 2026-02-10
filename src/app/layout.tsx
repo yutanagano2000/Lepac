@@ -8,6 +8,7 @@ import { FeedbackInput } from "@/components/FeedbackInput";
 import { Header } from "@/components/Header";
 import { MainContentWrapper } from "@/components/MainContentWrapper";
 import { MobileMenuProvider } from "@/components/MobileMenuContext";
+import { Toaster } from "sonner";
 import { initDb } from "@/db";
 
 const geistSans = Geist({
@@ -59,6 +60,7 @@ export default async function RootLayout({
                 </div>
               </div>
             </MobileMenuProvider>
+            <Toaster richColors position="top-right" />
           </ThemeProvider>
         </SessionProvider>
       </body>

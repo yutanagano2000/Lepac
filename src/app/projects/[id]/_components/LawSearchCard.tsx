@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { safeWindowOpen } from "@/lib/sanitize";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -362,7 +363,7 @@ const LawSearchCard: React.FC<LawSearchCardProps> = ({
               key={index}
               variant="outline"
               size="sm"
-              onClick={() => window.open(button.url, '_blank', 'noopener,noreferrer')}
+              onClick={() => safeWindowOpen(button.url)}
             >
               <ExternalLink className="h-3 w-3 mr-2" />
               {button.label}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2 } from "lucide-react";
+import { isSafeUrl } from "@/lib/sanitize";
 
 interface PDFThumbnailProps {
   src: string;
@@ -39,6 +40,11 @@ export function PDFThumbnail({ src, alt, className, onClick }: PDFThumbnailProps
 
         // Worker設定
         pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+        // URL安全性チェック（javascript: / data: スキームを拒否）
+        if (!isSafeUrl(src)) {
+          throw new Error("Unsafe PDF URL");
+        }
 
         // PDFを読み込む
         const loadingTask = pdfjsLib.getDocument(src);

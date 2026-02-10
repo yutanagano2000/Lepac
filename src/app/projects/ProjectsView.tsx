@@ -43,6 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Project, NewProject } from "@/db/schema";
 import { MONTHS, MANAGER_OPTIONS, TABLE_COLUMNS, getRecentSearches, addRecentSearch } from "./_constants";
 import { EditableCell } from "./_components/EditableCell";
@@ -224,16 +225,16 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       });
       if (res.ok) {
         const data = await res.json();
-        alert(data.message);
+        toast.success(data.message);
         setImportOpen(false);
         fetchPage(1);
       } else {
         const data = await res.json();
-        alert(data.error || "インポートに失敗しました");
+        toast.error(data.error || "インポートに失敗しました");
       }
     } catch (error) {
       console.error("Import error:", error);
-      alert("インポートに失敗しました");
+      toast.error("インポートに失敗しました");
     } finally {
       setImportSubmitting(false);
     }
@@ -243,7 +244,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.manager?.trim()) {
-      alert("担当を選択してください");
+      toast.warning("担当を選択してください");
       return;
     }
     setIsSubmitting(true);
@@ -262,7 +263,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       fetchPage(pagination.page);
     } catch (error) {
       console.error("handleSubmit error:", error);
-      alert(error instanceof Error ? error.message : "案件の登録に失敗しました");
+      toast.error(error instanceof Error ? error.message : "案件の登録に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
@@ -286,7 +287,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       fetchPage(pagination.page);
     } catch (error) {
       console.error("handleEditSubmit error:", error);
-      alert(error instanceof Error ? error.message : "案件の更新に失敗しました");
+      toast.error(error instanceof Error ? error.message : "案件の更新に失敗しました");
     }
   };
 
@@ -321,7 +322,7 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       fetchPage(pagination.page);
     } catch (error) {
       console.error("handleDelete error:", error);
-      alert(error instanceof Error ? error.message : "案件の削除に失敗しました");
+      toast.error(error instanceof Error ? error.message : "案件の削除に失敗しました");
     }
   };
 
