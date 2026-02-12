@@ -1,3 +1,5 @@
+import type { PhaseOverride } from "@/components/horizontal-timeline/types";
+
 // ワークフロー工程定義（スケジュール画面の正規フロー）
 export const WORKFLOW_PHASES = [
   {
@@ -190,7 +192,7 @@ function subtractCalendarDays(date: Date, days: number): Date {
 /**
  * 営業日を加算（土日を除く）
  */
-function addBusinessDays(date: Date, businessDays: number): Date {
+export function addBusinessDays(date: Date, businessDays: number): Date {
   const result = new Date(date);
   let added = 0;
 
@@ -209,10 +211,42 @@ function addBusinessDays(date: Date, businessDays: number): Date {
 /**
  * 暦日を加算
  */
-function addCalendarDays(date: Date, days: number): Date {
+export function addCalendarDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+/**
+ * カーソルチェーンモード: カスタム順序に従い、前のタスク終了日→次のタスク開始日で連鎖計算
+ */
+function calculateSubPhaseDatesChained(
+  phaseStart: Date,
+  subPhases: readonly WorkflowSubPhase[],
+  override: PhaseOverride
+): WorkflowSubPhase[] {
+  const order = override.subPhaseOrder!;
+  const skipped = new Set(override.skippedSubPhases ?? []);
+
+  const ordered = order
+    .map(key => subPhases.find(sp => sp.key === key))
+    .filter((sp): sp is WorkflowSubPhase => sp != null && !skipped.has(sp.key));
+
+  let cursor = new Date(phaseStart);
+
+  return ordered.map(sp => {
+    // 固定日付がある場合はカーソルをリスタート
+    if (override.fixedDates?.[sp.key]) {
+      cursor = new Date(override.fixedDates[sp.key]);
+    }
+    const date = new Date(cursor);
+    const dur = override.customDurations?.[sp.key] ?? sp.duration ?? 1;
+    const unit = sp.unit ?? 'business_days';
+    cursor = unit === 'business_days'
+      ? addBusinessDays(cursor, dur)
+      : addCalendarDays(cursor, dur);
+    return { ...sp, date, duration: dur, unit };
+  });
 }
 
 /**
@@ -221,9 +255,15 @@ function addCalendarDays(date: Date, days: number): Date {
 function calculateSubPhaseDates(
   phaseKey: string,
   phaseStart: Date,
-  subPhases?: readonly WorkflowSubPhase[]
+  subPhases?: readonly WorkflowSubPhase[],
+  override?: PhaseOverride
 ): WorkflowSubPhase[] | undefined {
   if (!subPhases) return undefined;
+
+  // カスタム順序が指定されていればチェーンモード
+  if (override?.subPhaseOrder && override.subPhaseOrder.length > 0) {
+    return calculateSubPhaseDatesChained(phaseStart, subPhases, override);
+  }
 
   return subPhases.map((subPhase) => {
     // 分岐ノードの場合は日付を設定しない
@@ -428,7 +468,8 @@ export function calculateWorkflowTimeline(startDate: Date): WorkflowTimelinePhas
  * @returns 各工程の予定日リスト（WORKFLOW_PHASESベース）
  */
 export function calculateWorkflowTimelineFromCompletion(
-  completionMonth: string
+  completionMonth: string,
+  phaseOverrides?: Record<string, PhaseOverride>
 ): WorkflowTimelinePhase[] {
   // completionMonthのバリデーション（YYYY-MM形式を期待）
   if (!completionMonth || !/^\d{4}-\d{2}$/.test(completionMonth)) {
@@ -481,7 +522,7 @@ export function calculateWorkflowTimelineFromCompletion(
     }
 
     const calculatedSubPhases = "subPhases" in workflowPhase
-      ? calculateSubPhaseDates(workflowPhase.key, subPhaseBaseDate, workflowPhase.subPhases)
+      ? calculateSubPhaseDates(workflowPhase.key, subPhaseBaseDate, workflowPhase.subPhases, phaseOverrides?.[workflowPhase.key])
       : undefined;
 
     results.push({
