@@ -46,12 +46,14 @@ export async function GET(request: Request) {
             like(projects.projectNumber, searchPattern),
             like(projects.landowner1, searchPattern),
             like(projects.landowner2, searchPattern),
-            like(projects.landowner3, searchPattern)
+            like(projects.landowner3, searchPattern),
+            like(projects.landowner, searchPattern),
+            like(projects.landownerAddress, searchPattern)
           )
         )
       )
       .orderBy(asc(projects.managementNumber))
-      .limit(10),
+      .limit(20),
 
     // TODOを検索（必要カラムのみselect）
     db
