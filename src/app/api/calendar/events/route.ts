@@ -250,6 +250,8 @@ export async function GET(request: Request) {
         title: event.title,
         start: event.eventDate,
         end: event.endDate,
+        startTime: event.startTime || null,
+        endTime: event.endTime || null,
         projectId: null,
         projectName: null,
         status: null,
@@ -280,7 +282,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(validation.error, { status: 400 });
   }
 
-  const { title, eventType, eventDate, endDate, description } = validation.data;
+  const { title, eventType, eventDate, endDate, startTime, endTime, description } = validation.data;
 
   // endDateがeventDateより前の場合はエラー
   if (endDate && endDate < eventDate) {
@@ -303,6 +305,8 @@ export async function POST(request: NextRequest) {
         eventType: eventType || "other",
         eventDate,
         endDate: endDate || null,
+        startTime: startTime || null,
+        endTime: endTime || null,
         description: description || null,
         userId,
         userName,
@@ -316,6 +320,8 @@ export async function POST(request: NextRequest) {
       title: result.title,
       start: result.eventDate,
       end: result.endDate,
+      startTime: result.startTime,
+      endTime: result.endTime,
       description: result.description,
       userName: result.userName,
     }, { status: 201 });

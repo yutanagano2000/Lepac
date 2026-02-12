@@ -190,6 +190,8 @@ export const createProjectSchema = z.object({
   windSpeed: optionalString,
   // 外部連携
   dococabiLink: optionalString,
+  // タイムラインフェーズ手動上書き（JSON）
+  phaseOverrides: optionalString,
 }).strict();
 
 // プロジェクト更新スキーマ（すべてオプショナル）
@@ -242,12 +244,17 @@ export const createMeetingSchema = z.object({
 // 会議更新スキーマ
 export const updateMeetingSchema = createMeetingSchema.partial();
 
+// 時刻バリデーション (HH:MM 形式)
+const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "時刻はHH:MM形式で入力してください").optional().nullable();
+
 // カレンダーイベント作成スキーマ
 export const createCalendarEventSchema = z.object({
   title: nonEmptyString,
   eventType: z.enum(["todo", "meeting", "other"]).default("other"),
   eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付はYYYY-MM-DD形式で入力してください"),
   endDate: dateString,
+  startTime: timeString,
+  endTime: timeString,
   description: optionalString,
 });
 

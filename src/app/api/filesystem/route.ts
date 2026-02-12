@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireOrganization } from "@/lib/auth-guard";
+import { db, ensureDbReady } from "@/db";
+import { serverFolders, serverFiles } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -39,11 +42,22 @@ const SUBFOLDERS = [
 ];
 
 /**
+ * ファイルサーバーにアクセス可能かチェック
+ */
+function isFileServerAvailable(): boolean {
+  try {
+    return fs.existsSync(CABINET_BASE_PATH);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 管理番号からフォルダを検索
  * フォルダ名は "0012-担当者　P3327" 形式のため、先頭一致で検索
  */
 function findProjectFolder(managementNumber: string): string | null {
-  if (!fs.existsSync(CABINET_BASE_PATH)) {
+  if (!isFileServerAvailable()) {
     return null;
   }
 
@@ -144,6 +158,134 @@ function getFilesRecursive(
   return result;
 }
 
+// ==========================================
+// DB フォールバック関数群
+// ==========================================
+
+/**
+ * DBキャッシュから findFolder 結果を返す
+ */
+async function findFolderFromDb(managementNumber: string) {
+  const padded = managementNumber.padStart(4, "0");
+  const folder = await db.select().from(serverFolders)
+    .where(eq(serverFolders.managementNumber, padded))
+    .limit(1);
+
+  if (folder.length === 0) {
+    return NextResponse.json({
+      found: false,
+      managementNumber,
+      source: "cache",
+      message: `管理番号「${managementNumber}」に該当するフォルダが見つかりません`,
+    });
+  }
+
+  const f = folder[0];
+
+  // サブフォルダごとのファイル情報をDBから取得
+  const allFiles = await db.select().from(serverFiles)
+    .where(eq(serverFiles.managementNumber, padded));
+
+  const subfolders = SUBFOLDERS.map(sf => {
+    const sfFiles = allFiles.filter(file => file.subfolderKey === sf.key);
+    return {
+      ...sf,
+      path: `${f.folderPath}\\${sf.name}`,
+      exists: sfFiles.length > 0,
+      fileCount: sfFiles.length,
+      files: sfFiles.slice(0, 5).map(file => file.fileName),
+    };
+  });
+
+  return NextResponse.json({
+    found: true,
+    managementNumber,
+    folderPath: f.folderPath,
+    folderName: f.folderName,
+    subfolders,
+    source: "cache",
+    syncedAt: f.syncedAt,
+  });
+}
+
+/**
+ * DBキャッシュから listFiles 結果を返す
+ */
+async function listFilesFromDb(managementNumber: string, subfolderKey: string | null) {
+  const padded = managementNumber.padStart(4, "0");
+
+  const folder = await db.select().from(serverFolders)
+    .where(eq(serverFolders.managementNumber, padded))
+    .limit(1);
+
+  if (folder.length === 0) {
+    return NextResponse.json({ error: "フォルダが見つかりません" }, { status: 404 });
+  }
+
+  let files;
+  if (subfolderKey) {
+    files = await db.select().from(serverFiles).where(
+      and(
+        eq(serverFiles.managementNumber, padded),
+        eq(serverFiles.subfolderKey, subfolderKey)
+      )
+    );
+  } else {
+    files = await db.select().from(serverFiles)
+      .where(eq(serverFiles.managementNumber, padded));
+  }
+
+  const sf = subfolderKey ? SUBFOLDERS.find(s => s.key === subfolderKey) : null;
+  const folderPath = sf
+    ? `${folder[0].folderPath}\\${sf.name}`
+    : folder[0].folderPath;
+
+  return NextResponse.json({
+    folderPath,
+    files: files.map(f => ({
+      name: f.fileName,
+      path: f.filePath,
+      size: f.fileSize || 0,
+      modifiedAt: f.fileModifiedAt || "",
+    })),
+    totalCount: files.length,
+    source: "cache",
+  });
+}
+
+/**
+ * DBキャッシュから listAllProjects 結果を返す
+ */
+async function listAllProjectsFromDb() {
+  const folders = await db.select().from(serverFolders);
+
+  const result = folders.map(f => {
+    const match = f.folderName.match(/^(\d+)-([^\s　]+)[\s　]+(.+?)(?:[\s　]+(.*))?$/);
+    if (match) {
+      return {
+        folderName: f.folderName,
+        managementNumber: match[1],
+        manager: match[2],
+        projectNumber: match[3].trim(),
+        note: match[4]?.trim() || null,
+      };
+    }
+    return {
+      folderName: f.folderName,
+      managementNumber: f.managementNumber,
+      manager: null,
+      projectNumber: null,
+      note: null,
+    };
+  });
+
+  return NextResponse.json({
+    folders: result,
+    totalCount: result.length,
+    source: "cache",
+  });
+}
+
 export async function GET(request: Request) {
   // 認証チェック
   const authResult = await requireOrganization();
@@ -155,17 +297,40 @@ export async function GET(request: Request) {
   const action = searchParams.get("action");
   const managementNumber = searchParams.get("managementNumber");
 
-  // ベースパスの存在確認
-  if (!fs.existsSync(CABINET_BASE_PATH)) {
-    return NextResponse.json({
-      error: "ファイルサーバーに接続できません",
-    }, { status: 503 });
-  }
-
   // 管理番号のバリデーション
   if (managementNumber && !isValidManagementNumber(managementNumber)) {
     return NextResponse.json({ error: "無効な管理番号形式です" }, { status: 400 });
   }
+
+  const serverAvailable = isFileServerAvailable();
+
+  // ファイルサーバー未接続時 → DBフォールバック
+  if (!serverAvailable) {
+    console.log("[Filesystem] ファイルサーバー未接続 → DBキャッシュにフォールバック");
+    await ensureDbReady();
+
+    if (action === "findFolder" && managementNumber) {
+      return findFolderFromDb(managementNumber);
+    }
+    if (action === "listFiles" && managementNumber) {
+      const subfolder = searchParams.get("subfolder");
+      if (subfolder && !SUBFOLDERS.find(s => s.key === subfolder)) {
+        return NextResponse.json({ error: "無効なサブフォルダ指定です" }, { status: 400 });
+      }
+      return listFilesFromDb(managementNumber, subfolder);
+    }
+    if (action === "listAllProjects") {
+      return listAllProjectsFromDb();
+    }
+
+    // searchTouhon, getPhotos は DBキャッシュ非対応
+    return NextResponse.json({
+      error: "ファイルサーバーに接続できません（キャッシュ対象外のアクション）",
+      source: "cache",
+    }, { status: 503 });
+  }
+
+  // ===== 以下: ファイルサーバーへの直接アクセス =====
 
   // アクション: フォルダ検索（管理番号で検索）
   if (action === "findFolder" && managementNumber) {

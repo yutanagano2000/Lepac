@@ -474,6 +474,12 @@ export async function runMigrations(client: { execute: (sql: string, args?: unkn
   try { await client.execute(`ALTER TABLE calendar_events ADD COLUMN organization_id INTEGER`); } catch (e) {}
   // 既存データにデフォルト組織ID（Person Energy = 1）を設定
   try { await client.execute(`UPDATE calendar_events SET organization_id = 1 WHERE organization_id IS NULL`); } catch (e) {}
+  // カレンダーイベントに時間フィールド追加
+  try { await client.execute(`ALTER TABLE calendar_events ADD COLUMN start_time TEXT`); } catch (e) {}
+  try { await client.execute(`ALTER TABLE calendar_events ADD COLUMN end_time TEXT`); } catch (e) {}
+
+  // タイムラインフェーズ手動上書き用（JSON: { [phaseKey]: { startDate?, endDate?, note? } }）
+  try { await client.execute(`ALTER TABLE projects ADD COLUMN phase_overrides TEXT`); } catch (e) {}
 
   // 古い名前を新しい名前に統一（重複データのクリーンアップ）
   // 「現地調査」→「現調」、「農転・地目申請」→「法令申請」、「連系（発電開始）」→「連系」
@@ -604,4 +610,60 @@ export async function runMigrations(client: { execute: (sql: string, args?: unkn
   try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_projects_org_address ON projects (organization_id, address)`); } catch (e) {}
   try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_todos_org_content ON todos (organization_id, content)`); } catch (e) {}
   try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_meetings_org_title ON meetings (organization_id, title)`); } catch (e) {}
+
+  // 候補地テーブル（太陽光発電 候補地探索）
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS saved_sites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      address TEXT,
+      city_code TEXT,
+      land_category TEXT,
+      area_sqm REAL,
+      noushin_class TEXT,
+      city_planning_class TEXT,
+      owner_intention TEXT,
+      is_idle_farmland INTEGER,
+      score INTEGER,
+      stars INTEGER,
+      score_details TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      memo TEXT,
+      data_source TEXT DEFAULT 'manual',
+      data_date TEXT,
+      created_at TEXT NOT NULL,
+      created_by INTEGER
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_saved_sites_org ON saved_sites (organization_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_saved_sites_stars ON saved_sites (stars)`); } catch (e) {}
+
+  // ファイルサーバー同期: フォルダテーブル
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS server_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      management_number TEXT NOT NULL UNIQUE,
+      folder_name TEXT NOT NULL,
+      folder_path TEXT NOT NULL,
+      synced_at TEXT NOT NULL
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_server_folders_mgmt ON server_folders (management_number)`); } catch (e) {}
+
+  // ファイルサーバー同期: ファイルテーブル
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS server_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      management_number TEXT NOT NULL,
+      subfolder_key TEXT,
+      file_name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      file_size INTEGER DEFAULT 0,
+      file_modified_at TEXT,
+      synced_at TEXT NOT NULL
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_server_files_mgmt ON server_files (management_number)`); } catch (e) {}
 }
