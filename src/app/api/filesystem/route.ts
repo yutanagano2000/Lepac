@@ -179,6 +179,11 @@ export async function GET(request: Request) {
       });
     }
 
+    // パストラバーサル対策
+    if (!isPathWithinBase(folderPath, CABINET_BASE_PATH)) {
+      return NextResponse.json({ error: "アクセスが拒否されました" }, { status: 403 });
+    }
+
     // サブフォルダの状況を取得
     const subfolders = SUBFOLDERS.map(sf => {
       const subfolderPath = path.join(folderPath, sf.name);
@@ -245,6 +250,11 @@ export async function GET(request: Request) {
 
     const touhonPath = path.join(CABINET_BASE_PATH, "■謄本");
 
+    // パストラバーサル対策
+    if (!isPathWithinBase(touhonPath, CABINET_BASE_PATH)) {
+      return NextResponse.json({ error: "アクセスが拒否されました" }, { status: 403 });
+    }
+
     if (!fs.existsSync(touhonPath)) {
       return NextResponse.json({ error: "謄本フォルダが見つかりません" }, { status: 404 });
     }
@@ -271,6 +281,11 @@ export async function GET(request: Request) {
     }
 
     const photoPath = path.join(folderPath, "02_土地情報", "写真");
+
+    // パストラバーサル対策
+    if (!isPathWithinBase(photoPath, CABINET_BASE_PATH)) {
+      return NextResponse.json({ error: "アクセスが拒否されました" }, { status: 403 });
+    }
 
     if (!fs.existsSync(photoPath)) {
       return NextResponse.json({ photos: [], totalCount: 0 });

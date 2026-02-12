@@ -172,8 +172,23 @@ export async function GET(request: Request) {
       ).orderBy(asc(calendarEvents.eventDate), asc(calendarEvents.id)).limit(MAX_EVENTS_PER_TYPE),
     ]);
 
+    // カレンダーイベント型定義
+    type CalendarEvent = {
+      id: string;
+      type: "todo" | "progress" | "meeting" | "other";
+      title: string;
+      start: string | null;
+      end?: string | null;
+      projectId: number | null;
+      projectName: string | null;
+      status: string | null;
+      description: string | null;
+      userName: string | null;
+      category?: string | null;
+    };
+
     // イベントを構築
-    const events = [];
+    const events: CalendarEvent[] = [];
 
     // TODOイベント
     for (const todo of allTodos) {

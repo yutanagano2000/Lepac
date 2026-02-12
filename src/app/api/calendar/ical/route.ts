@@ -91,9 +91,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 組織に属する案件を取得
-  const allProjects = await db.select().from(projects).where(eq(projects.organizationId, organizationId));
-  const projectIds = allProjects.map((p) => p.id);
+  // 組織に属する案件のIDと管理番号のみを取得（不要なカラムを除外）
+  const orgProjects = await db
+    .select({ id: projects.id, managementNumber: projects.managementNumber })
+    .from(projects)
+    .where(eq(projects.organizationId, organizationId));
+
+  const projectIds = orgProjects.map((p) => p.id);
 
   // 組織に属するプロジェクトの進捗のみを取得（日付範囲 + 件数制限）
   // 境界比較: >= startDate AND < endDateNextDay（終了日当日のレコードを含む）
@@ -115,7 +119,7 @@ export async function GET(request: NextRequest) {
 
   // プロジェクトIDから管理番号へのマップを作成
   const projectMap = new Map(
-    allProjects.map((p) => [p.id, p.managementNumber])
+    orgProjects.map((p) => [p.id, p.managementNumber])
   );
 
   // iCalヘッダー

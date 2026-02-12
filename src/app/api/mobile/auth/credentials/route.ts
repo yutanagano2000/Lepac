@@ -66,11 +66,12 @@ export async function POST(request: NextRequest) {
       .where(eq(users.username, body.username));
 
     // タイミング攻撃対策: ユーザーが存在しなくてもハッシュ比較を実行
-    const passwordToCompare = user?.password || DUMMY_HASH;
+    // パスワードがnull/undefined/空文字列の場合もダミーハッシュを使用
+    const passwordToCompare = (user?.password && user.password.length > 0) ? user.password : DUMMY_HASH;
     const isValidPassword = await bcrypt.compare(body.password, passwordToCompare);
 
-    // ユーザーが存在しないか、パスワードが不正
-    if (!user || !isValidPassword) {
+    // ユーザーが存在しないか、パスワードが設定されていないか、パスワードが不正
+    if (!user || !user.password || !isValidPassword) {
       // 詳細なエラー情報を隠蔽（ユーザー名の存在確認を防止）
       return NextResponse.json(
         { error: "Invalid credentials" },

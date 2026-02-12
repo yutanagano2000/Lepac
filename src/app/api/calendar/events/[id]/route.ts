@@ -51,8 +51,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    // エラーログは内部詳細を記録（クライアントには一般的なメッセージのみ）
-    console.error("イベントの削除に失敗 (id:", id, ")");
+    // エラーログ（ユーザー入力は含めない - 情報漏洩防止）
+    console.error("イベントの削除に失敗:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json({ error: "イベントの削除に失敗しました" }, { status: 500 });
   }
 }
