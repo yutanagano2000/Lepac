@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo, memo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Pencil, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Loader2, Check, FolderInput, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +69,8 @@ const FIXED_COLUMNS_COUNT = 4;
 
 export default function ProjectsView({ initialProjects, initialPagination }: ProjectsViewProps) {
   const router = useRouter();
+  const urlSearchParams = useSearchParams();
+  const initialQ = urlSearchParams.get("q") ?? "";
   const [projects, setProjects] = useState<ProjectWithOverdue[]>(initialProjects);
   const [pagination, setPagination] = useState<PaginationInfo>(initialPagination);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,8 +94,8 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 検索
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialQ);
+  const [searchInput, setSearchInput] = useState(initialQ);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,6 +153,15 @@ export default function ProjectsView({ initialProjects, initialPagination }: Pro
       setIsLoading(false);
     }
   }, [pagination.limit, sortOrder, searchQuery, selectedProjectIds]);
+
+  // URLのqパラメータがある場合、初回ロード時にサーバーサイド検索を実行
+  const initialQApplied = useRef(false);
+  useEffect(() => {
+    if (initialQ && !initialQApplied.current) {
+      initialQApplied.current = true;
+      fetchPage(1, initialQ);
+    }
+  }, [initialQ, fetchPage]);
 
   // 検索（デバウンス 400ms）
   const handleSearchChange = (value: string) => {
