@@ -16,6 +16,7 @@ interface ProjectRowProps {
 }
 
 // フェーズ状況をサブフェーズから集約して取得
+// phase.title（親フェーズ名）と phase.subTitles（子タスク名）の両方でマッチ
 function getPhaseStatus(progressItems: Progress[], phase: (typeof PHASES)[number]) {
   const subTitles = phase.subTitles;
   let completedCount = 0;
@@ -34,6 +35,20 @@ function getPhaseStatus(progressItems: Progress[], phase: (typeof PHASES)[number
     } else if (item.createdAt) {
       const d = new Date(item.createdAt);
       if (!latestDate || d > latestDate) latestDate = d;
+    }
+  }
+
+  // subTitles でマッチしなかった場合、phase.title でもフォールバック検索
+  if (!hasAnyProgress) {
+    const phaseItem = progressItems.find((p) => p.title === phase.title);
+    if (phaseItem) {
+      hasAnyProgress = true;
+      if (phaseItem.status === "completed" && phaseItem.completedAt) {
+        completedCount = subTitles.length;
+        latestDate = new Date(phaseItem.completedAt);
+      } else if (phaseItem.createdAt) {
+        latestDate = new Date(phaseItem.createdAt);
+      }
     }
   }
 

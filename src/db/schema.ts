@@ -231,6 +231,10 @@ export const projects = sqliteTable("projects", {
   windSpeed: text("wind_speed"), // 風速
   dococabiLink: text("dococabi_link"), // どこキャビ連携URL
 
+  // タイムラインフェーズ手動上書き
+  // 形式: { [phaseKey]: { startDate?: "YYYY-MM-DD", endDate?: "YYYY-MM-DD", note?: "メモ" } }
+  phaseOverrides: text("phase_overrides"),
+
   // 法令チェック結果（JSON形式で保存）
   // 形式: { "法令名": { "status": "該当"|"非該当"|"要確認", "note": "確認内容",
   //   "confirmationSource": "URL", "contactInfo": "連絡先TEL",
@@ -447,6 +451,8 @@ export const calendarEvents = sqliteTable("calendar_events", {
   eventType: text("event_type").notNull().default("other"), // todo, meeting, other, etc.
   eventDate: text("event_date").notNull(), // 日付（YYYY-MM-DD）
   endDate: text("end_date"), // 終了日（任意）
+  startTime: text("start_time"), // 開始時刻 "HH:MM" (例: "09:00")
+  endTime: text("end_time"), // 終了時刻 "HH:MM" (例: "17:00")
   description: text("description"), // 説明・メモ
   userId: integer("user_id"), // 作成者ID
   userName: text("user_name"), // 作成者名（キャッシュ用）
@@ -563,3 +569,72 @@ export const slopeAnalyses = sqliteTable("slope_analyses", {
 
 export type SlopeAnalysis = typeof slopeAnalyses.$inferSelect;
 export type NewSlopeAnalysis = typeof slopeAnalyses.$inferInsert;
+
+// 候補地テーブル（太陽光発電 候補地探索）
+export const savedSites = sqliteTable("saved_sites", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id").notNull(),
+  // 位置情報
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  address: text("address"),
+  cityCode: text("city_code"),
+  // 土地属性（WAGRI農地ピン相当）
+  landCategory: text("land_category"),         // 地目（田/畑/山林等）
+  areaSqm: real("area_sqm"),                   // 面積（㎡）
+  noushinClass: text("noushin_class"),          // 農振区分（青地/白地/農振外）
+  cityPlanningClass: text("city_planning_class"), // 都市計画区分
+  ownerIntention: text("owner_intention"),      // 所有者意向（売りたい/貸したい等）
+  isIdleFarmland: integer("is_idle_farmland"),  // 遊休農地フラグ
+  // スコアリング結果
+  score: integer("score"),                     // 算出スコア（0-100）
+  stars: integer("stars"),                     // ☆1-5
+  scoreDetails: text("score_details"),         // スコア内訳（JSON）
+  // 営業管理
+  status: text("status").notNull().default("new"), // new/visited/negotiating/contracted/rejected
+  memo: text("memo"),
+  // データソース
+  dataSource: text("data_source").default("manual"), // manual/wagri
+  dataDate: text("data_date"),                 // データ基準日
+  // メタ
+  createdAt: text("created_at").notNull(),
+  createdBy: integer("created_by"),
+}, (table) => ({
+  orgIdx: index("saved_sites_org_idx").on(table.organizationId),
+  starsIdx: index("saved_sites_stars_idx").on(table.stars),
+  statusIdx: index("saved_sites_status_idx").on(table.status),
+}));
+
+export type SavedSite = typeof savedSites.$inferSelect;
+export type NewSavedSite = typeof savedSites.$inferInsert;
+
+// ファイルサーバー同期: フォルダテーブル
+export const serverFolders = sqliteTable("server_folders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  managementNumber: text("management_number").notNull().unique(),
+  folderName: text("folder_name").notNull(),
+  folderPath: text("folder_path").notNull(),
+  syncedAt: text("synced_at").notNull(),
+}, (table) => ({
+  mgmtIdx: index("idx_server_folders_mgmt").on(table.managementNumber),
+}));
+
+export type ServerFolder = typeof serverFolders.$inferSelect;
+export type NewServerFolder = typeof serverFolders.$inferInsert;
+
+// ファイルサーバー同期: ファイルテーブル
+export const serverFiles = sqliteTable("server_files", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  managementNumber: text("management_number").notNull(),
+  subfolderKey: text("subfolder_key"), // "agreement", "landInfo" 等（NULLはルート）
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  fileSize: integer("file_size").default(0),
+  fileModifiedAt: text("file_modified_at"),
+  syncedAt: text("synced_at").notNull(),
+}, (table) => ({
+  mgmtIdx: index("idx_server_files_mgmt").on(table.managementNumber),
+}));
+
+export type ServerFile = typeof serverFiles.$inferSelect;
+export type NewServerFile = typeof serverFiles.$inferInsert;

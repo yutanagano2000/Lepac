@@ -157,17 +157,16 @@ export async function DELETE(
     return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
-  // 削除前にフィードバックを取得（監査ログ用）
-  const [existing] = await db
-    .select()
-    .from(feedbacks)
-    .where(and(eq(feedbacks.id, feedbackId), eq(feedbacks.organizationId, organizationId)));
-
-  if (!existing) {
-    return NextResponse.json({ error: "Feedback not found" }, { status: 404 });
-  }
-
   try {
+    // 削除前にフィードバックを取得（監査ログ用）
+    const [existing] = await db
+      .select()
+      .from(feedbacks)
+      .where(and(eq(feedbacks.id, feedbackId), eq(feedbacks.organizationId, organizationId)));
+
+    if (!existing) {
+      return NextResponse.json({ error: "Feedback not found" }, { status: 404 });
+    }
     // 組織に属するフィードバックのみ削除可能（削除結果を検証）
     const deleteResult = await db
       .delete(feedbacks)

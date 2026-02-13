@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, Check, Pencil, Trash2, ExternalLink, Copy, CheckCircle2, Loader2, ListTodo, PenTool, Mountain } from "lucide-react";
 import { formatDateJp } from "@/lib/timeline";
-import { WorkflowTimeline } from "@/components/WorkflowTimeline";
+import { HorizontalTimeline } from "@/components/horizontal-timeline";
 import { cn, parseTodoMessages, addTodoMessage } from "@/lib/utils";
 import { isSafeUrl } from "@/lib/sanitize";
 import {
@@ -48,6 +48,7 @@ import {
 import { ProjectFolderLink } from "@/components/ProjectFolderLink";
 import { ProjectPhotoGallery } from "@/components/ProjectPhotoGallery";
 import { ProjectDashboard } from "@/components/ProjectDashboard";
+import { PanelLayoutSection } from "@/components/PanelLayoutSection";
 import { laws } from "./_constants";
 import type { LegalStatuses } from "./_types";
 import LegalSearchTab from "./_components/LegalSearchTab";
@@ -644,8 +645,16 @@ export default function ProjectDetailPage() {
           {/* 進捗ダッシュボード */}
           <ProjectDashboard project={project} progressList={progressList} />
 
-          {/* ワークフロータイムライン */}
-          <WorkflowTimeline progressList={progressList} completionMonth={project?.completionMonth} />
+          {/* ワークフロータイムライン（横型Gitツリー） */}
+          <HorizontalTimeline
+            progressList={progressList}
+            completionMonth={project?.completionMonth}
+            projectId={project.id}
+            phaseOverrides={project?.phaseOverrides}
+            onUpdate={fetchProject}
+            interconnectionScheduled={project?.interconnectionScheduled}
+            interconnectionDate={project?.interconnectionDate}
+          />
 
           {/* TODO（この日までに行うリマインダー） */}
           <Card>
@@ -1237,6 +1246,13 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   </div>
+                  {/* パネルレイアウト */}
+                  <PanelLayoutSection
+                    projectId={project.id}
+                    currentLayout={project.panelLayout}
+                    onUpdate={fetchProject}
+                    variant="inline"
+                  />
                   {/* 環境データ */}
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">環境データ</span>

@@ -32,8 +32,8 @@ function isPathWithinBase(basePath: string, targetPath: string): boolean {
   const normalizedBase = resolvedBase.toLowerCase();
   const normalizedTarget = resolvedTarget.toLowerCase();
 
-  // path.relative で相対パスを計算
-  const relative = path.relative(resolvedBase, resolvedTarget);
+  // path.relative で相対パスを計算（Windows対応のため正規化後のパスを使用）
+  const relative = path.relative(normalizedBase, normalizedTarget);
 
   // ".." で始まる or 絶対パス = ベースパス外
   return !relative.startsWith("..") && !path.isAbsolute(relative);
@@ -197,9 +197,10 @@ export async function GET(request: NextRequest) {
       return new NextResponse(webStream, {
         headers: {
           "Content-Type": mimeType,
-          "Content-Disposition": `inline; filename="${encodeURIComponent(fileName)}"`,
+          "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
           "Content-Length": stats.size.toString(),
           "Cache-Control": "public, max-age=3600",
+          "X-Content-Type-Options": "nosniff",
         },
       });
     }
@@ -209,8 +210,9 @@ export async function GET(request: NextRequest) {
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": mimeType,
-        "Content-Disposition": `inline; filename="${encodeURIComponent(fileName)}"`,
+        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
         "Cache-Control": "public, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {

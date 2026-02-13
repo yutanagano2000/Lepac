@@ -74,6 +74,7 @@ export async function GET(request: Request) {
 
     // 各プロジェクト×カテゴリの最新写真2枚を取得（ホバープレビュー用）
     // ROW_NUMBER ウィンドウ関数で各グループ上位2件に制限（全件取得を回避）
+    // セキュリティ: inArrayを使用してパラメータ化クエリを構築
     const latestPhotosQuery = sql`
       SELECT * FROM (
         SELECT
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
             ORDER BY created_at DESC
           ) as rn
         FROM construction_photos
-        WHERE project_id IN (${sql.join(projectIds.map(id => sql`${id}`), sql`, `)})
+        WHERE project_id IN ${sql`(${sql.join(projectIds.map(id => sql`${id}`), sql`, `)})`}
       ) ranked
       WHERE rn <= 2
     `;
@@ -174,6 +175,6 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Photos summary error:", error instanceof Error ? error.message : "Unknown error");
-    return NextResponse.json({ error: "Failed to fetch photos summary" }, { status: 500 });
+    return NextResponse.json({ error: "写真サマリーの取得に失敗しました" }, { status: 500 });
   }
 }

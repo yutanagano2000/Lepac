@@ -238,7 +238,15 @@ export async function syncFromSheets(organizationId: number): Promise<SyncResult
             }
           }
 
-          await db.insert(projects).values(insertData as typeof projects.$inferInsert);
+          const [inserted] = await db
+            .insert(projects)
+            .values(insertData as typeof projects.$inferInsert)
+            .returning({ id: projects.id });
+
+          // 重複挿入防止: 新規IDをマップに追加
+          if (inserted?.id) {
+            existingMap.set(managementNumber, inserted.id);
+          }
           result.insertedCount++;
         }
       } catch (err) {

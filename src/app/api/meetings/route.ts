@@ -30,21 +30,21 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  // 認証・組織チェック（CSRF保護付き）
-  const authResult = await requireOrganizationWithCsrf(request);
-  if (!authResult.success) {
-    return authResult.response;
-  }
-  const { user, organizationId } = authResult;
-
-  const validation = await validateBody(request, createMeetingSchema);
-  if (!validation.success) {
-    return NextResponse.json(validation.error, { status: 400 });
-  }
-
-  const { title, meetingDate, category, content, agenda } = validation.data;
-
   try {
+    // 認証・組織チェック（CSRF保護付き）
+    const authResult = await requireOrganizationWithCsrf(request);
+    if (!authResult.success) {
+      return authResult.response;
+    }
+    const { user, organizationId } = authResult;
+
+    const validation = await validateBody(request, createMeetingSchema);
+    if (!validation.success) {
+      return NextResponse.json(validation.error, { status: 400 });
+    }
+
+    const { title, meetingDate, category, content, agenda } = validation.data;
+
     const [result] = await db
       .insert(meetings)
       .values({
