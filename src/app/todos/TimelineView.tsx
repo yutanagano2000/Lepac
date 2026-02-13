@@ -28,10 +28,12 @@ import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format as formatDate } from "date-fns";
 import { PHASES } from "./_constants";
+import type { Progress } from "@/db/schema";
 import type { ProjectWithProgress, TimelineViewProps } from "./_types";
 import { ProjectRow, FilterPanel, ProjectFormDialog } from "./_components";
 
 // フェーズ状況をサブフェーズから集約して取得
+// phase.title（親フェーズ名）と phase.subTitles（子タスク名）の両方でマッチ
 function getPhaseStatus(project: ProjectWithProgress, phase: (typeof PHASES)[number]) {
   const subTitles = phase.subTitles;
   let completedCount = 0;
@@ -50,6 +52,20 @@ function getPhaseStatus(project: ProjectWithProgress, phase: (typeof PHASES)[num
     } else if (item.createdAt) {
       const d = new Date(item.createdAt);
       if (!latestDate || d > latestDate) latestDate = d;
+    }
+  }
+
+  // subTitles でマッチしなかった場合、phase.title でもフォールバック検索
+  if (!hasAnyProgress) {
+    const phaseItem = project.progressItems.find((p) => p.title === phase.title);
+    if (phaseItem) {
+      hasAnyProgress = true;
+      if (phaseItem.status === "completed" && phaseItem.completedAt) {
+        completedCount = subTitles.length;
+        latestDate = new Date(phaseItem.completedAt);
+      } else if (phaseItem.createdAt) {
+        latestDate = new Date(phaseItem.createdAt);
+      }
     }
   }
 
@@ -151,18 +167,37 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     setAlertDialogOpen(true);
   }, []);
 
+  // phase.title または subTitles で既存の進捗を検索するヘルパー
+  const findExistingProgress = useCallback(
+    (project: ProjectWithProgress, phase: (typeof PHASES)[number]) => {
+      let item = project.progressItems.find((p) => p.title === phase.title);
+      if (!item) {
+        for (const subTitle of phase.subTitles) {
+          const found = project.progressItems.find((p) => p.title === subTitle);
+          if (found) {
+            if (!item || (found.createdAt && (!item.createdAt || found.createdAt > item.createdAt))) {
+              item = found;
+            }
+          }
+        }
+      }
+      return item || null;
+    },
+    []
+  );
+
   // 編集ダイアログを開く
   const openEditDialog = useCallback(
     (project: ProjectWithProgress, phase: (typeof PHASES)[number]) => {
       setEditingProject(project);
       setEditingPhase(phase);
-      const progressItem = project.progressItems.find((p) => p.title === phase.title);
+      const progressItem = findExistingProgress(project, phase);
       setPlannedDate(progressItem?.createdAt ? new Date(progressItem.createdAt) : undefined);
       setCompletedDate(progressItem?.completedAt ? new Date(progressItem.completedAt) : undefined);
       setPhaseMemo(progressItem?.description || "");
       setEditDialogOpen(true);
     },
-    []
+    [findExistingProgress]
   );
 
   // 保存処理
@@ -179,13 +214,13 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
     setIsSaving(true);
     try {
-      const existingProgress = editingProject.progressItems.find(
-        (p) => p.title === editingPhase.title
-      );
+      const existingProgress = findExistingProgress(editingProject, editingPhase);
 
       const plannedDateStr = plannedDate ? plannedDate.toISOString() : null;
       const completedDateStr = completedDate ? completedDate.toISOString() : null;
       const newStatus = completedDate ? "completed" : "planned";
+
+      let savedProgress: Progress | null = null;
 
       if (existingProgress) {
         const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
@@ -200,6 +235,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           }),
         });
         if (!res.ok) throw new Error("Failed to update progress");
+        savedProgress = await res.json();
       } else {
         const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "POST",
@@ -213,36 +249,20 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           }),
         });
         if (!res.ok) throw new Error("Failed to create progress");
+        savedProgress = await res.json();
       }
 
-      // ローカル状態を更新
+      // ローカル状態を更新（APIレスポンスの実IDを使用）
       setProjects((prev) =>
         prev.map((p) => {
           if (p.id !== editingProject.id) return p;
           const updatedProgressItems = existingProgress
             ? p.progressItems.map((item) =>
                 item.id === existingProgress.id
-                  ? {
-                      ...item,
-                      status: newStatus as "planned" | "completed",
-                      createdAt: plannedDateStr || item.createdAt,
-                      completedAt: completedDateStr,
-                      description: phaseMemo || null,
-                    }
+                  ? (savedProgress ?? item)
                   : item
               )
-            : [
-                ...p.progressItems,
-                {
-                  id: Date.now(),
-                  projectId: p.id,
-                  title: editingPhase.title,
-                  description: phaseMemo || null,
-                  status: newStatus as "planned" | "completed",
-                  createdAt: plannedDateStr || new Date().toISOString(),
-                  completedAt: completedDateStr,
-                },
-              ];
+            : [...p.progressItems, ...(savedProgress ? [savedProgress] : [])];
           return { ...p, progressItems: updatedProgressItems };
         })
       );
@@ -254,7 +274,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     } finally {
       setIsSaving(false);
     }
-  }, [editingProject, editingPhase, plannedDate, completedDate, phaseMemo, showAlert]);
+  }, [editingProject, editingPhase, plannedDate, completedDate, phaseMemo, showAlert, findExistingProgress]);
 
   // 完了処理
   const handleMarkComplete = useCallback(async () => {
@@ -265,12 +285,12 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
     setIsSaving(true);
     try {
-      const existingProgress = editingProject.progressItems.find(
-        (p) => p.title === editingPhase.title
-      );
+      const existingProgress = findExistingProgress(editingProject, editingPhase);
 
       const plannedDateStr = plannedDate ? plannedDate.toISOString() : new Date().toISOString();
       const completedDateStr = now.toISOString();
+
+      let savedProgress: Progress | null = null;
 
       if (existingProgress) {
         const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
@@ -285,6 +305,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           }),
         });
         if (!res.ok) throw new Error("Failed to mark as complete");
+        savedProgress = await res.json();
       } else {
         const res = await fetch(`/api/projects/${editingProject.id}/progress`, {
           method: "POST",
@@ -298,6 +319,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           }),
         });
         if (!res.ok) throw new Error("Failed to create completed progress");
+        savedProgress = await res.json();
       }
 
       setProjects((prev) =>
@@ -306,27 +328,10 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
           const updatedProgressItems = existingProgress
             ? p.progressItems.map((item) =>
                 item.id === existingProgress.id
-                  ? {
-                      ...item,
-                      status: "completed" as const,
-                      createdAt: plannedDateStr,
-                      completedAt: completedDateStr,
-                      description: phaseMemo || null,
-                    }
+                  ? (savedProgress ?? item)
                   : item
               )
-            : [
-                ...p.progressItems,
-                {
-                  id: Date.now(),
-                  projectId: p.id,
-                  title: editingPhase.title,
-                  description: phaseMemo || null,
-                  status: "completed" as const,
-                  createdAt: plannedDateStr,
-                  completedAt: completedDateStr,
-                },
-              ];
+            : [...p.progressItems, ...(savedProgress ? [savedProgress] : [])];
           return { ...p, progressItems: updatedProgressItems };
         })
       );
@@ -338,7 +343,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     } finally {
       setIsSaving(false);
     }
-  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert]);
+  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert, findExistingProgress]);
 
   // 未完了に戻す処理
   const handleMarkIncomplete = useCallback(async () => {
@@ -348,9 +353,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
 
     setIsSaving(true);
     try {
-      const existingProgress = editingProject.progressItems.find(
-        (p) => p.title === editingPhase.title
-      );
+      const existingProgress = findExistingProgress(editingProject, editingPhase);
 
       if (!existingProgress) {
         setIsSaving(false);
@@ -371,20 +374,13 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
         }),
       });
       if (!res.ok) throw new Error("Failed to mark as incomplete");
+      const savedProgress: Progress = await res.json();
 
       setProjects((prev) =>
         prev.map((p) => {
           if (p.id !== editingProject.id) return p;
           const updatedProgressItems = p.progressItems.map((item) =>
-            item.id === existingProgress.id
-              ? {
-                  ...item,
-                  status: "planned" as const,
-                  createdAt: plannedDateStr,
-                  completedAt: null,
-                  description: phaseMemo || null,
-                }
-              : item
+            item.id === existingProgress.id ? savedProgress : item
           );
           return { ...p, progressItems: updatedProgressItems };
         })
@@ -397,7 +393,7 @@ export default function TimelineView({ projects: initialProjects }: TimelineView
     } finally {
       setIsSaving(false);
     }
-  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert]);
+  }, [editingProject, editingPhase, plannedDate, phaseMemo, showAlert, findExistingProgress]);
 
   // TODO追加処理
   const handleAddTodo = useCallback(async () => {

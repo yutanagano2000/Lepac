@@ -8,18 +8,23 @@ import * as os from "os";
 export const dynamic = "force-dynamic";
 
 // 許可されたベースパス（環境変数で設定可能）
-const ALLOWED_BASE_PATHS = [
-  process.env.CABINET_BASE_PATH || "C:\\Person Energy\\◇Person独自案件管理\\□Person独自案件",
-];
+const ALLOWED_BASE_PATHS = (
+  process.env.CABINET_BASE_PATH || "C:\\Person Energy\\◇Person独自案件管理\\□Person独自案件"
+).split(",").map(p => p.trim()).filter(p => p.length > 0);
 
 /**
  * パスがホワイトリスト内にあるか検証
  */
 function isPathAllowed(targetPath: string): boolean {
-  const normalizedTarget = path.resolve(targetPath);
+  // ホワイトリストが空の場合は全て拒否
+  if (ALLOWED_BASE_PATHS.length === 0) {
+    return false;
+  }
+
+  const normalizedTarget = path.resolve(targetPath).toLowerCase();
 
   for (const basePath of ALLOWED_BASE_PATHS) {
-    const normalizedBase = path.resolve(basePath);
+    const normalizedBase = path.resolve(basePath).toLowerCase();
     // path.relative で判定（..で始まらなければ子パス）
     const relative = path.relative(normalizedBase, normalizedTarget);
     if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
@@ -54,13 +59,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "path is required" }, { status: 400 });
     }
 
-    // パス長制限（DoS防止）
+    // パス長制限（DoS防止）- 正規化前のチェック
     if (folderPath.length > 500) {
       return NextResponse.json({ error: "Path too long" }, { status: 400 });
     }
 
     // パスの正規化と検証
     const normalizedPath = path.resolve(folderPath);
+
+    // パス長制限（DoS防止）- 正規化後のチェック
+    if (normalizedPath.length > 1000) {
+      return NextResponse.json({ error: "Path too long" }, { status: 400 });
+    }
 
     // セキュリティ: ホワイトリストチェック
     if (!isPathAllowed(normalizedPath)) {

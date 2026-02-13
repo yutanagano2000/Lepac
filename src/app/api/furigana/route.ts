@@ -84,22 +84,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Yahoo! ルビ振りAPIにリクエスト (JSON-RPC 2.0形式)
-    const response = await fetch(YAHOO_API_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": `Yahoo AppID: ${clientId}`,
-      },
-      body: JSON.stringify({
-        id: "furigana-request",
-        jsonrpc: "2.0",
-        method: "jlp.furiganaservice.furigana",
-        params: {
-          q: trimmedName,
-          grade: 1, // 小学1年生レベル = すべての漢字にふりがなを付ける
+    // タイムアウト設定（10秒）でハングを防止
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    let response: Response;
+    try {
+      response = await fetch(YAHOO_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": `Yahoo AppID: ${clientId}`,
         },
-      }),
-    });
+        body: JSON.stringify({
+          id: "furigana-request",
+          jsonrpc: "2.0",
+          method: "jlp.furiganaservice.furigana",
+          params: {
+            q: trimmedName,
+            grade: 1, // 小学1年生レベル = すべての漢字にふりがなを付ける
+          },
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       console.error("Yahoo API HTTP error:", response.status, response.statusText);
@@ -135,7 +145,15 @@ export async function POST(request: NextRequest) {
       furigana: katakanaFurigana,
     });
   } catch (error) {
-    console.error("Furigana API error:", error);
+    // AbortErrorはタイムアウトとして処理
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("Furigana API timeout");
+      return NextResponse.json(
+        { error: "フリガナ変換がタイムアウトしました" },
+        { status: 504 }
+      );
+    }
+    console.error("Furigana API error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
       { error: "サーバーエラーが発生しました" },
       { status: 500 }

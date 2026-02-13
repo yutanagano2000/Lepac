@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
-import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder, PenTool, RefreshCw, Sheet } from "lucide-react";
+import { FileText, Mail, Users, MapPin, CalendarDays, Scale, Upload, Folder, PenTool, RefreshCw, Sheet, Sun } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +61,12 @@ const tools = [
     label: "現場案内図",
     description: "地図上で筆界をトレースして案内図を作成",
     icon: PenTool,
+  },
+  {
+    href: "/tools/site-search",
+    label: "候補地探索",
+    description: "太陽光発電の候補地をスコアリング・管理",
+    icon: Sun,
   },
 ] as const;
 

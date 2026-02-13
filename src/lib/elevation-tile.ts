@@ -76,14 +76,20 @@ async function fetchTilePixels(x: number, y: number, z: number): Promise<Uint8Ar
       const pixels = new Uint8Array(png.data);
 
       // タイル全体が無効データ（全ピクセルが無効値）かチェック
+      // エッジと内部の両方をサンプリングして海岸線タイルを正しく検出
       let hasValidPixel = false;
-      const sampleStep = Math.floor(TILE_SIZE / 4);
-      for (let sy = sampleStep; sy < TILE_SIZE && !hasValidPixel; sy += sampleStep) {
-        for (let sx = sampleStep; sx < TILE_SIZE && !hasValidPixel; sx += sampleStep) {
+      const sampleStep = Math.floor(TILE_SIZE / 8); // より細かいサンプリング（32px間隔）
+      // エッジもチェック（0, sampleStep, ..., TILE_SIZE-1）
+      for (let sy = 0; sy < TILE_SIZE && !hasValidPixel; sy += sampleStep) {
+        for (let sx = 0; sx < TILE_SIZE && !hasValidPixel; sx += sampleStep) {
           if (getElevationFromPixels(pixels, sx, sy) !== null) {
             hasValidPixel = true;
           }
         }
+      }
+      // 最後にエッジ（右下隅）もチェック
+      if (!hasValidPixel && getElevationFromPixels(pixels, TILE_SIZE - 1, TILE_SIZE - 1) !== null) {
+        hasValidPixel = true;
       }
       if (!hasValidPixel) continue; // 全サンプル点が無効→次のDEMソースへフォールバック
 

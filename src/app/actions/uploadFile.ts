@@ -212,7 +212,12 @@ export async function uploadFile(formData: FormData) {
     } catch (dbError) {
       // DB失敗時はアップロード済みファイルを削除（孤児ファイル防止）
       console.error("DB insert failed, cleaning up uploaded file:", dbError);
-      await getSupabaseAdmin().storage.from(STORAGE_BUCKET).remove([filePath]);
+      try {
+        await getSupabaseAdmin().storage.from(STORAGE_BUCKET).remove([filePath]);
+      } catch (cleanupError) {
+        // クリーンアップ失敗はログのみ（孤児ファイルが残る可能性）
+        console.error("Failed to cleanup orphan file:", filePath, cleanupError);
+      }
       throw dbError;
     }
   } catch (error) {

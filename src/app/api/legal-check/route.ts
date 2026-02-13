@@ -5,8 +5,34 @@ const BACKEND_URL =
   process.env.GEO_CHECKER_BACKEND_URL ||
   "https://geo-checker-backend-aj4j.onrender.com";
 
+// 許可するバックエンドホストのホワイトリスト（SSRF対策）
+const ALLOWED_BACKEND_HOSTS = [
+  "geo-checker-backend-aj4j.onrender.com",
+  "localhost",
+  "127.0.0.1",
+];
+
 // リクエストボディの最大サイズ（10KB）
 const MAX_BODY_SIZE = 10 * 1024;
+
+// API呼び出しタイムアウト（30秒）
+const API_TIMEOUT_MS = 30000;
+
+/**
+ * バックエンドURLの検証（SSRF対策）
+ */
+function isAllowedBackendUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    // httpsまたはlocalhostのhttpのみ許可
+    if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1"))) {
+      return false;
+    }
+    return ALLOWED_BACKEND_HOSTS.includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 // 許可するフィールドのホワイトリスト
 const ALLOWED_FIELDS = ["latitude", "longitude", "address", "projectId", "checkTypes"];
@@ -83,7 +109,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Content-Lengthのチェック
+    // バックエンドURLの検証（SSRF対策）
+    if (!isAllowedBackendUrl(BACKEND_URL)) {
+      console.error("Invalid backend URL configured:", BACKEND_URL);
+      return NextResponse.json(
+        { error: "サーバー設定エラー" },
+        { status: 500 }
+      );
+    }
+
+    // Content-Lengthのチェック（事前チェック、ただし偽装可能なため後で再検証）
     const contentLength = request.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
       return NextResponse.json(
@@ -92,7 +127,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // ボディをテキストとして取得してサイズ検証
+    const bodyText = await request.text();
+    if (bodyText.length > MAX_BODY_SIZE) {
+      return NextResponse.json(
+        { error: "リクエストサイズが大きすぎます" },
+        { status: 413 }
+      );
+    }
+
+    let body: unknown;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      return NextResponse.json(
+        { error: "無効なJSONです" },
+        { status: 400 }
+      );
+    }
 
     // リクエストボディのバリデーション
     const validation = validateRequestBody(body);
@@ -105,21 +157,40 @@ export async function POST(request: NextRequest) {
 
     // 許可されたフィールドのみを転送
     const sanitizedBody: Record<string, unknown> = {};
+    const bodyObj = body as Record<string, unknown>;
     for (const field of ALLOWED_FIELDS) {
-      if (field in body) {
-        sanitizedBody[field] = body[field];
+      if (field in bodyObj) {
+        sanitizedBody[field] = bodyObj[field];
       }
     }
 
-    const response = await fetch(`${BACKEND_URL}/api/v1/check`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sanitizedBody),
-    });
+    // タイムアウト設定でハングを防止
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(`${BACKEND_URL}/api/v1/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sanitizedBody),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const data = await response.json();
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
+    // AbortErrorはタイムアウトとして処理
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("Legal check API timeout");
+      return NextResponse.json(
+        { error: "法令チェックがタイムアウトしました" },
+        { status: 504 }
+      );
+    }
     // エラー詳細はログに出力し、クライアントには汎用メッセージを返す
     console.error("Legal check proxy error:", error instanceof Error ? error.message : "Unknown error");
     return NextResponse.json(
