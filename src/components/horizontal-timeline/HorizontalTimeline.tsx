@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { AlertTriangle, AlertCircle, ArrowRight } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { Calendar, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type ResponsibleType } from "@/lib/timeline";
 import type { Progress } from "@/db/schema";
@@ -25,6 +25,8 @@ interface HorizontalTimelineProps {
   projectId: number;
   phaseOverrides?: string | null;
   onUpdate?: () => void;
+  interconnectionScheduled?: string | null;
+  interconnectionDate?: string | null;
 }
 
 export function HorizontalTimeline({
@@ -33,16 +35,27 @@ export function HorizontalTimeline({
   projectId,
   phaseOverrides: phaseOverridesJson,
   onUpdate,
+  interconnectionScheduled,
+  interconnectionDate,
 }: HorizontalTimelineProps) {
   const {
     phases,
     overallProgress,
     currentPhase,
-    overdueCount,
-    upcomingCount,
-    nextAction,
     completedTitles,
   } = useTimelineData(completionMonth, progressList, phaseOverridesJson);
+
+  // 連系予定日までの残日数
+  const daysUntilInterconnection = useMemo(() => {
+    const dateStr = interconnectionScheduled || interconnectionDate;
+    if (!dateStr) return null;
+    const target = new Date(dateStr);
+    if (isNaN(target.getTime())) return null;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    target.setHours(0, 0, 0, 0);
+    return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  }, [interconnectionScheduled, interconnectionDate]);
 
   const [editingPhaseKey, setEditingPhaseKey] = useState<string | null>(null);
   const [highlightedPhase, setHighlightedPhase] = useState<string | null>(null);
@@ -148,50 +161,52 @@ export function HorizontalTimeline({
           )}
         </div>
 
-        {/* アラート / 次のアクション */}
-        {overdueCount > 0 ? (
-          <div className="rounded-xl border-2 border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/50 p-4">
-            <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-1 flex items-center gap-1.5">
-              <AlertTriangle className="h-4 w-4" />
-              遅延警告
-            </p>
-            <p className="text-lg font-bold text-red-700 dark:text-red-300">
-              {overdueCount}件のフェーズが遅延中
-            </p>
-            {upcomingCount > 0 && (
-              <p className="text-sm text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {upcomingCount}件が期日間近
+        {/* 連系カウントダウン */}
+        <div className={cn(
+          "rounded-xl border-2 p-4",
+          daysUntilInterconnection === null
+            ? "border-border bg-card"
+            : daysUntilInterconnection < 0
+            ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/50"
+            : daysUntilInterconnection <= 30
+            ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/50"
+            : "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/50"
+        )}>
+          <p className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+            <Calendar className="h-4 w-4" />
+            連系予定
+          </p>
+          {daysUntilInterconnection !== null ? (
+            <div className="text-center py-1">
+              <span className={cn(
+                "text-3xl font-bold",
+                daysUntilInterconnection < 0
+                  ? "text-red-600 dark:text-red-300"
+                  : daysUntilInterconnection <= 30
+                  ? "text-amber-600 dark:text-amber-300"
+                  : "text-green-600 dark:text-green-300"
+              )}>
+                {Math.abs(daysUntilInterconnection)}
+              </span>
+              <span className={cn(
+                "text-sm ml-1",
+                daysUntilInterconnection < 0
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-muted-foreground"
+              )}>
+                {daysUntilInterconnection < 0 ? "日超過" : daysUntilInterconnection === 0 ? "本日" : "日後"}
+              </span>
+              <p className="text-xs text-muted-foreground mt-1">
+                {interconnectionScheduled || interconnectionDate}
               </p>
-            )}
-          </div>
-        ) : upcomingCount > 0 ? (
-          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/50 p-4">
-            <p className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />
-              期日間近
-            </p>
-            <p className="text-lg font-bold text-amber-700 dark:text-amber-300">
-              {upcomingCount}件が1週間以内
-            </p>
-          </div>
-        ) : nextAction ? (
-          <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/50 p-4">
-            <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 mb-1 flex items-center gap-1.5">
-              <ArrowRight className="h-4 w-4" />
-              次のアクション
-            </p>
-            <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">
-              {nextAction.title}
-            </p>
-            <p className="text-sm text-muted-foreground">{nextAction.phaseTitle}</p>
-          </div>
-        ) : (
-          <div className="rounded-xl border-2 border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/50 p-4">
-            <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-1">ステータス</p>
-            <p className="text-lg font-bold text-green-700 dark:text-green-300">全工程完了</p>
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 py-1">
+              <Clock className="h-4 w-4 text-muted-foreground/50" />
+              <span className="text-sm text-muted-foreground">未設定</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 横型タイムライン */}

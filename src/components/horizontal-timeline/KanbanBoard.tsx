@@ -8,7 +8,10 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  pointerWithin,
+  type CollisionDetection,
 } from "@dnd-kit/core";
+import { COLUMN_PREFIX } from "./useKanbanDnd";
 import type { HorizontalPhaseData, PhaseOverrides, ProjectPhaseOverrides } from "./types";
 import { TaskCard } from "./TaskCard";
 import type { TaskCardData } from "./TaskCard";
@@ -25,7 +28,7 @@ interface KanbanBoardProps {
   highlightedPhase?: string | null;
 }
 
-/** フェーズデータからカンバンカラムデータに変換 */
+/** フェーズデータからカンバンカラムデータに変換（日付昇順） */
 function buildColumns(
   phases: HorizontalPhaseData[],
   completedTitles: Set<string>
@@ -48,10 +51,40 @@ function buildColumns(
         });
       }
     }
+    // 日付昇順ソート
+    tasks.sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
     columns[phase.key] = tasks;
   }
   return columns;
 }
+
+/**
+ * カスタム衝突検出:
+ * 1. pointerWithin でポインタが入っているカラムを検出（空カラムも検出可能）
+ * 2. カラム内にアイテムがあれば closestCorners で細かい位置を特定
+ * 3. 空カラムならカラム自体をドロップ先として返す
+ */
+const customCollisionDetection: CollisionDetection = (args) => {
+  // pointerWithin: ポインタ座標が rect 内にある droppable を全て返す
+  const pointerCollisions = pointerWithin(args);
+
+  if (pointerCollisions.length > 0) {
+    // カラム droppable にヒットしているか
+    const columnHit = pointerCollisions.find((c) =>
+      String(c.id).startsWith(COLUMN_PREFIX)
+    );
+    // カラム内の sortable アイテムにもヒットしているか
+    const itemHits = pointerCollisions.filter(
+      (c) => !String(c.id).startsWith(COLUMN_PREFIX)
+    );
+
+    if (itemHits.length > 0) return itemHits;
+    if (columnHit) return [columnHit]; // 空カラム
+  }
+
+  // ポインタがどのカラムにも入っていない場合は closestCorners で最寄りを返す
+  return closestCorners(args);
+};
 
 export function KanbanBoard({
   phases,
@@ -101,7 +134,7 @@ export function KanbanBoard({
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={customCollisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}

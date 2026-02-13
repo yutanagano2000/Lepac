@@ -32,9 +32,10 @@ interface PanelLayoutSectionProps {
   projectId: number;
   currentLayout: string | null;
   onUpdate: () => void;
+  variant?: "card" | "inline";
 }
 
-export function PanelLayoutSection({ projectId, currentLayout, onUpdate }: PanelLayoutSectionProps) {
+export function PanelLayoutSection({ projectId, currentLayout, onUpdate, variant = "card" }: PanelLayoutSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedValue, setSelectedValue] = useState<string>(currentLayout || "");
   const [customValue, setCustomValue] = useState("");
@@ -93,6 +94,84 @@ export function PanelLayoutSection({ projectId, currentLayout, onUpdate }: Panel
     }
   };
 
+  const editContent = (
+    <div className="space-y-3">
+      <Select value={selectedValue} onValueChange={handleSelectChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="レイアウトを選択" />
+        </SelectTrigger>
+        <SelectContent>
+          {PANEL_LAYOUT_OPTIONS.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">その他（自由入力）</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {isCustom && (
+        <Input
+          value={customValue}
+          onChange={(e) => setCustomValue(e.target.value)}
+          placeholder="例: 13直4列"
+          className="w-full"
+        />
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={isSaving}>
+          <X className="h-4 w-4 mr-1" />
+          キャンセル
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={isSaving || (!selectedValue && !customValue.trim()) || (isCustom && !customValue.trim())}
+        >
+          <Check className="h-4 w-4 mr-1" />
+          {isSaving ? "保存中..." : "保存"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const displayContent = (
+    <div className={cn(
+      "rounded-lg border px-4 py-3",
+      currentLayout
+        ? "bg-primary/5 border-primary/20"
+        : "bg-muted/50 border-dashed"
+    )}>
+      {currentLayout ? (
+        <span className="text-base font-medium">{currentLayout}</span>
+      ) : (
+        <span className="text-sm text-muted-foreground">未設定 - 編集ボタンから設定してください</span>
+      )}
+    </div>
+  );
+
+  if (variant === "inline") {
+    return (
+      <div className="grid grid-cols-3 items-start border-b pb-3">
+        <span className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+          <LayoutGrid className="h-4 w-4" />
+          パネルレイアウト
+        </span>
+        <div className="col-span-2">
+          {isEditing ? editContent : (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{currentLayout || "未設定"}</span>
+              <Button variant="ghost" size="sm" className="h-6 px-2" onClick={startEdit}>
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card>
       <CardContent className="pt-6">
@@ -108,61 +187,7 @@ export function PanelLayoutSection({ projectId, currentLayout, onUpdate }: Panel
             </Button>
           )}
         </div>
-
-        {isEditing ? (
-          <div className="space-y-3">
-            <Select value={selectedValue} onValueChange={handleSelectChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="レイアウトを選択" />
-              </SelectTrigger>
-              <SelectContent>
-                {PANEL_LAYOUT_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-                <SelectItem value="custom">その他（自由入力）</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {isCustom && (
-              <Input
-                value={customValue}
-                onChange={(e) => setCustomValue(e.target.value)}
-                placeholder="例: 13直4列"
-                className="w-full"
-              />
-            )}
-
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={isSaving}>
-                <X className="h-4 w-4 mr-1" />
-                キャンセル
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={isSaving || (!selectedValue && !customValue.trim()) || (isCustom && !customValue.trim())}
-              >
-                <Check className="h-4 w-4 mr-1" />
-                {isSaving ? "保存中..." : "保存"}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className={cn(
-            "rounded-lg border px-4 py-3",
-            currentLayout
-              ? "bg-primary/5 border-primary/20"
-              : "bg-muted/50 border-dashed"
-          )}>
-            {currentLayout ? (
-              <span className="text-base font-medium">{currentLayout}</span>
-            ) : (
-              <span className="text-sm text-muted-foreground">未設定 - 編集ボタンから設定してください</span>
-            )}
-          </div>
-        )}
+        {isEditing ? editContent : displayContent}
       </CardContent>
     </Card>
   );

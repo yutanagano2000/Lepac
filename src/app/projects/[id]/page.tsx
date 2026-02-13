@@ -645,13 +645,6 @@ export default function ProjectDetailPage() {
           {/* 進捗ダッシュボード */}
           <ProjectDashboard project={project} progressList={progressList} />
 
-          {/* パネルレイアウト */}
-          <PanelLayoutSection
-            projectId={project.id}
-            currentLayout={project.panelLayout}
-            onUpdate={fetchProject}
-          />
-
           {/* ワークフロータイムライン（横型Gitツリー） */}
           <HorizontalTimeline
             progressList={progressList}
@@ -659,6 +652,8 @@ export default function ProjectDetailPage() {
             projectId={project.id}
             phaseOverrides={project?.phaseOverrides}
             onUpdate={fetchProject}
+            interconnectionScheduled={project?.interconnectionScheduled}
+            interconnectionDate={project?.interconnectionDate}
           />
 
           {/* TODO（この日までに行うリマインダー） */}
@@ -1251,6 +1246,13 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   </div>
+                  {/* パネルレイアウト */}
+                  <PanelLayoutSection
+                    projectId={project.id}
+                    currentLayout={project.panelLayout}
+                    onUpdate={fetchProject}
+                    variant="inline"
+                  />
                   {/* 環境データ */}
                   <div className="grid grid-cols-3 items-start border-b pb-3">
                     <span className="text-sm font-medium text-muted-foreground">環境データ</span>

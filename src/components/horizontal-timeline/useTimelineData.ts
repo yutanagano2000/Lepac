@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import {
   WORKFLOW_PHASES,
   calculateWorkflowTimelineFromCompletion,
+  addBusinessDays,
+  addCalendarDays,
   type WorkflowSubPhase,
   type WorkflowTimelinePhase,
 } from "@/lib/timeline";
@@ -79,6 +81,36 @@ function processSubPhases(
   return filtered;
 }
 
+/** サブフェーズの日付をフェーズ開始日から連鎖再計算 */
+function recalcSubPhaseDates(
+  subs: WorkflowSubPhase[],
+  phaseStartDate: Date | undefined
+): WorkflowSubPhase[] {
+  if (subs.length === 0) return subs;
+
+  // 開始日: override/calculated → 最初のサブフェーズの既存日付 → 今日
+  const startDate = phaseStartDate
+    ?? subs[0]?.date
+    ?? new Date();
+
+  let cursor = new Date(startDate);
+  return subs.map((sp) => {
+    const date = new Date(cursor);
+    const dur = sp.duration ?? 1;
+    const unit = sp.unit ?? "business_days";
+    cursor = unit === "business_days"
+      ? addBusinessDays(cursor, dur)
+      : addCalendarDays(cursor, dur);
+    return { ...sp, date };
+  });
+}
+
+/** サブフェーズを日付昇順でソート */
+function sortSubPhasesByDate(subs: WorkflowSubPhase[]): WorkflowSubPhase[] {
+  if (subs.length <= 1) return subs;
+  return [...subs].sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
+}
+
 export function useTimelineData(
   completionMonth: string | null | undefined,
   progressList: Progress[],
@@ -130,7 +162,24 @@ export function useTimelineData(
 
       // サブフェーズ（override/taskAssignments適用）
       const rawSubs = calculated?.subPhases ?? ("subPhases" in wp ? (wp.subPhases as readonly WorkflowSubPhase[]) : undefined);
-      const subs = processSubPhases(wp.key, rawSubs, override, taskAssignments, allSubPhasesMap);
+      const processedSubs = processSubPhases(wp.key, rawSubs, override, taskAssignments, allSubPhasesMap);
+
+      // タスク移動やカスタム順序がある場合、日付をチェーン再計算
+      const hasCustomOrder = override?.subPhaseOrder && override.subPhaseOrder.length > 0;
+      const hasMovedTasks = Object.values(taskAssignments).some((t) => t === wp.key) ||
+        (processedSubs && rawSubs && processedSubs.length !== rawSubs.length);
+      const phaseStart = override?.startDate ? new Date(override.startDate) : calculated?.startDate;
+
+      let subs: WorkflowSubPhase[] | undefined;
+      if (processedSubs && (hasCustomOrder || hasMovedTasks)) {
+        // 日付チェーン再計算 → 結果は順序通りなのでソート不要
+        subs = recalcSubPhaseDates(processedSubs, phaseStart);
+      } else if (processedSubs) {
+        // 再計算不要でも常に日付昇順ソートして表示
+        subs = sortSubPhasesByDate(processedSubs);
+      } else {
+        subs = processedSubs;
+      }
 
       let totalSubs = 0;
       let completedSubs = 0;

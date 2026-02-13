@@ -179,6 +179,8 @@ export async function GET(request: Request) {
       title: string;
       start: string | null;
       end?: string | null;
+      startTime?: string | null;
+      endTime?: string | null;
       projectId: number | null;
       projectName: string | null;
       status: string | null;
