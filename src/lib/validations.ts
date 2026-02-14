@@ -332,6 +332,76 @@ export const fileUploadSchema = z.object({
   category: z.enum(["registry_copy", "cadastral_map", "drawing", "consent_form", "other"]),
 });
 
+// マップアノテーション作成/更新スキーマ
+export const upsertMapAnnotationSchema = z.object({
+  id: z.number().int().positive().optional().nullable(),
+  name: z.string().max(200).optional().nullable(),
+  geoJson: z.string().min(1, "geoJsonは必須です").max(5000000, "geoJsonが大きすぎます"),
+  mapCenter: z.string().max(200).optional().nullable(),
+  mapZoom: z.number().int().min(1).max(22).optional().nullable(),
+  tileLayer: z.string().max(100).optional().nullable(),
+});
+
+// ===== ワークフロー関連スキーマ =====
+
+// ワークフローステップ作成スキーマ
+const workflowStepSchema = z.object({
+  stepOrder: z.number().int().positive(),
+  taskType: z.enum(["input", "document", "check", "submit", "navigate"]),
+  title: nonEmptyString,
+  instruction: optionalString,
+  targetUrl: z.string().max(500).optional().nullable(),
+  requiredFields: z.string().optional().nullable(), // JSON文字列
+  estimatedMinutes: z.number().int().positive().max(480).optional().nullable(),
+});
+
+// ワークフローテンプレート作成スキーマ
+export const createWorkflowTemplateSchema = z.object({
+  name: nonEmptyString,
+  description: optionalString,
+  category: z.string().max(100).optional().nullable(),
+  steps: z.array(workflowStepSchema).min(1, "少なくとも1つのステップが必要です"),
+});
+
+// ワークフローテンプレート更新スキーマ
+export const updateWorkflowTemplateSchema = z.object({
+  name: nonEmptyString.optional(),
+  description: optionalString,
+  category: z.string().max(100).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+// ワークフローステップ追加スキーマ
+export const addWorkflowStepSchema = workflowStepSchema;
+
+// ワークフローステップ更新スキーマ
+export const updateWorkflowStepSchema = workflowStepSchema.partial();
+
+// ワークフローステップ並び替えスキーマ
+export const reorderWorkflowStepsSchema = z.object({
+  stepIds: z.array(z.number().int().positive()).min(1),
+});
+
+// ワークフロー割り当てスキーマ
+export const createWorkflowAssignmentSchema = z.object({
+  templateId: z.number().int().positive(),
+  userId: z.number().int().positive(),
+  projectId: z.number().int().positive().optional().nullable(),
+  dueDate: dateString,
+  priority: z.number().int().min(1).max(3).optional(),
+});
+
+// ステップ完了スキーマ
+export const completeWorkflowStepSchema = z.object({
+  notes: optionalString,
+  result: z.string().optional().nullable(), // JSON文字列
+});
+
+// ステップスキップスキーマ
+export const skipWorkflowStepSchema = z.object({
+  reason: optionalString,
+});
+
 // バリデーションエラーをJSON形式に変換
 export function formatZodError(error: z.ZodError) {
   return {

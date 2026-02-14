@@ -1,15 +1,23 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FolderKanban, Wrench, LogOut, Calendar, GitBranch, ListTodo, MessageSquarePlus, HardHat, X, Mountain } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { Home, FolderKanban, Wrench, LogOut, Calendar, GitBranch, ListTodo, MessageSquarePlus, HardHat, X, Mountain, Workflow, Wallet, ClipboardList, Users, LucideIcon } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useMobileMenu } from "@/components/MobileMenuContext";
 
-const items = [
+// メニューアイテムの型定義
+type MenuItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const baseItems: MenuItem[] = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/projects", label: "案件", icon: FolderKanban },
   { href: "/construction", label: "工事", icon: HardHat },
@@ -17,12 +25,30 @@ const items = [
   { href: "/todo", label: "TODO", icon: ListTodo },
   { href: "/todos", label: "タイムライン", icon: GitBranch },
   { href: "/calendar", label: "カレンダー", icon: Calendar },
+  { href: "/workflows", label: "ワークフロー", icon: Workflow },
+  { href: "/workflows/my-tasks", label: "マイタスク", icon: ClipboardList },
+  { href: "/workflows/members", label: "メンバー状況", icon: Users },
   { href: "/tools", label: "ツール", icon: Wrench },
   { href: "/feedbacks", label: "要望", icon: MessageSquarePlus },
-] as const;
+];
+
+// ファイナンスメニュー（権限必要）
+const financeItem: MenuItem = { href: "/finance", label: "ファイナンス", icon: Wallet };
 
 function SideNavContent({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  // 権限に基づいてメニューを構築
+  const items = useMemo(() => {
+    const menuItems = [...baseItems];
+    // canViewFinance 権限があればファイナンスメニューを追加
+    if (session?.user?.permissions?.canViewFinance) {
+      // 「要望」の前に挿入（インデックス9）
+      menuItems.splice(9, 0, financeItem);
+    }
+    return menuItems;
+  }, [session?.user?.permissions?.canViewFinance]);
 
   return (
     <div className="flex h-full flex-col p-4">

@@ -25,7 +25,9 @@ export type ResourceType =
   | "user"
   | "calendar_event"
   | "file"
-  | "session";
+  | "session"
+  | "workflow_template"
+  | "workflow_assignment";
 
 export interface AuditLogParams {
   user?: AuthUser | null;
@@ -414,6 +416,65 @@ export async function logLogout(
     action: "logout",
     resourceType: "session",
     resourceName: user.username ?? user.name,
+    request,
+  });
+}
+
+/**
+ * ワークフローテンプレート作成ログ
+ */
+export async function logWorkflowTemplateCreate(
+  user: AuthUser,
+  templateId: number,
+  name: string,
+  request?: NextRequest
+): Promise<void> {
+  await logAudit({
+    user,
+    action: "create",
+    resourceType: "workflow_template",
+    resourceId: templateId,
+    resourceName: name,
+    request,
+  });
+}
+
+/**
+ * ワークフローテンプレート削除ログ
+ */
+export async function logWorkflowTemplateDelete(
+  user: AuthUser,
+  templateId: number,
+  name: string,
+  request?: NextRequest
+): Promise<void> {
+  await logAudit({
+    user,
+    action: "delete",
+    resourceType: "workflow_template",
+    resourceId: templateId,
+    resourceName: name,
+    request,
+  });
+}
+
+/**
+ * ワークフロー割り当てログ
+ */
+export async function logWorkflowAssignmentCreate(
+  user: AuthUser,
+  assignmentId: number,
+  workflowName: string,
+  assigneeId: number,
+  request?: NextRequest
+): Promise<void> {
+  await logAudit({
+    user,
+    action: "create",
+    resourceType: "workflow_assignment",
+    resourceId: assignmentId,
+    resourceName: workflowName,
+    details: { assigneeId },
     request,
   });
 }
