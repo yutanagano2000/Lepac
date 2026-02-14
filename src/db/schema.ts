@@ -317,6 +317,13 @@ export const meetings = sqliteTable("meetings", {
 export type Meeting = typeof meetings.$inferSelect;
 export type NewMeeting = typeof meetings.$inferInsert;
 
+// ユーザー権限フラグの型定義
+export type UserPermissions = {
+  canViewFinance?: boolean;    // ファイナンス閲覧
+  canExportData?: boolean;     // データエクスポート
+  canManageUsers?: boolean;    // ユーザー管理
+};
+
 // ユーザーテーブル
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -324,6 +331,8 @@ export const users = sqliteTable("users", {
   name: text("name"), // 表示名
   password: text("password").notNull(), // ハッシュ化したパスワード
   role: text("role").notNull().default("user"), // user, admin
+  // 権限フラグ（JSON形式）
+  permissions: text("permissions"), // JSON: { canViewFinance: true, ... }
   // OAuth連携用
   lineId: text("line_id").unique(), // LINE User ID
   email: text("email"), // メールアドレス（OAuth取得用）
@@ -638,3 +647,100 @@ export const serverFiles = sqliteTable("server_files", {
 
 export type ServerFile = typeof serverFiles.$inferSelect;
 export type NewServerFile = typeof serverFiles.$inferInsert;
+
+// ワークフロー タスク種別
+export const WORKFLOW_TASK_TYPES = [
+  "input",     // データ入力
+  "document",  // 書類作成
+  "check",     // 確認・チェック
+  "submit",    // 送信・提出
+  "navigate",  // 画面遷移
+] as const;
+
+// ワークフロー ステータス
+export const WORKFLOW_STATUSES = [
+  "pending",     // 未着手
+  "in_progress", // 進行中
+  "completed",   // 完了
+  "cancelled",   // キャンセル
+] as const;
+
+// ワークフローテンプレート
+export const workflowTemplates = sqliteTable("workflow_templates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  organizationId: integer("organization_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"), // 月次処理, 請求, 報告 など
+  isActive: integer("is_active").notNull().default(1), // 1=有効, 0=無効
+  createdBy: integer("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at"),
+}, (table) => ({
+  orgIdx: index("workflow_templates_org_idx").on(table.organizationId),
+  activeIdx: index("workflow_templates_active_idx").on(table.isActive),
+}));
+
+export type WorkflowTemplate = typeof workflowTemplates.$inferSelect;
+export type NewWorkflowTemplate = typeof workflowTemplates.$inferInsert;
+
+// ワークフローステップ
+export const workflowSteps = sqliteTable("workflow_steps", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  templateId: integer("template_id").notNull(),
+  stepOrder: integer("step_order").notNull(),
+  taskType: text("task_type").notNull(), // input, document, check, submit, navigate
+  title: text("title").notNull(),
+  instruction: text("instruction"),
+  targetUrl: text("target_url"), // 遷移先URL（任意）
+  requiredFields: text("required_fields"), // JSON: 必須入力項目
+  estimatedMinutes: integer("estimated_minutes"),
+}, (table) => ({
+  templateIdx: index("workflow_steps_template_idx").on(table.templateId),
+  orderIdx: index("workflow_steps_order_idx").on(table.templateId, table.stepOrder),
+}));
+
+export type WorkflowStep = typeof workflowSteps.$inferSelect;
+export type NewWorkflowStep = typeof workflowSteps.$inferInsert;
+
+// ワークフロー割り当て
+export const workflowAssignments = sqliteTable("workflow_assignments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  templateId: integer("template_id").notNull(),
+  userId: integer("user_id").notNull(), // 担当者
+  projectId: integer("project_id"), // 案件紐付け（任意）
+  assignedBy: integer("assigned_by").notNull(), // 割り当てた管理者
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, cancelled
+  currentStep: integer("current_step").notNull().default(1),
+  dueDate: text("due_date"),
+  priority: integer("priority").default(2), // 1=低, 2=中, 3=高
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull(),
+}, (table) => ({
+  templateIdx: index("workflow_assignments_template_idx").on(table.templateId),
+  userIdx: index("workflow_assignments_user_idx").on(table.userId),
+  statusIdx: index("workflow_assignments_status_idx").on(table.status),
+}));
+
+export type WorkflowAssignment = typeof workflowAssignments.$inferSelect;
+export type NewWorkflowAssignment = typeof workflowAssignments.$inferInsert;
+
+// ワークフロー実行記録
+export const workflowExecutions = sqliteTable("workflow_executions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  assignmentId: integer("assignment_id").notNull(),
+  stepId: integer("step_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending, in_progress, completed, skipped
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+  durationSeconds: integer("duration_seconds"),
+  result: text("result"), // JSON: 入力値、添付ファイルURLなど
+  notes: text("notes"),
+}, (table) => ({
+  assignmentIdx: index("workflow_executions_assignment_idx").on(table.assignmentId),
+  stepIdx: index("workflow_executions_step_idx").on(table.stepId),
+}));
+
+export type WorkflowExecution = typeof workflowExecutions.$inferSelect;
+export type NewWorkflowExecution = typeof workflowExecutions.$inferInsert;

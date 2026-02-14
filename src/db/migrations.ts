@@ -259,6 +259,8 @@ export async function runMigrations(client: { execute: (sql: string, args?: unkn
   try { await client.execute(`ALTER TABLE users ADD COLUMN image TEXT`); } catch (e) {}
   // 法人テナント用カラム追加
   try { await client.execute(`ALTER TABLE users ADD COLUMN organization_id INTEGER`); } catch (e) {}
+  // 権限フラグ用カラム追加（JSON形式: { canViewFinance: true, ... }）
+  try { await client.execute(`ALTER TABLE users ADD COLUMN permissions TEXT`); } catch (e) {}
 
   // 法人（組織）テーブル
   await client.execute(`
@@ -666,4 +668,84 @@ export async function runMigrations(client: { execute: (sql: string, args?: unkn
     )
   `);
   try { await client.execute(`CREATE INDEX IF NOT EXISTS idx_server_files_mgmt ON server_files (management_number)`); } catch (e) {}
+
+  // ===== ワークフロー機能（2026年2月） =====
+
+  // ワークフローテンプレート
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS workflow_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      category TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_by INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_templates_org_idx ON workflow_templates (organization_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_templates_active_idx ON workflow_templates (is_active)`); } catch (e) {}
+
+  // ワークフローステップ
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS workflow_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      template_id INTEGER NOT NULL,
+      step_order INTEGER NOT NULL,
+      task_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      instruction TEXT,
+      target_url TEXT,
+      required_fields TEXT,
+      estimated_minutes INTEGER,
+      FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_steps_template_idx ON workflow_steps (template_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_steps_order_idx ON workflow_steps (template_id, step_order)`); } catch (e) {}
+
+  // ワークフロー割り当て
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS workflow_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      template_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      project_id INTEGER,
+      assigned_by INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      current_step INTEGER NOT NULL DEFAULT 1,
+      due_date TEXT,
+      priority INTEGER DEFAULT 2,
+      started_at TEXT,
+      completed_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (template_id) REFERENCES workflow_templates(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_assignments_template_idx ON workflow_assignments (template_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_assignments_user_idx ON workflow_assignments (user_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_assignments_status_idx ON workflow_assignments (status)`); } catch (e) {}
+
+  // ワークフロー実行記録
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS workflow_executions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assignment_id INTEGER NOT NULL,
+      step_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      started_at TEXT,
+      completed_at TEXT,
+      duration_seconds INTEGER,
+      result TEXT,
+      notes TEXT,
+      FOREIGN KEY (assignment_id) REFERENCES workflow_assignments(id) ON DELETE CASCADE,
+      FOREIGN KEY (step_id) REFERENCES workflow_steps(id)
+    )
+  `);
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_executions_assignment_idx ON workflow_executions (assignment_id)`); } catch (e) {}
+  try { await client.execute(`CREATE INDEX IF NOT EXISTS workflow_executions_step_idx ON workflow_executions (step_id)`); } catch (e) {}
 }

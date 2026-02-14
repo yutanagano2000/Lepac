@@ -18,6 +18,8 @@ import {
   AlertCircle,
   CalendarClock,
   Clock,
+  Play,
+  ClipboardList,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,11 +67,19 @@ export function HomeSearchView() {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [isMac, setIsMac] = useState(false);
 
   // ダッシュボード用state
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  // ワークフロータスク用state
+  const [workflowTasks, setWorkflowTasks] = useState<{
+    pending: number;
+    inProgress: number;
+    inProgressId: number | null;
+  }>({ pending: 0, inProgress: 0, inProgressId: null });
 
   // 適応型デバウンス（delay省略→文字数ベースで自動調整）
   const debouncedQuery = useDebounce(query);
@@ -77,9 +87,10 @@ export function HomeSearchView() {
   // SWRベース検索（キャッシュ + 重複排除 + keepPreviousData）
   const { results, isSearching, searchError } = useSearchQuery(debouncedQuery);
 
-  // 検索履歴を初期ロード
+  // 検索履歴を初期ロード & OS判定
   useEffect(() => {
     setSearchHistory(getSearchHistory());
+    setIsMac(/Mac|iPhone|iPad/.test(navigator.userAgent));
   }, []);
 
   // 検索実行時に履歴保存
@@ -130,7 +141,30 @@ export function HomeSearchView() {
         setIsDashboardLoading(false);
       }
     };
+
+    const fetchWorkflowTasks = async () => {
+      try {
+        const res = await fetch("/api/workflows/my-tasks", {
+          signal: abortController.signal,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const assignments = data.assignments ?? [];
+          const pending = assignments.filter((a: { status: string }) => a.status === "pending").length;
+          const inProgressList = assignments.filter((a: { status: string }) => a.status === "in_progress");
+          setWorkflowTasks({
+            pending,
+            inProgress: inProgressList.length,
+            inProgressId: inProgressList[0]?.assignmentId ?? null,
+          });
+        }
+      } catch {
+        // ワークフロータスク取得エラーは無視
+      }
+    };
+
     fetchDashboard();
+    fetchWorkflowTasks();
 
     return () => {
       abortController.abort();
@@ -285,7 +319,7 @@ export function HomeSearchView() {
               )}
               {!isSearching && (
                 <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground border">
-                  {typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent) ? "⌘" : "Ctrl"}K
+                  {isMac ? "⌘" : "Ctrl"}K
                 </kbd>
               )}
             </div>
@@ -411,6 +445,51 @@ export function HomeSearchView() {
               </div>
             ) : dashboard && (
               <div className="grid grid-cols-3 gap-4">
+                {/* 仕事を始める */}
+                {(workflowTasks.pending > 0 || workflowTasks.inProgress > 0) && (
+                  <Link
+                    href={
+                      workflowTasks.inProgressId
+                        ? `/workflows/execute/${workflowTasks.inProgressId}`
+                        : "/workflows/my-tasks"
+                    }
+                  >
+                    <Card className="transition-all hover:shadow-md cursor-pointer h-[180px] border-primary/50 bg-primary/5">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                          <ClipboardList className="h-4 w-4 text-primary" />
+                          マイタスク
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {workflowTasks.inProgress > 0 ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-blue-500 text-white">進行中</Badge>
+                              <span className="text-2xl font-bold">{workflowTasks.inProgress}</span>
+                            </div>
+                            <button className="w-full flex items-center justify-center gap-2 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors">
+                              <Play className="h-4 w-4" />
+                              作業を続ける
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">未着手</span>
+                              <span className="text-2xl font-bold">{workflowTasks.pending}</span>
+                            </div>
+                            <button className="w-full flex items-center justify-center gap-2 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:bg-primary/90 transition-colors">
+                              <Play className="h-4 w-4" />
+                              仕事を始める
+                            </button>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                )}
+
                 {/* 期日超過TODO */}
                 <Card className={cn(
                   "transition-all hover:shadow-md cursor-pointer h-[180px]",
