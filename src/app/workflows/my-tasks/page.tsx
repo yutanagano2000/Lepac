@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PRIORITY } from "../_constants";
 
 interface MyTask {
   assignmentId: number;
@@ -75,11 +76,11 @@ export default function MyTasksPage() {
 
   const getPriorityBadge = (priority: number) => {
     switch (priority) {
-      case 1:
+      case PRIORITY.URGENT:
         return <Badge variant="destructive">緊急</Badge>;
-      case 2:
+      case PRIORITY.HIGH:
         return <Badge variant="default">高</Badge>;
-      case 3:
+      case PRIORITY.MEDIUM:
         return <Badge variant="secondary">中</Badge>;
       default:
         return <Badge variant="outline">低</Badge>;
@@ -224,7 +225,9 @@ export default function MyTasksPage() {
                           className="h-full bg-primary transition-all"
                           style={{
                             width: `${
-                              ((task.currentStep - 1) / task.totalSteps) * 100
+                              task.totalSteps > 0
+                                ? ((task.currentStep - 1) / task.totalSteps) * 100
+                                : 0
                             }%`,
                           }}
                         />

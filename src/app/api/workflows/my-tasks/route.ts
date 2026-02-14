@@ -81,5 +81,5 @@ export async function GET() {
     totalSteps: stepCountMap.get(assignment.templateId) ?? 0,
   }));
 
-  return NextResponse.json(assignmentsWithStats);
+  return NextResponse.json({ assignments: assignmentsWithStats });
 }
